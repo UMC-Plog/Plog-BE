@@ -1,0 +1,13 @@
+# EC2에서 앱 컨테이너를 기동하는 구성.
+# 실제 값(이미지 태그, DB 접속정보)은 같은 폴더의 .env 를 CD 워크플로우가 생성해 주입한다.
+services:
+  app:
+    image: ${DOCKER_IMAGE}          # 예: <dockerhub-id>/plog-be:latest  (.env 에서 주입)
+    container_name: plog-be
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env                        # DB_URL / DB_USERNAME / DB_PASSWORD 주입
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    restart: unless-stopped
