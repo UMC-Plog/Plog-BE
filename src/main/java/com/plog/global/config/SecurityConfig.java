@@ -1,4 +1,4 @@
-package com.plog.global.security;
+package com.plog.global.config;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 

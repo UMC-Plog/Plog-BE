@@ -39,3 +39,8 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// 실행 가능한 bootJar만 생성 (plain jar 비활성화 → Docker COPY 시 jar 하나만 잡히게)
+tasks.named('jar') {
+	enabled = false
+}
