@@ -1,0 +1,27 @@
+# 빌드 산출물 / 로컬 캐시 (이미지 빌드 컨텍스트에서 제외 → 전송량·빌드시간 절감)
+build/
+.gradle/
+
+# VCS / IDE
+.git/
+.github/
+.idea/
+*.iml
+.vscode/
+
+# 시크릿 / 로컬 설정
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.jks
+src/main/resources/application-local.*
+src/main/resources/application-secret.*
+
+# 기타
+logs/
+*.log
+.agents/
+HELP.md
+docs/

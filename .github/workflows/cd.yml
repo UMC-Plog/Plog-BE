@@ -1,0 +1,81 @@
+name: CD
+
+# main 에 push(= PR 머지) 되면 이미지 빌드 → Docker Hub push → EC2 배포
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # Actions 탭에서 수동 실행도 허용 (첫 배포 테스트용)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 소스 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Docker Hub 로그인
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Buildx 설정
+        uses: docker/setup-buildx-action@v3
+
+      - name: 이미지 빌드 & 푸시
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/plog-be:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/plog-be:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: docker-compose.yml 전송
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: docker-compose.yml
+          target: ~/plog-app
+
+      - name: EC2 배포
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/plog-app
+
+            # 시크릿으로 .env 생성 (compose 가 이미지 태그·DB 접속정보를 여기서 읽음)
+            cat > .env <<'EOF'
+            DOCKER_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/plog-be:latest
+            DB_URL=${{ secrets.DB_URL }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            EOF
+
+            # private 이미지 pull 위해 EC2 도 Docker Hub 로그인
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+            docker compose pull
+            docker compose up -d
+            docker image prune -f
+
+            # 기동 확인 (최대 60초 대기)
+            for i in $(seq 1 12); do
+              if curl -sf http://localhost:8080/swagger-ui/index.html > /dev/null; then
+                echo "✅ 배포 성공: 앱이 응답합니다."
+                exit 0
+              fi
+              echo "기동 대기 중... ($i/12)"
+              sleep 5
+            done
+            echo "⚠️ 앱이 60초 내 응답하지 않음. 로그 확인:"
+            docker compose logs --tail=50
+            exit 1
