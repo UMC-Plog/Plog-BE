@@ -1,6 +1,5 @@
 package com.plog.domain.task.entity;
 
-import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.global.common.BaseEntity;
 import jakarta.persistence.Column;
@@ -35,13 +34,10 @@ public class Task extends BaseEntity {
     @Column(name = "task_id")
     private Long id;
 
+    // 담당자 미배정 카드는 기획상 없음 → NOT NULL 유지, project는 projectMember.project로 유도
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_member_id", nullable = false)
     private ProjectMember projectMember;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id", nullable = false)
-    private Project project;
 
     // TODO(팀 확인): ERD는 NULL 허용이지만 제목 없는 업무카드가 가능한지 확인 필요.
     //  불가능하다면 nullable = false로 변경 권장.

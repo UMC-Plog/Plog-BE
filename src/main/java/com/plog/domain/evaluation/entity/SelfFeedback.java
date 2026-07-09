@@ -1,6 +1,5 @@
 package com.plog.domain.evaluation.entity;
 
-import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.global.common.BaseEntity;
 import jakarta.persistence.Column;
@@ -38,10 +37,6 @@ public class SelfFeedback extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_member_id", nullable = false)
     private ProjectMember projectMember;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id", nullable = false)
-    private Project project;
 
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;

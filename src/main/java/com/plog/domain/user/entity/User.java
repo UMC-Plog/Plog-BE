@@ -37,7 +37,7 @@ public class User extends BaseEntity {
 
     // TODO(팀 확인): 소셜 로그인 전용 유저는 password가 없을 수 있음.
     //  ERD는 NOT NULL이지만 소셜 가입 지원 시 nullable = true로 변경 필요.
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String password;
 
     @Column(nullable = false)
@@ -50,9 +50,9 @@ public class User extends BaseEntity {
     private String profileImageUrl;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "provider_type", nullable = false)
+    @Column(name = "provider_type")
     private ProviderType providerType;
 
-    @Column(name = "provider_id", nullable = false)
+    @Column(name = "provider_id")
     private String providerId;
 }

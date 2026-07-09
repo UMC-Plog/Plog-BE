@@ -39,11 +39,11 @@ public class PostAttachment extends BaseEntity {
     @Column(name = "attachment_type")
     private AttachmentType attachmentType;
 
-    @Column(name = "file_url")
+    @Column(name = "file_url", length = 512)
     private String fileUrl;
 
     @Column(name = "file_size")
-    private String fileSize;
+    private Long fileSize;
 
     @Column(name = "file_name")
     private String fileName;

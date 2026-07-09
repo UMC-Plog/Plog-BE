@@ -49,7 +49,7 @@ public class ExternalResource extends BaseEntity {
     private Project project;
 
     // 동기화 시 어느 연결의 토큰을 쓸지 (자격증명).
-    // 불변식: connection.project == this.project → 스키마로 강제 불가, 등록 서비스에서 검증 필요
+    // 불변식: connection.projectMember.project == this.project → 스키마로 강제 불가, 등록 서비스에서 검증 필요
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "connection_id", nullable = false)
     private ExternalConnection connection;

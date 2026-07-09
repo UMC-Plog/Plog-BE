@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,7 +25,10 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "fcm")
+@Table(name = "fcm", uniqueConstraints = {
+        // 토큰 = 디바이스 식별자. 같은 토큰이 여러 유저 행에 걸리면 알림 오발송 위험
+        @UniqueConstraint(name = "uk_fcm_token", columnNames = "token")
+})
 public class FcmToken extends BaseEntity {
 
     @Id
@@ -32,11 +36,13 @@ public class FcmToken extends BaseEntity {
     @Column(name = "fcm_id")
     private Long id;
 
-    // 유니크 제약 없음: 한 유저가 여러 기기(토큰)를 가질 수 있음
+    // user_id에는 유니크를 걸지 않음: 한 유저가 여러 기기(토큰)를 가질 수 있음
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "token")
+    // TODO(구현 규칙): 재등록 시 upsert — 토큰이 이미 존재하면 user 참조를 갱신 (기기 주인 교체).
+    //  soft delete 금지 — deleted_at 처리된 행이 유니크 제약을 점유해 재등록이 막힘. 물리 삭제로 처리.
+    @Column(name = "token", nullable = false, length = 512)
     private String token;
 }

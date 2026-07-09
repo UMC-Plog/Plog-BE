@@ -1,6 +1,5 @@
 package com.plog.domain.integration.entity;
 
-import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.global.common.BaseEntity;
 import jakarta.persistence.Column;
@@ -38,10 +37,6 @@ public class ExternalConnection extends BaseEntity {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id", nullable = false)
-    private Project project;
-
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_member_id", nullable = false)
     private ProjectMember projectMember;
 
@@ -54,7 +49,7 @@ public class ExternalConnection extends BaseEntity {
     private String externalAccountId;
 
     // TODO(보안): 평문 저장 금지. 저장 전 암호화(AES) 또는 JPA AttributeConverter 적용 필요
-    @Column(name = "access_token")
+    @Column(name = "access_token", length = 512)
     private String accessToken;
 
     public boolean isLinked() {

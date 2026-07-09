@@ -1,6 +1,5 @@
 package com.plog.domain.evaluation.entity;
 
-import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.global.common.BaseEntity;
 import jakarta.persistence.Column;
@@ -35,10 +34,7 @@ public class PeerEvaluation extends BaseEntity {
     @Column(name = "peer_id")
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id", nullable = false)
-    private Project project;
-
+    // project는 evaluator.project로 유도 (평가자/피평가자는 항상 같은 프로젝트 멤버)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "evaluator_id", nullable = false)
     private ProjectMember evaluator;

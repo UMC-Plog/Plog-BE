@@ -43,9 +43,8 @@ public class TaskAttachment extends BaseEntity {
     private String fileName;
 
     @Column(name = "file_size")
-    private String fileSize;
+    private Long fileSize;
 
-    // TODO(팀 확인): 첨부파일에 URL이 없으면 의미가 없으므로 NOT NULL 권장 (ERD는 NULL)
-    @Column(name = "file_url")
+    @Column(name = "file_url", length = 512)
     private String fileUrl;
 }
