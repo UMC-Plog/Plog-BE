@@ -52,12 +52,15 @@ jobs:
             set -e
             cd ~/plog-app
 
-            # 시크릿으로 .env 생성 (compose 가 이미지 태그·DB 접속정보를 여기서 읽음)
+            # 시크릿으로 .env 생성 (compose 가 이미지 태그·DB·JWT·메일 접속정보를 여기서 읽음)
             cat > .env <<'EOF'
             DOCKER_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/plog-be:latest
             DB_URL=${{ secrets.DB_URL }}
             DB_USERNAME=${{ secrets.DB_USERNAME }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            MAIL_USERNAME=${{ secrets.MAIL_USERNAME }}
+            MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}
             EOF
             chmod 600 .env
 

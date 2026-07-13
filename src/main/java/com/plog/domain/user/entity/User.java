@@ -19,7 +19,9 @@ import org.hibernate.annotations.Check;
 
 @Entity
 @Getter
-@Builder
+// 생성 경로를 정적 팩토리(createLocal/createSocial)로만 봉인.
+// 외부에서 password와 provider를 동시에 세팅한 불법 상태를 컴파일 시점에 차단(@Check에 의존하지 않음)
+@Builder(access = AccessLevel.PRIVATE)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 // 로그인 방식은 "정확히 하나": 이메일 유저(password만) XOR 소셜 유저(provider만).
@@ -29,7 +31,9 @@ import org.hibernate.annotations.Check;
 @Table(name = "tb_user", uniqueConstraints = {
         @UniqueConstraint(name = "uk_user_email", columnNames = "email"),
         // PostgreSQL은 NULL을 서로 다른 값으로 취급 → 이메일 유저(둘 다 NULL)끼리 충돌 없음
-        @UniqueConstraint(name = "uk_user_provider", columnNames = {"provider_type", "provider_id"})
+        @UniqueConstraint(name = "uk_user_provider", columnNames = {"provider_type", "provider_id"}),
+        // 닉네임 중복확인 API의 최종 방어선(TOCTOU 대비). 가입 시 위반 예외를 잡아 에러코드로 변환
+        @UniqueConstraint(name = "uk_user_nickname", columnNames = "nickname")
 })
 public class User extends BaseEntity {
 
@@ -60,6 +64,28 @@ public class User extends BaseEntity {
 
     @Column(name = "provider_id")
     private String providerId;
+
+    // 이메일 가입: password만 세팅, provider 접근 불가 → XOR 제약을 애초에 위반할 수 없음
+    public static User createLocal(String email, String encodedPassword, String name, String nickname) {
+        return User.builder()
+                .email(email)
+                .password(encodedPassword)
+                .name(name)
+                .nickname(nickname)
+                .build();
+    }
+
+    // 소셜 가입: provider만 세팅, password 접근 불가
+    public static User createSocial(String email, String name, String nickname,
+                                    ProviderType providerType, String providerId) {
+        return User.builder()
+                .email(email)
+                .name(name)
+                .nickname(nickname)
+                .providerType(providerType)
+                .providerId(providerId)
+                .build();
+    }
 
     // 로그인 방식은 provider 존재 여부로 유도 (별도 login_type 컬럼 불필요 — is_linked와 같은 원칙)
     public boolean isSocialUser() {
