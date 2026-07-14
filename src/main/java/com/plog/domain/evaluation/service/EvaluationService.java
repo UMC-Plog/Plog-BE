@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,23 +31,22 @@ public class EvaluationService {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
 
-        // TODO: ProjectStatus에 'EVALUATING(평가 대기)' 상태가 추가
-
         ProjectMember currentMember = projectMemberRepository.findByProjectIdAndUserId(projectId, userId)
                 .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN));
 
-
         List<ProjectMember> allMembers = projectMemberRepository.findAllByProjectId(projectId);
+
+        Set<Long> evaluatedTargetIds = peerEvaluationRepository.findEvaluatedTargetIds(currentMember);
 
         List<TargetMemberDto> targets = allMembers.stream()
                 .filter(member -> !member.getId().equals(currentMember.getId())) // 본인 제외
                 .map(member -> {
-
-                    boolean isEvaluated = peerEvaluationRepository.existsByEvaluatorAndEvaluatee(currentMember, member);
+                    
+                    boolean isEvaluated = evaluatedTargetIds.contains(member.getId());
 
                     return TargetMemberDto.builder()
                             .projectMemberId(member.getId())
-                            .nickname(member.getAnNickname() != null ? member.getAnNickname() : member.getUser().getNickname()) // 익명 닉네임이 있다면 우선 사용
+                            .nickname(member.getAnNickname() != null ? member.getAnNickname() : member.getUser().getNickname())
                             .isEvaluated(isEvaluated)
                             .build();
                 })
