@@ -34,14 +34,13 @@ public class EvaluationService {
         ProjectMember currentMember = projectMemberRepository.findByProjectIdAndUserId(projectId, userId)
                 .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN));
 
-        List<ProjectMember> allMembers = projectMemberRepository.findAllByProjectId(projectId);
+        List<ProjectMember> allMembers = projectMemberRepository.findAllWithUserByProjectId(projectId);
 
         Set<Long> evaluatedTargetIds = peerEvaluationRepository.findEvaluatedTargetIds(currentMember);
 
         List<TargetMemberDto> targets = allMembers.stream()
                 .filter(member -> !member.getId().equals(currentMember.getId())) // 본인 제외
                 .map(member -> {
-                    
                     boolean isEvaluated = evaluatedTargetIds.contains(member.getId());
 
                     return TargetMemberDto.builder()
