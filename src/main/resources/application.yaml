@@ -41,6 +41,10 @@ app:
     ttl: 5m
     max-attempts: 5
     resend-cooldown: 60s
+  # CORS 허용 오리진. 환경별로 다르므로 프로퍼티로 관리 (배포 도메인은 확정 후 추가)
+  cors:
+    allowed-origins:
+      - http://localhost:3000
 
 springdoc:
   api-docs:

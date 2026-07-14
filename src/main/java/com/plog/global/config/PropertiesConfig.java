@@ -6,6 +6,6 @@ import org.springframework.context.annotation.Configuration;
 
 /** @ConfigurationProperties 바인딩 대상들을 한 곳에서 등록. */
 @Configuration
-@EnableConfigurationProperties({JwtProperties.class, EmailVerificationProperties.class})
+@EnableConfigurationProperties({JwtProperties.class, EmailVerificationProperties.class, CorsProperties.class})
 public class PropertiesConfig {
 }

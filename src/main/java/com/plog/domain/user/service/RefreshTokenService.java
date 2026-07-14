@@ -52,10 +52,13 @@ public class RefreshTokenService {
         return token;
     }
 
-    /** 회전(rotation): 재발급 시 기존 토큰 폐기. */
+    /**
+     * 회전(rotation): 원문에 해당하는 토큰을 원자적으로 소모(삭제)하고 삭제된 행 수를 반환한다.
+     * 동시 요청이 같은 토큰으로 들어와도 단 하나만 1을 받고 나머지는 0을 받으므로, 반환값으로 소모 성공을 판정한다.
+     */
     @Transactional
-    public void revoke(RefreshToken token) {
-        refreshTokenRepository.delete(token);
+    public int consume(String rawToken) {
+        return refreshTokenRepository.deleteByTokenHash(HashUtil.sha256Hex(rawToken));
     }
 
     /** 로그아웃: 원문에 해당하는 토큰 폐기. 없어도 조용히 통과(멱등). */

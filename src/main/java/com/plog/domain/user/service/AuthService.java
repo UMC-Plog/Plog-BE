@@ -46,7 +46,11 @@ public class AuthService {
     public TokenResponse reissue(String rawRefreshToken) {
         RefreshToken current = refreshTokenService.validateOrThrow(rawRefreshToken);
         User user = current.getUser();
-        refreshTokenService.revoke(current); // 회전: 쓴 토큰은 폐기
+        // 회전: 조회-검증과 소모(삭제)를 분리하면 동시 요청이 함께 통과할 수 있다.
+        // 삭제 성공(1행) 여부로 소모를 판정해, 이미 쓰인 토큰이면 재발급을 거부한다.
+        if (refreshTokenService.consume(rawRefreshToken) == 0) {
+            throw new ApiException(AuthErrorCode.INVALID_REFRESH_TOKEN);
+        }
         return issueTokens(user);
     }
 
