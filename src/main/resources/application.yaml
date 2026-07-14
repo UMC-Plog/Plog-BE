@@ -10,6 +10,41 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: update
+  # Gmail SMTP. 계정/앱비밀번호는 literal 금지 → 환경변수로만 주입
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          # 응답 지연 대비 타임아웃(ms) — 메일 서버가 늘어질 때 스레드 물고 있지 않도록
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+# 애플리케이션 커스텀 프로퍼티 (@ConfigurationProperties 로 바인딩)
+app:
+  jwt:
+    # 기본값 금지: 누락 시 조용히 약한 키로 뜨는 것보다 기동 실패가 낫다.
+    # HS256이면 최소 256비트(UTF-8 32바이트 이상) 필요 — JwtProperties에서 검증
+    secret: ${JWT_SECRET}
+    access-token-ttl: 30m
+    refresh-token-ttl: 14d
+  # 이메일 인증 코드 정책 (하드코딩 금지 → @ConfigurationProperties 바인딩)
+  email-verification:
+    code-length: 6
+    ttl: 5m
+    max-attempts: 5
+    resend-cooldown: 60s
+  # CORS 허용 오리진. 환경별로 다르므로 프로퍼티로 관리 (배포 도메인은 확정 후 추가)
+  cors:
+    allowed-origins:
+      - http://localhost:3000
 
 springdoc:
   api-docs:
