@@ -21,7 +21,10 @@ public enum EvaluationErrorCode implements BaseErrorCode {
     KEYWORDS_REQUIRED(HttpStatus.BAD_REQUEST, "EVAL007", "최소 하나의 핵심 키워드를 선택해주세요."),
 
     // 타임아웃 및 상태 오류
-    CANNOT_MODIFY_AFTER_PUBLISH(HttpStatus.CONFLICT, "EVAL008", "리포트가 발행되어 평가를 수정할 수 없습니다.");
+    CANNOT_MODIFY_AFTER_PUBLISH(HttpStatus.CONFLICT, "EVAL008", "리포트가 발행되어 평가를 수정할 수 없습니다."),
+
+    // 셀프 피드백
+    SELF_FEEDBACK_NOT_FOUND(HttpStatus.BAD_REQUEST, "EVAL009", "해당 프로젝트에 등록된 셀프 피드백이 존재하지 않습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
