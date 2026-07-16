@@ -74,6 +74,16 @@ public class PostController {
         return ApiResponse.success(postService.deletePost(projectId, postId, userId));
     }
 
+    @PatchMapping("/{postId}/notice")
+    public ApiResponse<PostDto.NoticeResponse> changeNotice(
+            @PathVariable Long projectId,
+            @PathVariable Long postId,
+            @AuthenticationPrincipal(expression = "userId") Long userId,
+            @RequestBody PostDto.NoticeRequest request
+    ) {
+        return ApiResponse.success(postService.changeNotice(projectId, postId, userId, request));
+    }
+
     @PostMapping("/{postId}/comments")
     public ResponseEntity<ApiResponse<CommentDto.Response>> createComment(
             @PathVariable Long projectId,
