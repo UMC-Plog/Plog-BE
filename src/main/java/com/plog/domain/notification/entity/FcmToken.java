@@ -45,4 +45,5 @@ public class FcmToken extends BaseEntity {
     //  soft delete 금지 — deleted_at 처리된 행이 유니크 제약을 점유해 재등록이 막힘. 물리 삭제로 처리.
     @Column(name = "token", nullable = false, length = 512)
     private String token;
+
 }
