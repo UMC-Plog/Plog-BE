@@ -7,7 +7,7 @@ services:
     ports:
       - "8080:8080"
     env_file:
-      - .env                        # DB_URL / DB_USERNAME / DB_PASSWORD 주입
+      - .env                        # DB_* / JWT_SECRET / MAIL_* 주입
     environment:
       SPRING_PROFILES_ACTIVE: prod
     restart: unless-stopped
