@@ -62,6 +62,13 @@ public class EvaluationService {
         ProjectMember evaluator = projectMemberRepository.findByProjectIdAndUserId(projectId, userId)
                 .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN));
 
+        ProjectMember evaluatee = projectMemberRepository.findById(targetMemberId)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
+
+        if (!evaluatee.getProject().getId().equals(projectId)) {
+            throw new ApiException(ErrorCode.FORBIDDEN);
+        }
+
         PeerEvaluation evaluation = peerEvaluationRepository.findByEvaluatorIdAndEvaluateeId(evaluator.getId(), targetMemberId)
                 .orElseThrow(() -> new ApiException(EvaluationErrorCode.EVALUATION_NOT_FOUND));
 
