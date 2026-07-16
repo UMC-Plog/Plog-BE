@@ -31,7 +31,10 @@ public class S3Configuration {
     ) {
         var builder = S3Presigner.builder().region(Region.of(region));
         if (!endpoint.isBlank()) {
-            builder.endpointOverride(URI.create(endpoint));
+            builder.endpointOverride(URI.create(endpoint))
+                    .serviceConfiguration(software.amazon.awssdk.services.s3.S3Configuration.builder()
+                            .pathStyleAccessEnabled(true)
+                            .build());
         }
         return builder.build();
     }

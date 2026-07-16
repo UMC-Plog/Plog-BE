@@ -46,25 +46,28 @@ public class FileStorageService {
     @Value("${plog.s3.bucket:}")
     private String bucket;
 
-    public FileStorageDto.PresignedUploadResponse createUploadUrl(FileStorageDto.PresignedUploadRequest request) {
+    public FileStorageDto.PresignedUploadResponse createUploadUrl(
+            Long userId,
+            FileStorageDto.PresignedUploadRequest request
+    ) {
         ensureEnabled();
         validateFile(request.fileName(), request.contentType(), request.fileSize());
         String safeName = request.fileName().trim().replaceAll("[^a-zA-Z0-9._-]", "_");
-        String fileKey = "temporary/" + UUID.randomUUID() + "/" + safeName;
+        String fileKey = ownerPrefix(userId) + UUID.randomUUID() + "/" + safeName;
         Instant expiresAt = Instant.now().plus(URL_DURATION);
         PutObjectRequest putObject = PutObjectRequest.builder()
                 .bucket(bucket).key(fileKey).contentType(request.contentType()).contentLength(request.fileSize())
-                .tagging("state=temporary").build();
-        String url = s3Presigner.presignPutObject(PutObjectPresignRequest.builder()
-                        .signatureDuration(URL_DURATION).putObjectRequest(putObject).build())
-                .url().toString();
-        return new FileStorageDto.PresignedUploadResponse(url, fileKey, expiresAt);
+                .tagging("state=temporary&ownerId=" + userId).build();
+        var presigned = s3Presigner.presignPutObject(PutObjectPresignRequest.builder()
+                .signatureDuration(URL_DURATION).putObjectRequest(putObject).build());
+        return new FileStorageDto.PresignedUploadResponse(
+                presigned.url().toString(), fileKey, presigned.signedHeaders(), expiresAt);
     }
 
-    public void verifyUploadedFile(String fileKey, String fileName, long expectedSize) {
+    public void verifyUploadedFile(Long userId, String fileKey, String fileName, long expectedSize) {
         ensureEnabled();
         validateFile(fileName, null, expectedSize);
-        if (fileKey == null || !fileKey.startsWith("temporary/")) {
+        if (fileKey == null || !fileKey.startsWith(ownerPrefix(userId))) {
             throw new ApiException(FileStorageErrorCode.INVALID_FILE_KEY);
         }
         try {
@@ -109,6 +112,13 @@ public class FileStorageService {
         if (!enabled || bucket.isBlank()) {
             throw new ApiException(FileStorageErrorCode.FILE_STORAGE_DISABLED);
         }
+    }
+
+    private String ownerPrefix(Long userId) {
+        if (userId == null || userId <= 0) {
+            throw new ApiException(FileStorageErrorCode.INVALID_FILE_KEY);
+        }
+        return "temporary/users/" + userId + "/";
     }
 
     private void validateFile(String fileName, String contentType, long fileSize) {

@@ -44,6 +44,8 @@ public class FileDeletionEventListener {
                     Thread.sleep(200L * (1L << (attempt - 1)));
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
+                    log.error("s3_file_operation_failed operation={} fileKey={} attempts={} reason=interrupted",
+                            operation, fileKey, attempt, interrupted);
                     return;
                 }
             }

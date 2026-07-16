@@ -24,7 +24,7 @@ public class FileStorageController {
             @AuthenticationPrincipal(expression = "userId") Long userId,
             @Valid @RequestBody FileStorageDto.PresignedUploadRequest request
     ) {
-        var response = fileStorageService.createUploadUrl(request);
+        var response = fileStorageService.createUploadUrl(userId, request);
         return ResponseEntity.status(SuccessCode.CREATED.getHttpStatus())
                 .body(ApiResponse.success(SuccessCode.CREATED, response));
     }
