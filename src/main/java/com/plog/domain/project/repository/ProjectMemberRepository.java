@@ -1,10 +1,11 @@
 package com.plog.domain.project.repository;
 
+import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.ProjectMember;
-import org.springframework.data.jpa.repository.EntityGraph;
-import org.springframework.data.jpa.repository.JpaRepository;
-import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.EntityGraph;
+import java.util.List;
 
 public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Long> {
 
@@ -14,4 +15,6 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
     List<ProjectMember> findAllWithUserByProjectId(Long projectId);
 
     Optional<ProjectMember> findByProjectIdAndUserId(Long projectId, Long userId);
+
+    Optional<ProjectMember> findByProjectIdAndUserIdAndStatus(Long projectId, Long userId, MemberStatus status);
 }
