@@ -24,6 +24,7 @@ import java.net.URI;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -51,11 +52,19 @@ public class PostService {
     public PostDto.Response createPost(Long projectId, Long userId, PostDto.CreateRequest request) {
         requireProject(projectId);
         ProjectMember member = projectAccessService.requireActiveMember(projectId, userId);
+        if (request.isNotice() && member.getRole() != ProjectRole.OWNER) {
+            throw new ApiException(PostErrorCode.NOTICE_PERMISSION_DENIED);
+        }
         String content = requireContent(request.content(), 5000);
         List<PostDto.AttachmentRequest> attachments = safeAttachments(request.attachments());
         validateAttachments(userId, attachments);
+        if (request.isNotice()) {
+            projectRepository.findByIdForUpdate(projectId)
+                    .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
+            clearNotices(projectId, null);
+        }
         Post post = postRepository.saveAndFlush(Post.builder()
-                .projectMember(member).content(content).isNotice(false).build());
+                .projectMember(member).content(content).isNotice(request.isNotice()).build());
         List<PostAttachment> savedAttachments = saveAttachments(post, attachments);
         publishPromotions(savedAttachments);
         return toResponse(post, member, savedAttachments);
@@ -87,7 +96,10 @@ public class PostService {
                 .map(post -> toResponse(post, member, attachmentsByPostId.getOrDefault(post.getId(), List.of())))
                 .toList();
         String nextCursor = hasNext && !page.isEmpty() ? encodeCursor(page.get(page.size() - 1)) : null;
-        return new PostDto.FeedResponse(posts, nextCursor, hasNext);
+        PostDto.Response notice = postRepository.findFirstByProjectMemberProjectIdAndIsNoticeTrue(projectId)
+                .map(post -> toResponse(post, member, attachmentRepository.findAllByPostIdOrderByIdAsc(post.getId())))
+                .orElse(null);
+        return new PostDto.FeedResponse(notice, posts, nextCursor, hasNext);
     }
 
     @Transactional
@@ -143,6 +155,26 @@ public class PostService {
             eventPublisher.publishEvent(new FileDeletionEvent(fileKeys));
         }
         return new PostDto.DeletedResponse(true);
+    }
+
+    @Transactional
+    public PostDto.NoticeResponse changeNotice(
+            Long projectId, Long postId, Long userId, PostDto.NoticeRequest request
+    ) {
+        requireProject(projectId);
+        ProjectMember member = projectAccessService.requireActiveMember(projectId, userId);
+        if (member.getRole() != ProjectRole.OWNER) {
+            throw new ApiException(PostErrorCode.NOTICE_PERMISSION_DENIED);
+        }
+        projectRepository.findByIdForUpdate(projectId)
+                .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
+        Post post = requirePost(projectId, postId);
+        if (request.isNotice()) {
+            clearNotices(projectId, postId);
+        }
+        post.changeNotice(request.isNotice());
+        postRepository.saveAndFlush(post);
+        return new PostDto.NoticeResponse(post.getId(), projectId, post.isNotice(), toInstant(post.getUpdatedAt()));
     }
 
     @Transactional
@@ -207,7 +239,7 @@ public class PostService {
         List<PostDto.AttachmentResponse> attachmentResponses = attachments.stream().map(this::toAttachmentResponse).toList();
         return new PostDto.Response(
                 post.getId(), post.getProjectMember().getProject().getId(), post.getProjectMember().getId(),
-                post.getProjectMember().getAnNickname(), post.getContent(),
+                post.getProjectMember().getAnNickname(), post.getContent(), post.isNotice(),
                 postLikeRepository.countByPostId(post.getId()), commentRepository.countByPostId(post.getId()),
                 postLikeRepository.existsByPostIdAndProjectMemberId(post.getId(), viewer.getId()), attachmentResponses,
                 toInstant(post.getCreatedAt()), toInstant(post.getUpdatedAt()));
@@ -297,6 +329,12 @@ public class PostService {
 
     private List<PostDto.AttachmentRequest> safeAttachments(List<PostDto.AttachmentRequest> attachments) {
         return attachments == null ? List.of() : attachments;
+    }
+
+    private void clearNotices(Long projectId, Long exceptPostId) {
+        List<Post> notices = new ArrayList<>(postRepository.findAllByProjectMemberProjectIdAndIsNoticeTrue(projectId));
+        notices.stream().filter(post -> !post.getId().equals(exceptPostId)).forEach(post -> post.changeNotice(false));
+        postRepository.saveAll(notices);
     }
 
     private void requireProject(Long projectId) {
