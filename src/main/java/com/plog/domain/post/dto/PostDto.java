@@ -52,5 +52,7 @@ public final class PostDto {
 
     public record FeedResponse(List<Response> posts, String nextCursor, boolean hasNext) {}
 
+    public record LikeResponse(Long postId, boolean liked, long likeCount) {}
+
     public record DeletedResponse(boolean deleted) {}
 }
