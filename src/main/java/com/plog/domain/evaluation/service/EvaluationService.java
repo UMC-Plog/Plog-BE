@@ -1,13 +1,16 @@
 package com.plog.domain.evaluation.service;
 
 import com.plog.domain.evaluation.dto.response.EvaluationTargetResponse;
+import com.plog.domain.evaluation.dto.response.PeerEvaluationDetailResponse;
 import com.plog.domain.evaluation.dto.response.TargetMemberDto;
+import com.plog.domain.evaluation.entity.PeerEvaluation;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.code.ErrorCode;
+import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.exception.ApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -52,5 +55,16 @@ public class EvaluationService {
                 .collect(Collectors.toList());
 
         return new EvaluationTargetResponse(targets);
+    }
+
+    public PeerEvaluationDetailResponse getPeerEvaluationDetail(Long projectId, Long targetMemberId, Long userId) {
+
+        ProjectMember evaluator = projectMemberRepository.findByProjectIdAndUserId(projectId, userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN));
+
+        PeerEvaluation evaluation = peerEvaluationRepository.findByEvaluatorIdAndEvaluateeId(evaluator.getId(), targetMemberId)
+                .orElseThrow(() -> new ApiException(EvaluationErrorCode.EVALUATION_NOT_FOUND));
+
+        return PeerEvaluationDetailResponse.from(evaluation);
     }
 }
