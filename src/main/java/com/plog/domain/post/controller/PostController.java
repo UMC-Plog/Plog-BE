@@ -1,5 +1,6 @@
 package com.plog.domain.post.controller;
 
+import com.plog.domain.post.dto.CommentDto;
 import com.plog.domain.post.dto.PostDto;
 import com.plog.domain.post.service.PostService;
 import com.plog.global.api.code.SuccessCode;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -72,4 +74,52 @@ public class PostController {
         return ApiResponse.success(postService.deletePost(projectId, postId, userId));
     }
 
+    @PostMapping("/{postId}/comments")
+    public ResponseEntity<ApiResponse<CommentDto.Response>> createComment(
+            @PathVariable Long projectId,
+            @PathVariable Long postId,
+            @AuthenticationPrincipal(expression = "userId") Long userId,
+            @Valid @RequestBody CommentDto.CreateRequest request
+    ) {
+        return ResponseEntity.status(SuccessCode.CREATED.getHttpStatus())
+                .body(ApiResponse.success(SuccessCode.CREATED,
+                        postService.createComment(projectId, postId, userId, request)));
+    }
+
+    @GetMapping("/{postId}/comments")
+    public ApiResponse<CommentDto.ListResponse> getComments(
+            @PathVariable Long projectId,
+            @PathVariable Long postId,
+            @AuthenticationPrincipal(expression = "userId") Long userId
+    ) {
+        return ApiResponse.success(postService.getComments(projectId, postId, userId));
+    }
+
+    @DeleteMapping("/{postId}/comments/{commentId}")
+    public ApiResponse<PostDto.DeletedResponse> deleteComment(
+            @PathVariable Long projectId,
+            @PathVariable Long postId,
+            @PathVariable Long commentId,
+            @AuthenticationPrincipal(expression = "userId") Long userId
+    ) {
+        return ApiResponse.success(postService.deleteComment(projectId, postId, commentId, userId));
+    }
+
+    @PutMapping("/{postId}/like")
+    public ApiResponse<PostDto.LikeResponse> like(
+            @PathVariable Long projectId,
+            @PathVariable Long postId,
+            @AuthenticationPrincipal(expression = "userId") Long userId
+    ) {
+        return ApiResponse.success(postService.like(projectId, postId, userId));
+    }
+
+    @DeleteMapping("/{postId}/like")
+    public ApiResponse<PostDto.LikeResponse> unlike(
+            @PathVariable Long projectId,
+            @PathVariable Long postId,
+            @AuthenticationPrincipal(expression = "userId") Long userId
+    ) {
+        return ApiResponse.success(postService.unlike(projectId, postId, userId));
+    }
 }
