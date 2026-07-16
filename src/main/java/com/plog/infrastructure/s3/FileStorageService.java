@@ -40,10 +40,14 @@ public class FileStorageService {
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
 
-    @Value("${plog.s3.bucket}")
+    @Value("${plog.s3.enabled:false}")
+    private boolean enabled;
+
+    @Value("${plog.s3.bucket:}")
     private String bucket;
 
     public FileStorageDto.PresignedUploadResponse createUploadUrl(FileStorageDto.PresignedUploadRequest request) {
+        ensureEnabled();
         validateFile(request.fileName(), request.contentType(), request.fileSize());
         String safeName = request.fileName().trim().replaceAll("[^a-zA-Z0-9._-]", "_");
         String fileKey = "temporary/" + UUID.randomUUID() + "/" + safeName;
@@ -58,6 +62,7 @@ public class FileStorageService {
     }
 
     public void verifyUploadedFile(String fileKey, String fileName, long expectedSize) {
+        ensureEnabled();
         validateFile(fileName, null, expectedSize);
         if (fileKey == null || !fileKey.startsWith("temporary/")) {
             throw new ApiException(FileStorageErrorCode.INVALID_FILE_KEY);
@@ -80,6 +85,7 @@ public class FileStorageService {
     }
 
     public String createDownloadUrl(String fileKey) {
+        ensureEnabled();
         GetObjectRequest getObject = GetObjectRequest.builder().bucket(bucket).key(fileKey).build();
         return s3Presigner.presignGetObject(GetObjectPresignRequest.builder()
                         .signatureDuration(URL_DURATION).getObjectRequest(getObject).build())
@@ -87,14 +93,22 @@ public class FileStorageService {
     }
 
     public void delete(String fileKey) {
+        ensureEnabled();
         s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(fileKey).build());
     }
 
     public void markPermanent(String fileKey) {
+        ensureEnabled();
         s3Client.putObjectTagging(PutObjectTaggingRequest.builder()
                 .bucket(bucket).key(fileKey)
                 .tagging(Tagging.builder().tagSet(Tag.builder().key("state").value("permanent").build()).build())
                 .build());
+    }
+
+    private void ensureEnabled() {
+        if (!enabled || bucket.isBlank()) {
+            throw new ApiException(FileStorageErrorCode.FILE_STORAGE_DISABLED);
+        }
     }
 
     private void validateFile(String fileName, String contentType, long fileSize) {

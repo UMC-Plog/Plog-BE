@@ -46,6 +46,14 @@ app:
     allowed-origins:
       - http://localhost:3000
 
+# S3 인프라가 준비되기 전까지 비활성화한다. 활성화 시 bucket과 AWS 자격증명이 필요하다.
+plog:
+  s3:
+    enabled: ${S3_ENABLED:false}
+    bucket: ${S3_BUCKET:}
+    region: ${S3_REGION:ap-northeast-2}
+    endpoint: ${S3_ENDPOINT:}
+
 springdoc:
   api-docs:
     path: /v3/api-docs
