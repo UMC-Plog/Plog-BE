@@ -19,4 +19,8 @@ public interface FcmTokenRepository extends JpaRepository<FcmToken, Long> {
                 updated_at = now()
             """, nativeQuery = true)
     int upsert(@Param("userId") Long userId, @Param("token") String token);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from FcmToken f where f.token = :token and f.user.id = :userId")
+    int deleteByTokenAndUserId(@Param("token") String token, @Param("userId") Long userId);
 }

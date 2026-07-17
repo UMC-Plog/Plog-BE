@@ -19,7 +19,7 @@ public class FcmTokenService {
 
     @Transactional
     public FcmTokenDto.Response put(Long userId, FcmTokenDto.Request request) {
-        String value = request.token() == null ? "" : request.token();
+        String value = request.token() == null ? "" : request.token().trim();
         if (value.isEmpty() || value.length() > 512) {
             throw new ApiException(NotificationErrorCode.INVALID_FCM_TOKEN);
         }
@@ -35,17 +35,11 @@ public class FcmTokenService {
 
     @Transactional
     public FcmTokenDto.DeletedResponse delete(Long userId, FcmTokenDto.Request request) {
-        String value = request.token() == null ? "" : request.token();
+        String value = request.token() == null ? "" : request.token().trim();
         if (value.isEmpty()) {
             throw new ApiException(NotificationErrorCode.INVALID_FCM_TOKEN);
         }
-        boolean deleted = fcmTokenRepository.findByToken(value)
-                .filter(token -> token.getUser().getId().equals(userId))
-                .map(token -> {
-                    fcmTokenRepository.delete(token);
-                    return true;
-                })
-                .orElse(false);
+        boolean deleted = fcmTokenRepository.deleteByTokenAndUserId(value, userId) > 0;
         return new FcmTokenDto.DeletedResponse(deleted);
     }
 }
