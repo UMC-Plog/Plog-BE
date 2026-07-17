@@ -25,7 +25,7 @@ public class ProjectSettingsService {
     private final ProjectAccessService projectAccessService;
     private final InviteTokenCipher inviteTokenCipher;
 
-    @Value("${plog.invite.base-url:https://plog.example.com/invite}")
+    @Value("${plog.invite.base-url}")
     private String inviteBaseUrl;
 
     public ProjectSettingsDto.Response getSettings(Long projectId, Long userId) {
