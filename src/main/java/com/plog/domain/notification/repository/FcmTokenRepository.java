@@ -11,6 +11,12 @@ public interface FcmTokenRepository extends JpaRepository<FcmToken, Long> {
     Optional<FcmToken> findByToken(String token);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query(value = "update fcm set user_id = :userId, updated_at = now() where fcm_id = :fcmId", nativeQuery = true)
-    int updateOwnerAndTimestamp(@Param("fcmId") Long fcmId, @Param("userId") Long userId);
+    @Query(value = """
+            insert into fcm (user_id, token, created_at, updated_at)
+            values (:userId, :token, now(), now())
+            on conflict (token) do update
+            set user_id = excluded.user_id,
+                updated_at = now()
+            """, nativeQuery = true)
+    int upsert(@Param("userId") Long userId, @Param("token") String token);
 }

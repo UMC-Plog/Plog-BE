@@ -5,7 +5,6 @@ import com.plog.domain.notification.entity.FcmToken;
 import com.plog.domain.notification.exception.NotificationErrorCode;
 import com.plog.domain.notification.repository.FcmTokenRepository;
 import com.plog.domain.notification.repository.NotificationUserRepository;
-import com.plog.domain.user.entity.User;
 import com.plog.global.api.exception.ApiException;
 import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
@@ -20,16 +19,15 @@ public class FcmTokenService {
 
     @Transactional
     public FcmTokenDto.Response put(Long userId, FcmTokenDto.Request request) {
-        String value = request.token() == null ? "" : request.token().trim();
+        String value = request.token() == null ? "" : request.token();
         if (value.isEmpty() || value.length() > 512) {
             throw new ApiException(NotificationErrorCode.INVALID_FCM_TOKEN);
         }
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(NotificationErrorCode.USER_NOT_FOUND));
-        FcmToken token = fcmTokenRepository.findByToken(value).map(existing -> {
-            fcmTokenRepository.updateOwnerAndTimestamp(existing.getId(), user.getId());
-            return fcmTokenRepository.findByToken(value).orElseThrow();
-        }).orElseGet(() -> fcmTokenRepository.saveAndFlush(FcmToken.builder().user(user).token(value).build()));
+        if (!userRepository.existsById(userId)) {
+            throw new ApiException(NotificationErrorCode.USER_NOT_FOUND);
+        }
+        fcmTokenRepository.upsert(userId, value);
+        FcmToken token = fcmTokenRepository.findByToken(value).orElseThrow();
         return new FcmTokenDto.Response(
                 token.getId(), token.getUser().getId(), token.getToken(),
                 token.getUpdatedAt().toInstant(ZoneOffset.UTC));
@@ -37,13 +35,17 @@ public class FcmTokenService {
 
     @Transactional
     public FcmTokenDto.DeletedResponse delete(Long userId, FcmTokenDto.Request request) {
-        String value = request.token() == null ? "" : request.token().trim();
+        String value = request.token() == null ? "" : request.token();
         if (value.isEmpty()) {
             throw new ApiException(NotificationErrorCode.INVALID_FCM_TOKEN);
         }
-        fcmTokenRepository.findByToken(value)
+        boolean deleted = fcmTokenRepository.findByToken(value)
                 .filter(token -> token.getUser().getId().equals(userId))
-                .ifPresent(fcmTokenRepository::delete);
-        return new FcmTokenDto.DeletedResponse(true);
+                .map(token -> {
+                    fcmTokenRepository.delete(token);
+                    return true;
+                })
+                .orElse(false);
+        return new FcmTokenDto.DeletedResponse(deleted);
     }
 }
