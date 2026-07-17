@@ -16,15 +16,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class InviteTokenCipher {
     private static final int IV_LENGTH = 12;
+    private static final int AUTH_TAG_LENGTH = 16;
     private static final SecureRandom RANDOM = new SecureRandom();
     private final SecretKeySpec key;
 
-    public InviteTokenCipher(@Value("${plog.invite.encryption-key-base64:}") String encodedKey) {
-        byte[] decoded = encodedKey.isBlank() ? new byte[0] : Base64.getDecoder().decode(encodedKey);
-        if (decoded.length == 0) {
-            this.key = null;
-            return;
+    public InviteTokenCipher(@Value("${plog.invite.encryption-key-base64}") String encodedKey) {
+        if (encodedKey == null || encodedKey.isBlank()) {
+            throw new IllegalArgumentException("plog.invite.encryption-key-base64 must be configured");
         }
+        byte[] decoded = Base64.getDecoder().decode(encodedKey);
         if (decoded.length != 32) {
             throw new IllegalArgumentException("plog.invite.encryption-key-base64 must decode to 32 bytes");
         }
@@ -32,11 +32,14 @@ public class InviteTokenCipher {
     }
 
     public String decrypt(String encryptedToken) {
-        if (key == null || encryptedToken == null || encryptedToken.isBlank()) {
+        if (encryptedToken == null || encryptedToken.isBlank()) {
             throw new ApiException(ProjectErrorCode.INVITE_TOKEN_CONFIGURATION_ERROR);
         }
         try {
             byte[] packed = Base64.getDecoder().decode(encryptedToken);
+            if (packed.length < IV_LENGTH + AUTH_TAG_LENGTH) {
+                throw new IllegalArgumentException("encrypted invite token is too short");
+            }
             ByteBuffer buffer = ByteBuffer.wrap(packed);
             byte[] iv = new byte[IV_LENGTH];
             buffer.get(iv);
@@ -51,7 +54,7 @@ public class InviteTokenCipher {
     }
 
     public String encrypt(String plainToken) {
-        if (key == null || plainToken == null || plainToken.isBlank()) {
+        if (plainToken == null || plainToken.isBlank()) {
             throw new ApiException(ProjectErrorCode.INVITE_TOKEN_CONFIGURATION_ERROR);
         }
         try {

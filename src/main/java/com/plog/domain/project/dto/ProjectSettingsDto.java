@@ -1,7 +1,6 @@
 package com.plog.domain.project.dto;
 
 import com.plog.domain.project.entity.ProjectType;
-import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -10,7 +9,7 @@ public final class ProjectSettingsDto {
     private ProjectSettingsDto() {}
 
     public record UpdateRequest(
-            @Size(min = 2, max = 20) String projectName,
+            String projectName,
             LocalDate endDay,
             ProjectType projectType
     ) {}

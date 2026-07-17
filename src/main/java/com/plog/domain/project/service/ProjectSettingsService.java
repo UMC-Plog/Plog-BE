@@ -50,8 +50,8 @@ public class ProjectSettingsService {
             Long userId,
             ProjectSettingsDto.UpdateRequest request
     ) {
-        projectAccessService.requireOwner(projectId, userId);
         Project project = requireProject(projectId);
+        projectAccessService.requireOwner(projectId, userId);
         String projectName = request.projectName() == null ? null : request.projectName().trim();
         if (projectName != null && (projectName.length() < 2 || projectName.length() > 20)) {
             throw new ApiException(ProjectErrorCode.INVALID_PROJECT_NAME);
