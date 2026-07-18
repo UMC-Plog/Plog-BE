@@ -24,7 +24,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "self_feedback", uniqueConstraints = {
-        // 멤버당 자기 피드백 1건 (project_member가 이미 프로젝트 단위이므로 이것으로 충분)
         @UniqueConstraint(name = "uk_self_feedback_member", columnNames = "project_member_id")
 })
 public class SelfFeedback extends BaseEntity {

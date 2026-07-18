@@ -14,6 +14,7 @@ public enum EvaluationErrorCode implements BaseErrorCode {
     CANNOT_EVALUATE_SELF(HttpStatus.FORBIDDEN, "EVAL002", "본인은 평가할 수 없습니다."),
     EVALUATION_PERIOD_CLOSED(HttpStatus.BAD_REQUEST, "EVAL003", "평가 기간이 종료되었습니다."),
     EVALUATION_NOT_STARTED(HttpStatus.BAD_REQUEST, "EVAL004", "평가 기간이 아닙니다."),
+    EVALUATION_NOT_FOUND(HttpStatus.NOT_FOUND, "EVAL010", "해당 팀원에게 작성한 평가 내역이 존재하지 않습니다."),
 
     // 유효성 검사 오류
     INVALID_SCORE_RANGE(HttpStatus.BAD_REQUEST, "EVAL005", "평가 점수는 1~5점 사이여야 합니다."),

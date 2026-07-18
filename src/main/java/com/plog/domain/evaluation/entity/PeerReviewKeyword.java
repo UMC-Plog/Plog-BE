@@ -1,5 +1,6 @@
 package com.plog.domain.evaluation.entity;
 
+/**
 import com.plog.global.common.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -47,3 +48,5 @@ public class PeerReviewKeyword extends BaseEntity {
     @Column(name = "feedback", length = 200)
     private String feedback;
 }
+
+ **/
