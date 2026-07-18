@@ -9,15 +9,18 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum EvaluationSuccessCode implements BaseCode {
 
-    EVALUATION_SUBMITTED(HttpStatus.CREATED, "EVAL001", "동료 평가가 성공적으로 제출되었습니다."),
-    EVALUATION_UPDATED(HttpStatus.OK, "EVAL002", "동료 평가가 수정되었습니다."),
-    SELF_FEEDBACK_SUBMITTED(HttpStatus.CREATED, "EVAL003", "자기 피드백이 등록되었습니다."),
-    SELF_FEEDBACK_UPDATED(HttpStatus.OK, "EVAL004", "자기 피드백이 수정되었습니다."),
-    EVALUATION_TARGET_RETRIEVED(HttpStatus.OK, "EVAL005", "평가 대상 목록을 성공적으로 조회했습니다."),
-    PEER_EVALUATION_RETRIEVED(HttpStatus.OK, "EVAL007", "동료 평가 상세 조회 성공"),
+    // 대상자 조회
+    EVALUATION_TARGET_RETRIEVED(HttpStatus.OK, "EVAL200_1", "평가 대상 팀원 목록을 성공적으로 조회했습니다."),
+
+    // 동료 평가
+    PEER_EVALUATION_RETRIEVED(HttpStatus.OK, "EVAL200_2", "동료 평가 상세 조회 성공"),
+    EVALUATION_SUBMITTED(HttpStatus.OK, "EVAL200_3", "동료 평가가 성공적으로 제출되었습니다."),
+    EVALUATION_UPDATED(HttpStatus.OK, "EVAL200_4", "동료 평가 수정 성공"),
 
     // 셀프 피드백
-    SELF_FEEDBACK_RETRIEVED(HttpStatus.OK, "EVAL006", "셀프 피드백 조회 성공");
+    SELF_FEEDBACK_RETRIEVED(HttpStatus.OK, "EVAL200_5", "셀프 피드백 조회 성공"),
+    SELF_FEEDBACK_SUBMITTED(HttpStatus.CREATED, "EVAL201_1", "자기 피드백이 성공적으로 등록되었습니다."),
+    SELF_FEEDBACK_UPDATED(HttpStatus.OK, "EVAL200_6", "셀프 피드백 수정 성공");
 
     private final HttpStatus httpStatus;
     private final String code;

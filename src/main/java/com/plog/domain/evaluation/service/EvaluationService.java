@@ -1,6 +1,8 @@
 package com.plog.domain.evaluation.service;
 
+import com.plog.domain.evaluation.dto.request.PeerEvaluationCreateRequest;
 import com.plog.domain.evaluation.dto.response.EvaluationTargetResponse;
+import com.plog.domain.evaluation.dto.response.PeerEvaluationCreateResponse;
 import com.plog.domain.evaluation.dto.response.PeerEvaluationDetailResponse;
 import com.plog.domain.evaluation.dto.response.TargetMemberDto;
 import com.plog.domain.evaluation.entity.PeerEvaluation;
@@ -73,5 +75,57 @@ public class EvaluationService {
                 .orElseThrow(() -> new ApiException(EvaluationErrorCode.EVALUATION_NOT_FOUND));
 
         return PeerEvaluationDetailResponse.from(evaluation);
+    }
+
+    @Transactional
+    public PeerEvaluationCreateResponse createPeerEvaluation(
+            Long projectId,
+            Long targetMemberId,
+            Long userId,
+            PeerEvaluationCreateRequest request) {
+
+        ProjectMember evaluator = projectMemberRepository.findByProjectIdAndUserId(projectId, userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN));
+
+        ProjectMember evaluatee = projectMemberRepository.findById(targetMemberId)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
+
+        if (!evaluatee.getProject().getId().equals(projectId)) {
+            throw new ApiException(ErrorCode.FORBIDDEN);
+        }
+
+        if (evaluator.getId().equals(evaluatee.getId())) {
+            throw new ApiException(EvaluationErrorCode.CANNOT_EVALUATE_SELF);
+        }
+
+        if (peerEvaluationRepository.findByEvaluatorIdAndEvaluateeId(evaluator.getId(), evaluatee.getId()).isPresent()) {
+            throw new ApiException(EvaluationErrorCode.ALREADY_EVALUATED);
+        }
+
+        boolean isNudgeTriggered = checkNudgeCondition(request);
+
+        PeerEvaluation evaluation = PeerEvaluation.builder()
+                .evaluator(evaluator)
+                .evaluatee(evaluatee)
+                .collaborationScore(request.collaborationScore())
+                .initiativeScore(request.initiativeScore())
+                .responsibilityScore(request.responsibilityScore())
+                .communicationScore(request.communicationScore())
+                .outputScore(request.outputScore())
+                .keywords(request.keywords())
+                .feedback(request.feedback())
+                .build();
+
+        peerEvaluationRepository.save(evaluation);
+
+        return new PeerEvaluationCreateResponse(evaluation.getId(), isNudgeTriggered);
+    }
+
+    private boolean checkNudgeCondition(PeerEvaluationCreateRequest request) {
+        int firstScore = request.collaborationScore();
+        return firstScore == request.initiativeScore() &&
+                firstScore == request.responsibilityScore() &&
+                firstScore == request.communicationScore() &&
+                firstScore == request.outputScore();
     }
 }
