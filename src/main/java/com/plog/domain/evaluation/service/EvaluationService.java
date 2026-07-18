@@ -94,6 +94,10 @@ public class EvaluationService {
             throw new ApiException(ErrorCode.FORBIDDEN);
         }
 
+        if (!evaluatee.getProject().isEvaluatingState()) {
+            throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
+        }
+
         if (evaluator.getId().equals(evaluatee.getId())) {
             throw new ApiException(EvaluationErrorCode.CANNOT_EVALUATE_SELF);
         }

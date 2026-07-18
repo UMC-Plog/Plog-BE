@@ -52,4 +52,11 @@ public class Project extends BaseEntity {
 
     @Column(name = "end_day", nullable = false)
     private LocalDate endDay;
+
+    public boolean isEvaluatingState() {
+        if (this.status == ProjectStatus.COMPLETED) {
+            return false;
+        }
+        return LocalDate.now().isAfter(this.endDay);
+    }
 }
