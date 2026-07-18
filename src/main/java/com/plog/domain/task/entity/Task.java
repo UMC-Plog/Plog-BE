@@ -59,4 +59,17 @@ public class Task extends BaseEntity {
     // DONE에서 되돌리면 null로 초기화
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
+
+    // Project를 직접 참조하지 않고 ProjectMember를 통해서만 프로젝트와 연결한다.
+    // (project_id 컬럼 없음 — projectId는 URL 검증용으로만 사용되고 저장되지 않음)
+    public static Task create(ProjectMember projectMember, String title, TaskCategory category,
+                              TaskStatus cardStatus, LocalDate endDate) {
+        return Task.builder()
+                .projectMember(projectMember)
+                .title(title)
+                .category(category)
+                .cardStatus(cardStatus)
+                .endDate(endDate)
+                .build();
+    }
 }
