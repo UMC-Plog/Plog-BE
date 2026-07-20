@@ -145,6 +145,27 @@ class ProjectCreateServiceTest {
         assertThat(savedMember.getStatus()).isEqualTo(MemberStatus.ACTIVE);
     }
 
+    @Test
+    void createsInviteUrlWithoutDuplicateSlashWhenBaseUrlHasTrailingSlash() {
+        ProjectCreateService serviceWithTrailingSlash = new ProjectCreateService(
+                userRepository,
+                projectRepository,
+                projectMemberRepository,
+                inviteTokenService,
+                INVITE_BASE_URL + "/"
+        );
+        User user = User.createLocal("owner@plog.test", "encoded-password", "Owner", "owner");
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        executeInviteTokenPersistence();
+        given(projectRepository.save(any(Project.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(projectMemberRepository.save(any(ProjectMember.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        ProjectCreateResponse response = serviceWithTrailingSlash.create(1L, validRequest("Plog API"));
+
+        assertThat(response.invite().inviteUrl()).isEqualTo(INVITE_BASE_URL + "/" + RAW_INVITE_TOKEN);
+    }
+
     @ParameterizedTest
     @NullSource
     @ValueSource(strings = {"", " ", "P", "123456789012345678901"})

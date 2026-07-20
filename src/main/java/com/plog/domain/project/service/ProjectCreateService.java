@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
 public class ProjectCreateService {
@@ -84,7 +85,12 @@ public class ProjectCreateService {
                 created.project().getEndDay(),
                 created.member().getId(),
                 created.member().getRole(),
-                new ProjectCreateResponse.Invite(inviteCode, inviteBaseUrl + "/" + inviteCode)
+                new ProjectCreateResponse.Invite(
+                        inviteCode,
+                        UriComponentsBuilder.fromUriString(inviteBaseUrl)
+                                .pathSegment(inviteCode)
+                                .toUriString()
+                )
         );
     }
 
