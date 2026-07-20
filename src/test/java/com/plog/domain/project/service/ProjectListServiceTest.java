@@ -20,6 +20,7 @@ import com.plog.domain.user.entity.User;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,7 +53,7 @@ class ProjectListServiceTest {
         given(project.getProjectName()).willReturn("Plog");
         given(project.getProjectType()).willReturn(ProjectType.DEVELOP);
         given(project.getStatus()).willReturn(ProjectStatus.IN_PROGRESS);
-        given(project.getEndDay()).willReturn(LocalDate.now().plusDays(5));
+        given(project.getEndDay()).willReturn(LocalDate.now(ZoneOffset.UTC).plusDays(5));
 
         ProjectMember myMembership = member(project, user(1L, "vana"));
         ProjectMember fourthMember = mock(ProjectMember.class);
