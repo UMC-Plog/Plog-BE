@@ -12,15 +12,14 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDate;
 import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 
 @Entity
+@DynamicUpdate
 @Getter
-@Builder
-@AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "projects", uniqueConstraints = {
         // 초대 토큰으로 프로젝트를 특정해야 하므로 중복 불가
@@ -56,6 +55,28 @@ public class Project extends BaseEntity {
     @Column(name = "end_day", nullable = false)
     private LocalDate endDay;
 
+    @Builder
+    private Project(
+            Long id,
+            String projectName,
+            String inviteTokenHash,
+            String inviteTokenEncrypted,
+            ProjectType projectType,
+            ProjectStatus status,
+            LocalDate startDay,
+            LocalDate endDay
+    ) {
+        validateInviteTokenValues(inviteTokenHash, inviteTokenEncrypted);
+        this.id = id;
+        this.projectName = projectName;
+        this.inviteTokenHash = inviteTokenHash;
+        this.inviteTokenEncrypted = inviteTokenEncrypted;
+        this.projectType = projectType;
+        this.status = status;
+        this.startDay = startDay;
+        this.endDay = endDay;
+    }
+
     public void updateSettings(String projectName, LocalDate endDay, ProjectType projectType) {
         if (projectName != null) {
             this.projectName = projectName;
@@ -65,6 +86,19 @@ public class Project extends BaseEntity {
         }
         if (projectType != null) {
             this.projectType = projectType;
+        }
+    }
+
+    public void rotateInviteToken(String inviteTokenHash, String inviteTokenEncrypted) {
+        validateInviteTokenValues(inviteTokenHash, inviteTokenEncrypted);
+        this.inviteTokenHash = inviteTokenHash;
+        this.inviteTokenEncrypted = inviteTokenEncrypted;
+    }
+
+    private static void validateInviteTokenValues(String inviteTokenHash, String inviteTokenEncrypted) {
+        if (inviteTokenHash == null || inviteTokenHash.isBlank()
+                || inviteTokenEncrypted == null || inviteTokenEncrypted.isBlank()) {
+            throw new IllegalArgumentException("invite token values must not be blank");
         }
     }
 

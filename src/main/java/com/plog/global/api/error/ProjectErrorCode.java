@@ -15,6 +15,7 @@ public enum ProjectErrorCode implements BaseErrorCode {
     INVALID_PROJECT_NAME(HttpStatus.BAD_REQUEST, "PROJECT004", "프로젝트명은 2자 이상 20자 이하여야 합니다."),
     INVALID_PROJECT_END_DAY(HttpStatus.BAD_REQUEST, "PROJECT005", "예상 종료일은 오늘과 시작일 이후여야 합니다."),
     INVITE_TOKEN_CONFIGURATION_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "PROJECT006", "초대 토큰 설정이 올바르지 않습니다."),
+    INVITE_TOKEN_GENERATION_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "PROJECT007", "초대 토큰을 발급할 수 없습니다."),
 
     PROJECT_ACCESS_DENIED_OR_NOT_FOUND(HttpStatus.BAD_REQUEST, "PROJ400_1", "존재하지 않는 프로젝트이거나 접근 권한이 없습니다."),
     MEMBER_NOT_FOUND(HttpStatus.BAD_REQUEST, "PROJ400_2", "해당 팀원은 현재 프로젝트에 참여하고 있지 않습니다."),
