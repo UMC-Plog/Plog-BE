@@ -1,6 +1,6 @@
 package com.plog.domain.project.service;
 
-import com.plog.domain.project.exception.ProjectErrorCode;
+import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;

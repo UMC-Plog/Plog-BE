@@ -3,8 +3,8 @@ package com.plog.domain.project.service;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectRole;
-import com.plog.domain.project.exception.ProjectErrorCode;
 import com.plog.domain.project.repository.ProjectMemberRepository;
+import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,8 +18,14 @@ public class ProjectAccessService {
         if (userId == null) {
             throw new ApiException(ProjectErrorCode.PROJECT_MEMBER_REQUIRED);
         }
-        return projectMemberRepository.findByProjectIdAndUserIdAndStatus(projectId, userId, MemberStatus.ACTIVE)
+        ProjectMember member = projectMemberRepository
+                .findByProjectIdAndUserIdAndStatus(projectId, userId, MemberStatus.ACTIVE)
                 .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_MEMBER_REQUIRED));
+        ProjectRole role = member.getRole();
+        if (role != ProjectRole.OWNER && role != ProjectRole.MEMBER) {
+            throw new ApiException(ProjectErrorCode.PROJECT_MEMBER_REQUIRED);
+        }
+        return member;
     }
 
     public ProjectMember requireOwner(Long projectId, Long userId) {
