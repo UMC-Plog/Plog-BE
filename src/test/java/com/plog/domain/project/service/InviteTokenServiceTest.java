@@ -9,6 +9,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -289,13 +290,9 @@ class InviteTokenServiceTest {
     void rejectsRotationWhenEveryCandidateMatchesTheCurrentToken() {
         enableTransactions();
         String currentRawToken = "current-raw-token";
-        Project project = Project.builder()
-                .id(10L)
-                .inviteTokenHash(HashUtil.sha256Hex(currentRawToken))
-                .inviteTokenEncrypted(inviteTokenCipher.encrypt(currentRawToken))
-                .build();
+        String currentTokenHash = HashUtil.sha256Hex(currentRawToken);
         given(inviteTokenGenerator.generate()).willReturn(currentRawToken);
-        given(projectRepository.findByIdForUpdate(10L)).willReturn(Optional.of(project));
+        given(projectRepository.existsByInviteTokenHash(currentTokenHash)).willReturn(true);
 
         assertThatThrownBy(() -> inviteTokenService.rotate(10L))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
@@ -303,6 +300,8 @@ class InviteTokenServiceTest {
                                 .isEqualTo(ProjectErrorCode.INVITE_TOKEN_GENERATION_ERROR));
 
         verify(inviteTokenGenerator, times(5)).generate();
+        verify(projectRepository, times(5)).existsByInviteTokenHash(currentTokenHash);
+        verify(projectRepository, never()).findByIdForUpdate(anyLong());
     }
 
     private void enableTransactions() {

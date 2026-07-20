@@ -76,9 +76,6 @@ public class InviteTokenService {
         return issueAndPersist(issuedToken -> {
             Project project = projectRepository.findByIdForUpdate(projectId)
                     .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
-            if (issuedToken.hash().equals(project.getInviteTokenHash())) {
-                throw new InviteTokenCollisionException();
-            }
             project.rotateInviteToken(issuedToken.hash(), issuedToken.encryptedValue());
             return project;
         }).token();
