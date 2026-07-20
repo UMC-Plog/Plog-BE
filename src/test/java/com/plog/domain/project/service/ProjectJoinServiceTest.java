@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -25,12 +27,14 @@ import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -165,6 +169,38 @@ class ProjectJoinServiceTest {
     }
 
     @Test
+    void convertsAConcurrentMembershipUniqueViolationToAnAlreadyJoinedConflict() {
+        User user = user();
+        Project project = project();
+        DataIntegrityViolationException duplicateMembership = constraintViolation("uk_project_member");
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(inviteTokenService.findProjectByRawToken(INVITE_CODE)).willReturn(Optional.of(project));
+        given(projectMemberRepository.findByProjectIdAndUserId(10L, 1L)).willReturn(Optional.empty());
+        given(projectMemberRepository.saveAndFlush(any(ProjectMember.class)))
+                .willThrow(duplicateMembership);
+
+        assertProjectError(
+                () -> projectJoinService.join(1L, new ProjectJoinRequest(INVITE_CODE)),
+                ProjectErrorCode.PROJECT_ALREADY_JOINED
+        );
+    }
+
+    @Test
+    void doesNotHideAnUnrelatedDatabaseConstraintFailure() {
+        User user = user();
+        Project project = project();
+        DataIntegrityViolationException unrelatedFailure = constraintViolation("fk_project_member_user");
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(inviteTokenService.findProjectByRawToken(INVITE_CODE)).willReturn(Optional.of(project));
+        given(projectMemberRepository.findByProjectIdAndUserId(10L, 1L)).willReturn(Optional.empty());
+        given(projectMemberRepository.saveAndFlush(any(ProjectMember.class)))
+                .willThrow(unrelatedFailure);
+
+        assertThatThrownBy(() -> projectJoinService.join(1L, new ProjectJoinRequest(INVITE_CODE)))
+                .isSameAs(unrelatedFailure);
+    }
+
+    @Test
     void rejectsANullPrincipal() {
         assertThatThrownBy(() -> projectJoinService.join(null, new ProjectJoinRequest(INVITE_CODE)))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
@@ -183,6 +219,12 @@ class ProjectJoinServiceTest {
         User user = User.createLocal("member@plog.test", "encoded-password", "Member", "member");
         ReflectionTestUtils.setField(user, "id", 1L);
         return user;
+    }
+
+    private DataIntegrityViolationException constraintViolation(String constraintName) {
+        ConstraintViolationException hibernateException = mock(ConstraintViolationException.class);
+        lenient().when(hibernateException.getConstraintName()).thenReturn(constraintName);
+        return new DataIntegrityViolationException("constraint violation", hibernateException);
     }
 
     private Project project() {
