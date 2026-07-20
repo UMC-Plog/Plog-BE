@@ -19,6 +19,7 @@ import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.HashUtil;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -119,6 +120,9 @@ class ProjectJoinServiceIntegrationTest {
     void reactivatesTheExitedMembershipWithoutCreatingAnotherRow() {
         Fixture fixture = saveFixture("rejoined-member");
         Long exitedMemberId = saveExitedMember(fixture);
+        LocalDateTime previousUpdatedAt = projectMemberRepository.findById(exitedMemberId)
+                .orElseThrow()
+                .getUpdatedAt();
 
         ProjectJoinResponse response = projectJoinService.join(
                 fixture.userId(),
@@ -132,6 +136,8 @@ class ProjectJoinServiceIntegrationTest {
         assertThat(projectMemberRepository.count()).isEqualTo(1);
         ProjectMember reactivated = projectMemberRepository.findById(exitedMemberId).orElseThrow();
         assertThat(reactivated.getStatus()).isEqualTo(MemberStatus.ACTIVE);
+        assertThat(reactivated.getUpdatedAt()).isAfter(previousUpdatedAt);
+        assertThat(response.joinedAt()).isEqualTo(reactivated.getUpdatedAt());
     }
 
     @Test
@@ -159,6 +165,39 @@ class ProjectJoinServiceIntegrationTest {
                     .satisfies(result -> assertThat(((ApiException) result).getErrorCode())
                             .isEqualTo(ProjectErrorCode.PROJECT_ALREADY_JOINED));
             assertThat(projectMemberRepository.count()).isEqualTo(1);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void allowsOnlyOneOfTwoConcurrentRejoinRequests() throws Exception {
+        Fixture fixture = saveFixture("concurrent-rejoined-member");
+        Long exitedMemberId = saveExitedMember(fixture);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<Object>> futures = List.of(
+                    executor.submit(() -> joinAfterSignal(fixture, ready, start)),
+                    executor.submit(() -> joinAfterSignal(fixture, ready, start))
+            );
+            assertThat(ready.await(5, SECONDS)).isTrue();
+            start.countDown();
+
+            List<Object> results = List.of(
+                    futures.get(0).get(10, SECONDS),
+                    futures.get(1).get(10, SECONDS)
+            );
+
+            assertThat(results).filteredOn(ProjectJoinResponse.class::isInstance).hasSize(1);
+            assertThat(results).filteredOn(ApiException.class::isInstance)
+                    .singleElement()
+                    .satisfies(result -> assertThat(((ApiException) result).getErrorCode())
+                            .isEqualTo(ProjectErrorCode.PROJECT_ALREADY_JOINED));
+            assertThat(projectMemberRepository.count()).isEqualTo(1);
+            assertThat(projectMemberRepository.findById(exitedMemberId).orElseThrow().getStatus())
+                    .isEqualTo(MemberStatus.ACTIVE);
         } finally {
             executor.shutdownNow();
         }
