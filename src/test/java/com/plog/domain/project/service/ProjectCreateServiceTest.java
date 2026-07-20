@@ -9,6 +9,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.plog.domain.chat.entity.ChatRoom;
+import com.plog.domain.chat.repository.ChatRoomRepository;
 import com.plog.domain.project.dto.request.ProjectCreateRequest;
 import com.plog.domain.project.dto.response.ProjectCreateResponse;
 import com.plog.domain.project.entity.MemberStatus;
@@ -60,6 +62,9 @@ class ProjectCreateServiceTest {
     private ProjectMemberRepository projectMemberRepository;
 
     @Mock
+    private ChatRoomRepository chatRoomRepository;
+
+    @Mock
     private InviteTokenService inviteTokenService;
 
     private ProjectCreateService projectCreateService;
@@ -70,6 +75,7 @@ class ProjectCreateServiceTest {
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                chatRoomRepository,
                 inviteTokenService,
                 INVITE_BASE_URL
         );
@@ -125,9 +131,15 @@ class ProjectCreateServiceTest {
 
         ArgumentCaptor<Project> projectCaptor = ArgumentCaptor.forClass(Project.class);
         ArgumentCaptor<ProjectMember> memberCaptor = ArgumentCaptor.forClass(ProjectMember.class);
-        InOrder persistenceOrder = inOrder(projectRepository, projectMemberRepository);
+        ArgumentCaptor<ChatRoom> chatRoomCaptor = ArgumentCaptor.forClass(ChatRoom.class);
+        InOrder persistenceOrder = inOrder(
+                projectRepository,
+                projectMemberRepository,
+                chatRoomRepository
+        );
         persistenceOrder.verify(projectRepository).save(projectCaptor.capture());
         persistenceOrder.verify(projectMemberRepository).save(memberCaptor.capture());
+        persistenceOrder.verify(chatRoomRepository).save(chatRoomCaptor.capture());
 
         Project savedProject = projectCaptor.getValue();
         assertThat(savedProject.getProjectName()).isEqualTo("Plog API");
@@ -143,6 +155,7 @@ class ProjectCreateServiceTest {
         assertThat(savedMember.getProject().getId()).isEqualTo(10L);
         assertThat(savedMember.getRole()).isEqualTo(ProjectRole.OWNER);
         assertThat(savedMember.getStatus()).isEqualTo(MemberStatus.ACTIVE);
+        assertThat(chatRoomCaptor.getValue().getProject().getId()).isEqualTo(10L);
     }
 
     @Test
@@ -151,6 +164,7 @@ class ProjectCreateServiceTest {
                 userRepository,
                 projectRepository,
                 projectMemberRepository,
+                chatRoomRepository,
                 inviteTokenService,
                 INVITE_BASE_URL + "/"
         );
@@ -177,7 +191,13 @@ class ProjectCreateServiceTest {
                 ProjectErrorCode.INVALID_PROJECT_NAME
         );
 
-        verifyNoInteractions(userRepository, projectRepository, projectMemberRepository, inviteTokenService);
+        verifyNoInteractions(
+                userRepository,
+                projectRepository,
+                projectMemberRepository,
+                chatRoomRepository,
+                inviteTokenService
+        );
     }
 
     @ParameterizedTest
@@ -190,7 +210,13 @@ class ProjectCreateServiceTest {
                 ProjectErrorCode.INVALID_PROJECT_END_DAY
         );
 
-        verifyNoInteractions(userRepository, projectRepository, projectMemberRepository, inviteTokenService);
+        verifyNoInteractions(
+                userRepository,
+                projectRepository,
+                projectMemberRepository,
+                chatRoomRepository,
+                inviteTokenService
+        );
     }
 
     @Test
@@ -200,7 +226,13 @@ class ProjectCreateServiceTest {
                 AuthErrorCode.INVALID_TOKEN
         );
 
-        verifyNoInteractions(userRepository, projectRepository, projectMemberRepository, inviteTokenService);
+        verifyNoInteractions(
+                userRepository,
+                projectRepository,
+                projectMemberRepository,
+                chatRoomRepository,
+                inviteTokenService
+        );
     }
 
     @Test
@@ -215,6 +247,7 @@ class ProjectCreateServiceTest {
 
         verify(projectRepository, never()).save(any(Project.class));
         verify(projectMemberRepository, never()).save(any(ProjectMember.class));
+        verify(chatRoomRepository, never()).save(any(ChatRoom.class));
     }
 
     private ProjectCreateRequest validRequest(String projectName) {

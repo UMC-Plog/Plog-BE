@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import com.plog.domain.chat.repository.ChatRoomRepository;
 import com.plog.domain.project.dto.request.ProjectCreateRequest;
 import com.plog.domain.project.dto.response.ProjectCreateResponse;
 import com.plog.domain.project.entity.MemberStatus;
@@ -72,6 +73,9 @@ class ProjectCreateServiceIntegrationTest {
     private ProjectMemberRepository projectMemberRepository;
 
     @Autowired
+    private ChatRoomRepository chatRoomRepository;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     private InviteTokenCipher inviteTokenCipher;
@@ -87,6 +91,8 @@ class ProjectCreateServiceIntegrationTest {
     @AfterEach
     void cleanUp() {
         transactionTemplate.executeWithoutResult(status -> {
+            chatRoomRepository.deleteAll();
+            chatRoomRepository.flush();
             projectMemberRepository.deleteAll();
             projectMemberRepository.flush();
             projectRepository.deleteAll();
@@ -112,6 +118,8 @@ class ProjectCreateServiceIntegrationTest {
 
         assertThat(projectRepository.count()).isEqualTo(1);
         assertThat(projectMemberRepository.count()).isEqualTo(1);
+        assertThat(chatRoomRepository.count()).isEqualTo(1);
+        assertThat(chatRoomRepository.findByProjectId(response.projectId())).isPresent();
         Project storedProject = projectRepository.findById(response.projectId()).orElseThrow();
         assertThat(storedProject.getProjectName()).isEqualTo("Plog API");
         assertThat(storedProject.getProjectType()).isEqualTo(ProjectType.DEVELOP);
@@ -165,6 +173,7 @@ class ProjectCreateServiceIntegrationTest {
 
         assertThat(projectRepository.count()).isZero();
         assertThat(projectMemberRepository.count()).isZero();
+        assertThat(chatRoomRepository.count()).isZero();
         assertThat(projectRepository.findByInviteTokenHash(HashUtil.sha256Hex(RAW_INVITE_TOKEN)))
                 .isEmpty();
         assertThat(userRepository.count()).isEqualTo(1);
@@ -194,6 +203,7 @@ class ProjectCreateServiceIntegrationTest {
                 userRepository,
                 projectRepository,
                 memberRepository,
+                chatRoomRepository,
                 inviteTokenService,
                 INVITE_BASE_URL
         );
