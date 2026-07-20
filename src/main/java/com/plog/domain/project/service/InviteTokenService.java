@@ -8,6 +8,9 @@ import com.plog.global.util.HashUtil;
 import java.util.Optional;
 import java.util.function.Function;
 import org.hibernate.exception.ConstraintViolationException;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.PSQLState;
+import org.postgresql.util.ServerErrorMessage;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -106,9 +109,20 @@ public class InviteTokenService {
                     constraintViolation.getConstraintName())) {
                 return true;
             }
+            if (cause instanceof PSQLException postgresException
+                    && isInviteTokenUniqueViolation(postgresException)) {
+                return true;
+            }
             cause = cause.getCause();
         }
         return false;
+    }
+
+    private boolean isInviteTokenUniqueViolation(PSQLException exception) {
+        ServerErrorMessage serverError = exception.getServerErrorMessage();
+        return PSQLState.UNIQUE_VIOLATION.getState().equals(exception.getSQLState())
+                && serverError != null
+                && INVITE_TOKEN_UNIQUE_CONSTRAINT.equalsIgnoreCase(serverError.getConstraint());
     }
 
     static final class IssuedToken {

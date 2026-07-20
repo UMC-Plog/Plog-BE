@@ -32,6 +32,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.ServerErrorMessage;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -166,6 +168,37 @@ class InviteTokenServiceTest {
     }
 
     @Test
+    void retriesWhenPostgresReportsTheInviteTokenConstraintDirectly() {
+        enableTransactions();
+        String collidingToken = "postgres-colliding-token";
+        String uniqueToken = "postgres-unique-token";
+        given(inviteTokenGenerator.generate()).willReturn(collidingToken, uniqueToken);
+        doThrow(postgresUniqueViolation("uk_project_invite_token", "duplicate key"))
+                .doNothing()
+                .when(transactionManager).commit(any(TransactionStatus.class));
+
+        InviteTokenService.IssuedResult<String> result =
+                inviteTokenService.issueAndPersist(InviteTokenService.IssuedToken::rawValue);
+
+        assertThat(result.token().rawValue()).isEqualTo(uniqueToken);
+        verify(inviteTokenGenerator, times(2)).generate();
+        verify(transactionManager, times(2)).getTransaction(any(TransactionDefinition.class));
+    }
+
+    @Test
+    void doesNotRetryAnotherPostgresUniqueConstraint() {
+        enableTransactions();
+        given(inviteTokenGenerator.generate()).willReturn("candidate-token");
+        DataIntegrityViolationException unrelated =
+                postgresUniqueViolation("uk_other_constraint", "unrelated duplicate key");
+        doThrow(unrelated).when(transactionManager).commit(any(TransactionStatus.class));
+
+        assertThatThrownBy(() -> inviteTokenService.issueAndPersist(token -> token))
+                .isSameAs(unrelated);
+        verify(inviteTokenGenerator).generate();
+    }
+
+    @Test
     void failsWithoutLeakingTheDatabaseCauseAfterFiveInviteTokenCollisions() {
         enableTransactions();
         String collidingToken = "always-colliding-token";
@@ -281,5 +314,18 @@ class InviteTokenServiceTest {
         ConstraintViolationException hibernateException = mock(ConstraintViolationException.class);
         given(hibernateException.getConstraintName()).willReturn(constraintName);
         return new DataIntegrityViolationException(message, hibernateException);
+    }
+
+    private DataIntegrityViolationException postgresUniqueViolation(String constraintName, String message) {
+        String separator = Character.toString(0);
+        String serverMessage = String.join(
+                separator,
+                "SERROR",
+                "C23505",
+                "M" + message,
+                "n" + constraintName
+        ) + separator + separator;
+        PSQLException postgresException = new PSQLException(new ServerErrorMessage(serverMessage));
+        return new DataIntegrityViolationException(message, postgresException);
     }
 }
