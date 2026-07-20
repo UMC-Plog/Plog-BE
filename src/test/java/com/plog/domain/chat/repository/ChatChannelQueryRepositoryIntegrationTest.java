@@ -132,6 +132,27 @@ class ChatChannelQueryRepositoryIntegrationTest {
         assertThat(page.getTotalElements()).isZero();
     }
 
+    @Test
+    void searchesOnlyActiveUserChannelsByProjectNameIgnoringCase() {
+        User user = saveUser("channel-search");
+        ChatFixture first = saveChannel(user, "PLOG API", MemberStatus.ACTIVE);
+        ChatFixture second = saveChannel(user, "mobile plog", MemberStatus.ACTIVE);
+        saveChannel(user, "other", MemberStatus.ACTIVE);
+        saveChannel(user, "Plog exited", MemberStatus.EXIT);
+        saveChannel(saveUser("channel-search-outsider"), "Plog outsider", MemberStatus.ACTIVE);
+
+        Page<ChatChannelSummary> page = chatRoomRepository.findChannelPageByProjectName(
+                user.getId(),
+                MemberStatus.ACTIVE,
+                "%plog%",
+                PageRequest.of(0, 20)
+        );
+
+        assertThat(page.getTotalElements()).isEqualTo(2);
+        assertThat(page.getContent()).extracting(ChatChannelSummary::getRoomId)
+                .containsExactly(first.room().getId(), second.room().getId());
+    }
+
     private ChatFixture saveChannel(User user, String suffix, MemberStatus status) {
         Project project = saveProject(suffix);
         ProjectMember member = projectMemberRepository.save(ProjectMember.builder()

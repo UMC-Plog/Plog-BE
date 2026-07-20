@@ -62,4 +62,42 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
             @Param("memberStatus") MemberStatus memberStatus,
             Pageable pageable
     );
+
+    @Query(
+            value = "select room.project.id as projectId, "
+                    + "room.project.projectName as projectName, "
+                    + "room.id as roomId, "
+                    + "latest.message as latestMessage, "
+                    + "latest.createdAt as latestMessageAt, "
+                    + "count(unread.id) as unreadMessageCount "
+                    + "from ChatRoom room "
+                    + "join ProjectMember member on member.project = room.project "
+                    + "and member.user.id = :userId and member.status = :memberStatus "
+                    + "left join ChatMessage latest on latest.chatRoom = room "
+                    + "and latest.messageSequence = room.lastMessageSequence "
+                    + "left join ChatRoomReadCursor cursor on cursor.chatRoom = room "
+                    + "and cursor.projectMember = member "
+                    + "left join ChatMessage unread on unread.chatRoom = room "
+                    + "and unread.messageSequence is not null "
+                    + "and (cursor.lastReadMessageSequence is null "
+                    + "or unread.messageSequence > cursor.lastReadMessageSequence) "
+                    + "where lower(room.project.projectName) "
+                    + "like :projectNamePattern escape '!' "
+                    + "group by room.project.id, room.project.projectName, room.id, "
+                    + "latest.message, latest.createdAt "
+                    + "order by case when latest.createdAt is null then 1 else 0 end, "
+                    + "latest.createdAt desc, room.id asc",
+            countQuery = "select count(room.id) from ChatRoom room "
+                    + "where lower(room.project.projectName) "
+                    + "like :projectNamePattern escape '!' "
+                    + "and exists (select member.id from ProjectMember member "
+                    + "where member.project = room.project "
+                    + "and member.user.id = :userId and member.status = :memberStatus)"
+    )
+    Page<ChatChannelSummary> findChannelPageByProjectName(
+            @Param("userId") Long userId,
+            @Param("memberStatus") MemberStatus memberStatus,
+            @Param("projectNamePattern") String projectNamePattern,
+            Pageable pageable
+    );
 }
