@@ -33,7 +33,7 @@ public interface ChatRoomReadCursorRepository extends JpaRepository<ChatRoomRead
             + "and cursor.project_member_id = member.project_member_id "
             + "and cursor.chat_room_id = room.chat_room_id "
             + "and member.user_id = :userId "
-            + "and member.project_status = 'ACTIVE' "
+            + "and member.project_status = :memberStatus "
             + "and member.project_id = room.project_id "
             + "and message.chat_id = :messageId "
             + "and message.chat_room_id = cursor.chat_room_id "
@@ -44,7 +44,8 @@ public interface ChatRoomReadCursorRepository extends JpaRepository<ChatRoomRead
     int advance(
             @Param("roomId") Long roomId,
             @Param("userId") Long userId,
-            @Param("messageId") Long messageId
+            @Param("messageId") Long messageId,
+            @Param("memberStatus") String memberStatus
     );
 
     @Query("select room.id as chatRoomId, count(message.id) as unreadCount "
