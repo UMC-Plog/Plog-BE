@@ -1,18 +1,18 @@
 package com.plog.domain.evaluation.controller;
 
+import com.plog.domain.evaluation.dto.request.PeerEvaluationCreateRequest;
 import com.plog.domain.evaluation.dto.response.EvaluationTargetResponse;
+import com.plog.domain.evaluation.dto.response.PeerEvaluationCreateResponse;
 import com.plog.domain.evaluation.dto.response.PeerEvaluationDetailResponse;
 import com.plog.domain.evaluation.service.EvaluationService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.EvaluationSuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
@@ -43,5 +43,22 @@ public class EvaluationController {
         return ResponseEntity
                 .status(EvaluationSuccessCode.PEER_EVALUATION_RETRIEVED.getHttpStatus())
                 .body(ApiResponse.success(EvaluationSuccessCode.PEER_EVALUATION_RETRIEVED, response));
+    }
+
+    @Operation(summary = "동료 평가 제출", description = "동료 평가 점수와 피드백을 제출합니다.")
+    @PostMapping("/peers/{targetMemberId}")
+    public ResponseEntity<ApiResponse<PeerEvaluationCreateResponse>> createPeerEvaluation(
+            @PathVariable Long projectId,
+            @PathVariable Long targetMemberId,
+            @Valid @RequestBody PeerEvaluationCreateRequest request,
+            @AuthenticationPrincipal Long userId
+    ) {
+        PeerEvaluationCreateResponse response = evaluationService.createPeerEvaluation(
+                projectId, targetMemberId, userId, request
+        );
+
+        return ResponseEntity
+                .status(EvaluationSuccessCode.EVALUATION_SUBMITTED.getHttpStatus())
+                .body(ApiResponse.success(EvaluationSuccessCode.EVALUATION_SUBMITTED, response));
     }
 }
