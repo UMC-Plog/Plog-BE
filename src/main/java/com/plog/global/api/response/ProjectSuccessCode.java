@@ -12,6 +12,7 @@ public enum ProjectSuccessCode implements BaseCode {
     EXTERNAL_LINKS_RETRIEVED(HttpStatus.OK, "PROJECT001", "외부 툴 연동 상태를 조회했습니다."),
     PROJECT_SETTINGS_RETRIEVED(HttpStatus.OK, "PROJECT002", "프로젝트 설정을 조회했습니다."),
     PROJECT_SETTINGS_UPDATED(HttpStatus.OK, "PROJECT003", "프로젝트 설정을 수정했습니다."),
+    PROJECT_CREATED(HttpStatus.CREATED, "PROJECT004", "프로젝트를 생성했습니다."),
 
     PROJECT_STATUS_UPDATED(HttpStatus.OK, "PROJ200_1", "프로젝트 상태를 성공적으로 확인/갱신했습니다."),
     PROJECT_SETTING_UPDATED(HttpStatus.OK, "PROJ200_2", "프로젝트 설정이 변경되었습니다."),
