@@ -20,5 +20,9 @@ public record ProjectCreateResponse(
             String inviteCode,
             String inviteUrl
     ) {
+        @Override
+        public String toString() {
+            return "Invite[inviteCode=[REDACTED], inviteUrl=[REDACTED]]";
+        }
     }
 }

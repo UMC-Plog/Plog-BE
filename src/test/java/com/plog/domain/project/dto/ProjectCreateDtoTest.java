@@ -67,4 +67,17 @@ class ProjectCreateDtoTest {
         assertThat(json.path("invite").path("inviteUrl").textValue())
                 .isEqualTo("https://plog.test/invites/invite-code");
     }
+
+    @Test
+    void redactsInviteSecretsFromStringOutput() {
+        ProjectCreateResponse.Invite invite = new ProjectCreateResponse.Invite(
+                "invite-code",
+                "https://plog.test/invites/invite-code"
+        );
+
+        assertThat(invite.toString())
+                .doesNotContain("invite-code")
+                .doesNotContain("https://plog.test/invites/invite-code")
+                .contains("[REDACTED]");
+    }
 }
