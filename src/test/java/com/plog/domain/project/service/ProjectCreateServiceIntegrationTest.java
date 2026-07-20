@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import com.plog.domain.chat.entity.ChatRoom;
 import com.plog.domain.chat.repository.ChatRoomRepository;
 import com.plog.domain.project.dto.request.ProjectCreateRequest;
 import com.plog.domain.project.dto.response.ProjectCreateResponse;
@@ -180,6 +181,40 @@ class ProjectCreateServiceIntegrationTest {
         verify(generator).generate();
     }
 
+    @Test
+    void rollsBackTheProjectOwnerAndInviteWhenChatRoomPersistenceFails() {
+        User creator = saveCreator("chat-room-rollback");
+        InviteTokenGenerator generator = mock(InviteTokenGenerator.class);
+        given(generator.generate()).willReturn(RAW_INVITE_TOKEN);
+        ChatRoomRepository failingChatRoomRepository = mock(ChatRoomRepository.class);
+        DataIntegrityViolationException chatRoomFailure =
+                new DataIntegrityViolationException("chat room persistence failed");
+        given(failingChatRoomRepository.save(any(ChatRoom.class))).willThrow(chatRoomFailure);
+        ProjectCreateService service = createService(
+                generator,
+                projectMemberRepository,
+                failingChatRoomRepository
+        );
+
+        assertThatThrownBy(() -> service.create(
+                creator.getId(),
+                new ProjectCreateRequest(
+                        "Plog API",
+                        ProjectType.GENERAL,
+                        LocalDate.now(ZoneOffset.UTC).plusDays(30)
+                )
+        )).isSameAs(chatRoomFailure);
+
+        assertThat(projectRepository.count()).isZero();
+        assertThat(projectMemberRepository.count()).isZero();
+        assertThat(chatRoomRepository.count()).isZero();
+        assertThat(projectRepository.findByInviteTokenHash(HashUtil.sha256Hex(RAW_INVITE_TOKEN)))
+                .isEmpty();
+        assertThat(userRepository.count()).isEqualTo(1);
+        verify(failingChatRoomRepository).save(any(ChatRoom.class));
+        verify(generator).generate();
+    }
+
     private User saveCreator(String suffix) {
         return transactionTemplate.execute(status -> userRepository.save(User.createLocal(
                 suffix + "@plog.test",
@@ -193,6 +228,14 @@ class ProjectCreateServiceIntegrationTest {
             InviteTokenGenerator generator,
             ProjectMemberRepository memberRepository
     ) {
+        return createService(generator, memberRepository, chatRoomRepository);
+    }
+
+    private ProjectCreateService createService(
+            InviteTokenGenerator generator,
+            ProjectMemberRepository memberRepository,
+            ChatRoomRepository roomRepository
+    ) {
         InviteTokenService inviteTokenService = new InviteTokenService(
                 projectRepository,
                 generator,
@@ -203,7 +246,7 @@ class ProjectCreateServiceIntegrationTest {
                 userRepository,
                 projectRepository,
                 memberRepository,
-                chatRoomRepository,
+                roomRepository,
                 inviteTokenService,
                 INVITE_BASE_URL
         );
