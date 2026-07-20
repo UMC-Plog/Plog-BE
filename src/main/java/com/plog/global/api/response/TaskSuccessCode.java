@@ -1,4 +1,4 @@
-package com.plog.domain.task.exception.code;
+package com.plog.global.api.response;
 
 import com.plog.global.api.code.BaseCode;
 import lombok.Getter;

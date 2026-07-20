@@ -2,7 +2,7 @@ package com.plog.domain.task.controller;
 
 import com.plog.domain.task.dto.request.TaskCreateRequest;
 import com.plog.domain.task.dto.response.TaskCreateResponse;
-import com.plog.domain.task.exception.code.TaskSuccessCode;
+import com.plog.global.api.response.TaskSuccessCode;
 import com.plog.domain.task.service.TaskService;
 import com.plog.global.api.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;

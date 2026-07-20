@@ -70,6 +70,11 @@ public class Task extends BaseEntity {
                 .category(category)
                 .cardStatus(cardStatus)
                 .endDate(endDate)
+                .completedAt(
+                        cardStatus == TaskStatus.DONE
+                                ? LocalDateTime.now()
+                                : null
+                )
                 .build();
     }
 }
