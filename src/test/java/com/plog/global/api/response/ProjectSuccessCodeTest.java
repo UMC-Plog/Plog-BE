@@ -15,7 +15,8 @@ class ProjectSuccessCodeTest {
                 ProjectSuccessCode.PROJECT_SETTINGS_UPDATED,
                 ProjectSuccessCode.PROJECT_CREATED,
                 ProjectSuccessCode.PROJECT_JOINED,
-                ProjectSuccessCode.PROJECT_INVITE_REISSUED
+                ProjectSuccessCode.PROJECT_INVITE_REISSUED,
+                ProjectSuccessCode.PROJECT_LIST_RETRIEVED
         ))
                 .extracting(ProjectSuccessCode::getCode)
                 .containsExactly(
@@ -24,7 +25,8 @@ class ProjectSuccessCodeTest {
                         "PROJECT003",
                         "PROJECT004",
                         "PROJECT005",
-                        "PROJECT006"
+                        "PROJECT006",
+                        "PROJECT007"
                 );
 
         assertThat(ProjectSuccessCode.PROJECT_CREATED.getHttpStatus().value()).isEqualTo(201);
@@ -34,5 +36,6 @@ class ProjectSuccessCodeTest {
         assertThat(ProjectSuccessCode.PROJECT_INVITE_REISSUED.getHttpStatus().value()).isEqualTo(200);
         assertThat(ProjectSuccessCode.PROJECT_INVITE_REISSUED.getMessage())
                 .isEqualTo("프로젝트 초대 링크를 재발급했습니다.");
+        assertThat(ProjectSuccessCode.PROJECT_LIST_RETRIEVED.getHttpStatus().value()).isEqualTo(200);
     }
 }
