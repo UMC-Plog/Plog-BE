@@ -2,6 +2,7 @@ package com.plog.domain.project.service;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import com.plog.domain.project.dto.request.ProjectJoinRequest;
 import com.plog.domain.project.dto.response.ProjectJoinResponse;
@@ -20,6 +21,7 @@ import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.HashUtil;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -27,6 +29,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.postgresql.util.PSQLException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -137,7 +140,8 @@ class ProjectJoinServiceIntegrationTest {
         ProjectMember reactivated = projectMemberRepository.findById(exitedMemberId).orElseThrow();
         assertThat(reactivated.getStatus()).isEqualTo(MemberStatus.ACTIVE);
         assertThat(reactivated.getUpdatedAt()).isAfter(previousUpdatedAt);
-        assertThat(response.joinedAt()).isEqualTo(reactivated.getUpdatedAt());
+        assertThat(response.joinedAt())
+                .isCloseTo(reactivated.getUpdatedAt(), within(1, ChronoUnit.MICROS));
     }
 
     @Test
@@ -203,6 +207,50 @@ class ProjectJoinServiceIntegrationTest {
         }
     }
 
+    @Test
+    void stopsWaitingWhenAnExitedMembershipLockIsHeldTooLong() throws Exception {
+        Fixture fixture = saveFixture("locked-rejoined-member");
+        saveExitedMember(fixture);
+        CountDownLatch lockAcquired = new CountDownLatch(1);
+        CountDownLatch releaseLock = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> lockHolder = executor.submit(() -> {
+                TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+                transactionTemplate.executeWithoutResult(status -> {
+                    projectMemberRepository.findByProjectIdAndUserIdForUpdate(
+                            fixture.projectId(),
+                            fixture.userId()
+                    ).orElseThrow();
+                    lockAcquired.countDown();
+                    await(releaseLock);
+                });
+            });
+            assertThat(lockAcquired.await(5, SECONDS)).isTrue();
+
+            Future<Object> blockedJoin = executor.submit(() -> {
+                try {
+                    return projectJoinService.join(
+                            fixture.userId(),
+                            new ProjectJoinRequest(INVITE_CODE)
+                    );
+                } catch (RuntimeException exception) {
+                    return exception;
+                }
+            });
+
+            Object result = blockedJoin.get(5, SECONDS);
+            assertThat(result).isInstanceOf(RuntimeException.class);
+            assertThat(hasAnyPostgresState((Throwable) result, "55P03", "57014")).isTrue();
+
+            releaseLock.countDown();
+            lockHolder.get(5, SECONDS);
+        } finally {
+            releaseLock.countDown();
+            executor.shutdownNow();
+        }
+    }
+
     private Object joinAfterSignal(Fixture fixture, CountDownLatch ready, CountDownLatch start)
             throws InterruptedException {
         ready.countDown();
@@ -212,6 +260,30 @@ class ProjectJoinServiceIntegrationTest {
         } catch (ApiException exception) {
             return exception;
         }
+    }
+
+    private void await(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while holding the membership lock", exception);
+        }
+    }
+
+    private boolean hasAnyPostgresState(Throwable exception, String... sqlStates) {
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause instanceof PSQLException postgresException) {
+                for (String sqlState : sqlStates) {
+                    if (sqlState.equals(postgresException.getSQLState())) {
+                        return true;
+                    }
+                }
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     private Fixture saveFixture(String suffix) {
