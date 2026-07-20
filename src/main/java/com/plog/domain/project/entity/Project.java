@@ -68,6 +68,15 @@ public class Project extends BaseEntity {
         }
     }
 
+    public void rotateInviteToken(String inviteTokenHash, String inviteTokenEncrypted) {
+        if (inviteTokenHash == null || inviteTokenHash.isBlank()
+                || inviteTokenEncrypted == null || inviteTokenEncrypted.isBlank()) {
+            throw new IllegalArgumentException("invite token values must not be blank");
+        }
+        this.inviteTokenHash = inviteTokenHash;
+        this.inviteTokenEncrypted = inviteTokenEncrypted;
+    }
+
     public boolean isEvaluatingState() {
         if (this.status == ProjectStatus.COMPLETED) {
             return false;
