@@ -67,4 +67,11 @@ public class Project extends BaseEntity {
             this.projectType = projectType;
         }
     }
+
+    public boolean isEvaluatingState() {
+        if (this.status == ProjectStatus.COMPLETED) {
+            return false;
+        }
+        return !LocalDate.now().isAfter(this.endDay);
+    }
 }
