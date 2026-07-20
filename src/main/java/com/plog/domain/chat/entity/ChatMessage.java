@@ -30,6 +30,11 @@ public class ChatMessage extends BaseEntity {
     @Column(name = "chat_id")
     private Long id;
 
+    // 기존 메시지 backfill 전까지 nullable로 유지한다.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "chat_room_id")
+    private ChatRoom chatRoom;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_member_id", nullable = false)
     private ProjectMember projectMember;
