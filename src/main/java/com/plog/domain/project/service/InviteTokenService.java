@@ -1,9 +1,11 @@
 package com.plog.domain.project.service;
 
+import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.HashUtil;
+import java.util.Optional;
 import java.util.function.Function;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -58,6 +60,13 @@ public class InviteTokenService {
             }
         }
         throw new ApiException(ProjectErrorCode.INVITE_TOKEN_GENERATION_ERROR);
+    }
+
+    Optional<Project> findProjectByRawToken(String rawToken) {
+        if (rawToken == null || rawToken.isBlank()) {
+            return Optional.empty();
+        }
+        return projectRepository.findByInviteTokenHash(HashUtil.sha256Hex(rawToken));
     }
 
     private IssuedToken generateCandidate() {

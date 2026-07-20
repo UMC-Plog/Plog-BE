@@ -11,17 +11,23 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.HashUtil;
 import java.util.Base64;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
@@ -188,6 +194,37 @@ class InviteTokenServiceTest {
         assertThatThrownBy(() -> inviteTokenService.issueAndPersist(token -> token))
                 .isSameAs(unrelated);
         verify(inviteTokenGenerator).generate();
+    }
+
+    @Test
+    void findsAProjectByHashingTheRawToken() {
+        String rawToken = "raw-invite-token";
+        Project project = Project.builder().id(10L).build();
+        given(projectRepository.findByInviteTokenHash(HashUtil.sha256Hex(rawToken)))
+                .willReturn(Optional.of(project));
+
+        Optional<Project> foundProject = inviteTokenService.findProjectByRawToken(rawToken);
+
+        assertThat(foundProject).containsSame(project);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"not-registered-token", "%malformed-token%", "토큰"})
+    void safelyHashesUnknownNonBlankTokensBeforeLookup(String rawToken) {
+        given(projectRepository.findByInviteTokenHash(HashUtil.sha256Hex(rawToken)))
+                .willReturn(Optional.empty());
+
+        assertThat(inviteTokenService.findProjectByRawToken(rawToken)).isEmpty();
+
+        verify(projectRepository).findByInviteTokenHash(HashUtil.sha256Hex(rawToken));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" ", "\t"})
+    void doesNotQueryTheRepositoryForABlankRawToken(String rawToken) {
+        assertThat(inviteTokenService.findProjectByRawToken(rawToken)).isEmpty();
+        verifyNoInteractions(projectRepository);
     }
 
     private void enableTransactions() {
