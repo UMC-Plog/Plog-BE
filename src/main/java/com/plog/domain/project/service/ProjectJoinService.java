@@ -52,7 +52,7 @@ public class ProjectJoinService {
                 .orElseThrow(() -> new ApiException(ProjectErrorCode.INVALID_INVITE_CODE));
 
         ProjectMember member = projectMemberRepository
-                .findByProjectIdAndUserId(project.getId(), userId)
+                .findByProjectIdAndUserIdForUpdate(project.getId(), userId)
                 .map(this::reactivate)
                 .orElseGet(() -> createMember(user, project));
 

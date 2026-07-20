@@ -69,7 +69,8 @@ class ProjectJoinServiceTest {
         LocalDateTime joinedAt = LocalDateTime.of(2026, 7, 20, 21, 0);
         given(userRepository.findById(1L)).willReturn(Optional.of(user));
         given(inviteTokenService.findProjectByRawToken(INVITE_CODE)).willReturn(Optional.of(project));
-        given(projectMemberRepository.findByProjectIdAndUserId(10L, 1L)).willReturn(Optional.empty());
+        given(projectMemberRepository.findByProjectIdAndUserIdForUpdate(10L, 1L))
+                .willReturn(Optional.empty());
         given(projectMemberRepository.saveAndFlush(any(ProjectMember.class))).willAnswer(invocation -> {
             ProjectMember member = invocation.getArgument(0);
             ReflectionTestUtils.setField(member, "id", 25L);
@@ -115,7 +116,7 @@ class ProjectJoinServiceTest {
         ReflectionTestUtils.setField(exitedMember, "updatedAt", rejoinedAt);
         given(userRepository.findById(1L)).willReturn(Optional.of(user));
         given(inviteTokenService.findProjectByRawToken(INVITE_CODE)).willReturn(Optional.of(project));
-        given(projectMemberRepository.findByProjectIdAndUserId(10L, 1L))
+        given(projectMemberRepository.findByProjectIdAndUserIdForUpdate(10L, 1L))
                 .willReturn(Optional.of(exitedMember));
         given(projectMemberRepository.saveAndFlush(exitedMember)).willReturn(exitedMember);
 
@@ -144,7 +145,7 @@ class ProjectJoinServiceTest {
                 .build();
         given(userRepository.findById(1L)).willReturn(Optional.of(user));
         given(inviteTokenService.findProjectByRawToken(INVITE_CODE)).willReturn(Optional.of(project));
-        given(projectMemberRepository.findByProjectIdAndUserId(10L, 1L))
+        given(projectMemberRepository.findByProjectIdAndUserIdForUpdate(10L, 1L))
                 .willReturn(Optional.of(activeMember));
 
         assertProjectError(
@@ -175,7 +176,8 @@ class ProjectJoinServiceTest {
         DataIntegrityViolationException duplicateMembership = constraintViolation("uk_project_member");
         given(userRepository.findById(1L)).willReturn(Optional.of(user));
         given(inviteTokenService.findProjectByRawToken(INVITE_CODE)).willReturn(Optional.of(project));
-        given(projectMemberRepository.findByProjectIdAndUserId(10L, 1L)).willReturn(Optional.empty());
+        given(projectMemberRepository.findByProjectIdAndUserIdForUpdate(10L, 1L))
+                .willReturn(Optional.empty());
         given(projectMemberRepository.saveAndFlush(any(ProjectMember.class)))
                 .willThrow(duplicateMembership);
 
@@ -192,7 +194,8 @@ class ProjectJoinServiceTest {
         DataIntegrityViolationException unrelatedFailure = constraintViolation("fk_project_member_user");
         given(userRepository.findById(1L)).willReturn(Optional.of(user));
         given(inviteTokenService.findProjectByRawToken(INVITE_CODE)).willReturn(Optional.of(project));
-        given(projectMemberRepository.findByProjectIdAndUserId(10L, 1L)).willReturn(Optional.empty());
+        given(projectMemberRepository.findByProjectIdAndUserIdForUpdate(10L, 1L))
+                .willReturn(Optional.empty());
         given(projectMemberRepository.saveAndFlush(any(ProjectMember.class)))
                 .willThrow(unrelatedFailure);
 
