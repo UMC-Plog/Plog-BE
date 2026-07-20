@@ -20,7 +20,7 @@ import lombok.NoArgsConstructor;
 
 @Entity
 @Getter
-@Builder
+@Builder(access = AccessLevel.PRIVATE)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "chat_room_read_cursors", uniqueConstraints = {
@@ -44,8 +44,8 @@ public class ChatRoomReadCursor extends BaseEntity {
     @JoinColumn(name = "project_member_id", nullable = false)
     private ProjectMember projectMember;
 
-    @Column(name = "last_read_message_id")
-    private Long lastReadMessageId;
+    @Column(name = "last_read_message_sequence")
+    private Long lastReadMessageSequence;
 
     public static ChatRoomReadCursor create(ChatRoom chatRoom, ProjectMember projectMember) {
         Long roomProjectId = chatRoom.getProject().getId();

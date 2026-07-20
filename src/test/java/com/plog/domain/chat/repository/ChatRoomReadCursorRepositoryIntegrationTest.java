@@ -92,7 +92,7 @@ class ChatRoomReadCursorRepositoryIntegrationTest {
                 ChatRoomReadCursor.create(room, member)
         );
 
-        assertThat(cursor.getLastReadMessageId()).isNull();
+        assertThat(cursor.getLastReadMessageSequence()).isNull();
         assertThatThrownBy(() -> cursorRepository.saveAndFlush(
                 ChatRoomReadCursor.create(room, member)
         )).isInstanceOf(DataIntegrityViolationException.class);
@@ -118,22 +118,23 @@ class ChatRoomReadCursorRepositoryIntegrationTest {
         ChatMessage otherRoomMessage = saveMessage(otherRoom, otherProjectMember, "other-room");
 
         assertThat(cursorRepository.advance(
-                room.getId(), otherMember.getUser().getId(), first.getId(), MemberStatus.ACTIVE
+                room.getId(), otherMember.getUser().getId(), first.getId()
         )).isZero();
         assertThat(cursorRepository.advance(
-                room.getId(), member.getUser().getId(), otherRoomMessage.getId(), MemberStatus.ACTIVE
+                room.getId(), member.getUser().getId(), otherRoomMessage.getId()
         )).isZero();
         assertThat(cursorRepository.advance(
-                room.getId(), member.getUser().getId(), first.getId(), MemberStatus.ACTIVE
+                room.getId(), member.getUser().getId(), first.getId()
         )).isOne();
         assertThat(cursorRepository.advance(
-                room.getId(), member.getUser().getId(), second.getId(), MemberStatus.ACTIVE
+                room.getId(), member.getUser().getId(), second.getId()
         )).isOne();
         assertThat(cursorRepository.advance(
-                room.getId(), member.getUser().getId(), first.getId(), MemberStatus.ACTIVE
+                room.getId(), member.getUser().getId(), first.getId()
         )).isZero();
-        assertThat(cursorRepository.findById(cursor.getId()).orElseThrow().getLastReadMessageId())
-                .isEqualTo(second.getId());
+        assertThat(cursorRepository.findById(cursor.getId()).orElseThrow()
+                .getLastReadMessageSequence())
+                .isEqualTo(second.getMessageSequence());
     }
 
     @Test
@@ -157,7 +158,7 @@ class ChatRoomReadCursorRepositoryIntegrationTest {
         assertThat(beforeRead.getUnreadCount()).isEqualTo(2L);
 
         cursorRepository.advance(
-                room.getId(), member.getUser().getId(), first.getId(), MemberStatus.ACTIVE
+                room.getId(), member.getUser().getId(), first.getId()
         );
 
         ChatRoomUnreadCount afterRead = cursorRepository.findUnreadCount(
@@ -191,7 +192,7 @@ class ChatRoomReadCursorRepositoryIntegrationTest {
         );
         ChatMessage message = saveMessage(room, member, "read-before-exit");
         cursorRepository.advance(
-                room.getId(), member.getUser().getId(), message.getId(), MemberStatus.ACTIVE
+                room.getId(), member.getUser().getId(), message.getId()
         );
 
         assertThat(cursorRepository.findAccessibleCursor(
@@ -214,7 +215,7 @@ class ChatRoomReadCursorRepositoryIntegrationTest {
                 room.getId(), member.getUser().getId(), MemberStatus.ACTIVE
         )).isEmpty();
         assertThat(cursorRepository.advance(
-                room.getId(), member.getUser().getId(), message.getId(), MemberStatus.ACTIVE
+                room.getId(), member.getUser().getId(), message.getId()
         )).isZero();
 
         ProjectMember exitedMember = projectMemberRepository.findById(member.getId()).orElseThrow();
@@ -226,12 +227,13 @@ class ChatRoomReadCursorRepositoryIntegrationTest {
                 room.getId(), member.getUser().getId(), MemberStatus.ACTIVE
         ).orElseThrow();
         assertThat(reactivatedCursor.getId()).isEqualTo(cursor.getId());
-        assertThat(reactivatedCursor.getLastReadMessageId()).isEqualTo(message.getId());
+        assertThat(reactivatedCursor.getLastReadMessageSequence())
+                .isEqualTo(message.getMessageSequence());
     }
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    void retainsTheHighestMessageIdWhenCursorAdvancesRace() throws Exception {
+    void retainsTheHighestMessageSequenceWhenCursorAdvancesRace() throws Exception {
         Project project = saveProject("cursor-race");
         ProjectMember member = saveMember(project, "cursor-race-member", MemberStatus.ACTIVE);
         ChatRoom room = chatRoomRepository.save(ChatRoom.create(project));
@@ -251,14 +253,14 @@ class ChatRoomReadCursorRepositoryIntegrationTest {
                 ready.countDown();
                 start.await();
                 return cursorRepository.advance(
-                        roomId, userId, first.getId(), MemberStatus.ACTIVE
+                        roomId, userId, first.getId()
                 );
             });
             Future<Integer> higherAdvance = executor.submit(() -> {
                 ready.countDown();
                 start.await();
                 return cursorRepository.advance(
-                        roomId, userId, second.getId(), MemberStatus.ACTIVE
+                        roomId, userId, second.getId()
                 );
             });
 
@@ -270,8 +272,9 @@ class ChatRoomReadCursorRepositoryIntegrationTest {
             executor.shutdownNow();
         }
 
-        assertThat(cursorRepository.findById(cursor.getId()).orElseThrow().getLastReadMessageId())
-                .isEqualTo(second.getId());
+        assertThat(cursorRepository.findById(cursor.getId()).orElseThrow()
+                .getLastReadMessageSequence())
+                .isEqualTo(second.getMessageSequence());
     }
 
     private Project saveProject(String suffix) {
@@ -303,10 +306,11 @@ class ChatRoomReadCursorRepositoryIntegrationTest {
     }
 
     private ChatMessage saveMessage(ChatRoom room, ProjectMember member, String message) {
-        return chatMessageRepository.saveAndFlush(ChatMessage.builder()
-                .chatRoom(room)
-                .projectMember(member)
-                .message(message)
-                .build());
+        return chatMessageRepository.saveAndFlush(ChatMessage.create(
+                room,
+                member,
+                message,
+                room.issueNextMessageSequence()
+        ));
     }
 }

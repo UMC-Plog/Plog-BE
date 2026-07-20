@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -62,6 +63,9 @@ class ChatRoomRepositoryIntegrationTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void allowsOnlyOneChatRoomPerProject() {
@@ -116,27 +120,27 @@ class ChatRoomRepositoryIntegrationTest {
                 .status(MemberStatus.ACTIVE)
                 .build());
         ChatRoom room = chatRoomRepository.save(ChatRoom.create(project));
-        ChatMessage first = chatMessageRepository.saveAndFlush(ChatMessage.builder()
-                .chatRoom(room)
-                .projectMember(member)
-                .message("first")
-                .build());
-        ChatMessage second = chatMessageRepository.saveAndFlush(ChatMessage.builder()
-                .chatRoom(room)
-                .projectMember(member)
-                .message("second")
-                .build());
-        ChatMessage legacy = chatMessageRepository.saveAndFlush(ChatMessage.builder()
-                .projectMember(member)
-                .message("legacy")
-                .build());
+        ChatMessage first = chatMessageRepository.saveAndFlush(
+                ChatMessage.create(room, member, "first", 1L)
+        );
+        ChatMessage second = chatMessageRepository.saveAndFlush(
+                ChatMessage.create(room, member, "second", 2L)
+        );
+        Long legacyId = jdbcTemplate.queryForObject(
+                "insert into chat_messages "
+                        + "(project_member_id, message, created_at, updated_at) "
+                        + "values (?, ?, current_timestamp, current_timestamp) returning chat_id",
+                Long.class,
+                member.getId(),
+                "legacy"
+        );
 
         List<ChatMessage> messages = chatMessageRepository
                 .findAllByChatRoomIdOrderByCreatedAtAscIdAsc(room.getId());
 
         assertThat(messages).extracting(ChatMessage::getId)
                 .containsExactly(first.getId(), second.getId());
-        assertThat(chatMessageRepository.findById(legacy.getId()).orElseThrow().getChatRoom())
+        assertThat(chatMessageRepository.findById(legacyId).orElseThrow().getChatRoom())
                 .isNull();
     }
 
