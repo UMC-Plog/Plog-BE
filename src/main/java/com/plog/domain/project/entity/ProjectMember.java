@@ -57,4 +57,9 @@ public class ProjectMember extends BaseEntity {
 
     @Column(name = "an_nickname")
     private String anNickname;
+
+    public void reactivateAsMember() {
+        this.role = ProjectRole.MEMBER;
+        this.status = MemberStatus.ACTIVE;
+    }
 }
