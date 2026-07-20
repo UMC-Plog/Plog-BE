@@ -194,6 +194,48 @@ class ProjectControllerTest {
     }
 
     @Test
+    void rejectsANumericProjectTypeBeforeCallingTheService() throws Exception {
+        authenticate(1L);
+
+        mockMvc.perform(post("/api/v1/projects")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "projectName": "Plog API",
+                                  "projectType": 0,
+                                  "endDay": "2026-08-31"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("COMMON400_1"))
+                .andExpect(jsonPath("$.message").value("요청을 읽을 수 없습니다."));
+
+        verifyNoInteractions(projectCreateService);
+    }
+
+    @Test
+    void rejectsANumericStringProjectTypeBeforeCallingTheService() throws Exception {
+        authenticate(1L);
+
+        mockMvc.perform(post("/api/v1/projects")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "projectName": "Plog API",
+                                  "projectType": "1",
+                                  "endDay": "2026-08-31"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("COMMON400_1"))
+                .andExpect(jsonPath("$.message").value("요청을 읽을 수 없습니다."));
+
+        verifyNoInteractions(projectCreateService);
+    }
+
+    @Test
     void passesANullPrincipalToTheServiceWhenSecurityFiltersAreDisabled() throws Exception {
         given(projectCreateService.create(isNull(), any(ProjectCreateRequest.class)))
                 .willThrow(new ApiException(AuthErrorCode.INVALID_TOKEN));
