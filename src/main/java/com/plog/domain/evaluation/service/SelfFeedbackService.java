@@ -1,5 +1,6 @@
 package com.plog.domain.evaluation.service;
 
+import com.plog.domain.evaluation.dto.request.SelfFeedbackCreateRequest;
 import com.plog.domain.evaluation.dto.response.SelfFeedbackResponse;
 import com.plog.domain.evaluation.entity.SelfFeedback;
 import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
@@ -29,6 +30,29 @@ public class SelfFeedbackService {
         SelfFeedback selfFeedback = selfFeedbackRepository.findByProjectMemberId(projectMember.getId())
                 .orElseThrow(() -> new ApiException(EvaluationErrorCode.SELF_FEEDBACK_NOT_FOUND));
 
+
+        return new SelfFeedbackResponse(selfFeedback.getId(), selfFeedback.getContent());
+    }
+
+    @Transactional
+    public SelfFeedbackResponse createSelfFeedback(Long projectId, Long userId, SelfFeedbackCreateRequest request) {
+        ProjectMember projectMember = projectMemberRepository.findByProjectIdAndUserId(projectId, userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN));
+
+        if (!projectMember.getProject().isEvaluatingState()) {
+            throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
+        }
+
+        if (selfFeedbackRepository.findByProjectMemberId(projectMember.getId()).isPresent()) {
+            throw new ApiException(EvaluationErrorCode.ALREADY_SUBMITTED_SELF_FEEDBACK);
+        }
+
+        SelfFeedback selfFeedback = SelfFeedback.builder()
+                .projectMember(projectMember)
+                .content(request.content())
+                .build();
+
+        selfFeedbackRepository.save(selfFeedback);
 
         return new SelfFeedbackResponse(selfFeedback.getId(), selfFeedback.getContent());
     }
