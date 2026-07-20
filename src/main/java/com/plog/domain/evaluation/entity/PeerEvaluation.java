@@ -17,6 +17,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+import java.util.List;
 
 @Entity
 @Getter
@@ -24,7 +27,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "peer_evaluations", uniqueConstraints = {
-        // 같은 평가자가 같은 피평가자를 중복 평가 불가 (제출 시점에만 insert → row 존재 = 제출 완료)
         @UniqueConstraint(name = "uk_peer_evaluator_evaluatee", columnNames = {"evaluator_id", "evaluatee_id"})
 })
 public class PeerEvaluation extends BaseEntity {
@@ -34,7 +36,6 @@ public class PeerEvaluation extends BaseEntity {
     @Column(name = "peer_id")
     private Long id;
 
-    // project는 evaluator.project로 유도 (평가자/피평가자는 항상 같은 프로젝트 멤버)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "evaluator_id", nullable = false)
     private ProjectMember evaluator;
@@ -46,10 +47,8 @@ public class PeerEvaluation extends BaseEntity {
     @Column(name = "collaboration_score", nullable = false)
     private int collaborationScore;
 
-    // TODO(팀 확인): "주도성"의 영문으로 scrupulosity는 오역(꼼꼼함/강박).
-    //  initiative_score 권장. 일단 ERD대로 유지.
-    @Column(name = "scrupulosity_score", nullable = false)
-    private int scrupulosityScore;
+    @Column(name = "initiative_score", nullable = false)
+    private int initiativeScore;
 
     @Column(name = "responsibility_score", nullable = false)
     private int responsibilityScore;
@@ -59,4 +58,11 @@ public class PeerEvaluation extends BaseEntity {
 
     @Column(name = "output_score", nullable = false)
     private int outputScore;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "keywords", columnDefinition = "jsonb")
+    private List<String> keywords;
+
+    @Column(name = "feedback", length = 200)
+    private String feedback;
 }

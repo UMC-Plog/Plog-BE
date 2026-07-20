@@ -39,6 +39,9 @@ public class Project extends BaseEntity {
     @Column(name = "invite_token_hash", nullable = false)
     private String inviteTokenHash;
 
+    @Column(name = "invite_token_encrypted", length = 1024)
+    private String inviteTokenEncrypted;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "project_type", nullable = false)
     private ProjectType projectType;
@@ -52,4 +55,16 @@ public class Project extends BaseEntity {
 
     @Column(name = "end_day", nullable = false)
     private LocalDate endDay;
+
+    public void updateSettings(String projectName, LocalDate endDay, ProjectType projectType) {
+        if (projectName != null) {
+            this.projectName = projectName;
+        }
+        if (endDay != null) {
+            this.endDay = endDay;
+        }
+        if (projectType != null) {
+            this.projectType = projectType;
+        }
+    }
 }
