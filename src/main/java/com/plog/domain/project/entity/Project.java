@@ -72,6 +72,6 @@ public class Project extends BaseEntity {
         if (this.status == ProjectStatus.COMPLETED) {
             return false;
         }
-        return LocalDate.now().isAfter(this.endDay);
+        return !LocalDate.now().isAfter(this.endDay);
     }
 }
