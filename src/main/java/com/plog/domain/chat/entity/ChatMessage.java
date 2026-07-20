@@ -67,6 +67,9 @@ public class ChatMessage extends BaseEntity {
         if (messageSequence <= 0L) {
             throw new IllegalArgumentException("메시지 순번은 1 이상이어야 합니다.");
         }
+        if (message == null || message.isBlank()) {
+            throw new IllegalArgumentException("메시지 내용은 비어 있을 수 없습니다.");
+        }
         return ChatMessage.builder()
                 .chatRoom(chatRoom)
                 .projectMember(projectMember)
