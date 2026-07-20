@@ -1,6 +1,6 @@
 package com.plog.domain.chat.entity;
 
-import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.entity.Project;
 import com.plog.global.common.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -9,8 +9,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,23 +23,21 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "chat_messages")
-public class ChatMessage extends BaseEntity {
+@Table(name = "chat_rooms", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_chat_room_project", columnNames = "project_id")
+})
+public class ChatRoom extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "chat_id")
+    @Column(name = "chat_room_id")
     private Long id;
 
-    // 기존 메시지 backfill 전까지 nullable로 유지한다.
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "chat_room_id")
-    private ChatRoom chatRoom;
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id", nullable = false)
+    private Project project;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_member_id", nullable = false)
-    private ProjectMember projectMember;
-
-    @Column(name = "message", nullable = false, columnDefinition = "TEXT")
-    private String message;
+    public static ChatRoom create(Project project) {
+        return ChatRoom.builder().project(project).build();
+    }
 }
