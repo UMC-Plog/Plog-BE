@@ -1,5 +1,6 @@
 package com.plog.domain.chat.controller;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -15,6 +16,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -74,10 +77,39 @@ class ChatChannelControllerTest {
     }
 
     @Test
+    void includesNullLatestMessageFieldsForAChannelWithoutMessages() throws Exception {
+        authenticate(1L);
+        ChatChannelListResponse response = new ChatChannelListResponse(
+                List.of(new Channel(10L, "Plog", 20L, null, null, false, 0L)),
+                new PageInfo(0, 20, 1, 1, false)
+        );
+        given(service.getChannels(1L, 0, 20)).willReturn(response);
+
+        mockMvc.perform(get("/api/v1/dashboard/channels"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.content[0].latestMessage").value(nullValue()))
+                .andExpect(jsonPath("$.result.content[0].latestMessageAt").value(nullValue()))
+                .andExpect(jsonPath("$.result.content[0].hasUnreadMessage").value(false))
+                .andExpect(jsonPath("$.result.content[0].unreadMessageCount").value(0L));
+    }
+
+    @Test
     void rejectsAnInvalidPageBeforeCallingTheService() throws Exception {
         authenticate(1L);
 
         mockMvc.perform(get("/api/v1/dashboard/channels").param("page", "-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON400"));
+
+        verifyNoInteractions(service);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "101"})
+    void rejectsAnInvalidSizeBeforeCallingTheService(String size) throws Exception {
+        authenticate(1L);
+
+        mockMvc.perform(get("/api/v1/dashboard/channels").param("size", size))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON400"));
 
