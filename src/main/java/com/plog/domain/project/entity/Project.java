@@ -53,6 +53,18 @@ public class Project extends BaseEntity {
     @Column(name = "end_day", nullable = false)
     private LocalDate endDay;
 
+    public void updateSettings(String projectName, LocalDate endDay, ProjectType projectType) {
+        if (projectName != null) {
+            this.projectName = projectName;
+        }
+        if (endDay != null) {
+            this.endDay = endDay;
+        }
+        if (projectType != null) {
+            this.projectType = projectType;
+        }
+    }
+
     public boolean isEvaluatingState() {
         if (this.status == ProjectStatus.COMPLETED) {
             return false;
