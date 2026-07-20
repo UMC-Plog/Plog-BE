@@ -1,6 +1,7 @@
 package com.plog.domain.chat.repository;
 
 import com.plog.domain.chat.entity.ChatRoomReadCursor;
+import com.plog.domain.chat.repository.projection.ChatRoomUnreadCount;
 import com.plog.domain.project.entity.MemberStatus;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -37,6 +38,23 @@ public interface ChatRoomReadCursorRepository extends JpaRepository<ChatRoomRead
             @Param("roomId") Long roomId,
             @Param("userId") Long userId,
             @Param("messageId") Long messageId,
+            @Param("memberStatus") MemberStatus memberStatus
+    );
+
+    @Query("select room.id as chatRoomId, count(message.id) as unreadCount "
+            + "from ChatRoom room "
+            + "join ProjectMember member on member.project = room.project "
+            + "left join ChatRoomReadCursor cursor "
+            + "on cursor.chatRoom = room and cursor.projectMember = member "
+            + "left join ChatMessage message on message.chatRoom = room "
+            + "and (cursor.lastReadMessageId is null or message.id > cursor.lastReadMessageId) "
+            + "where room.id = :roomId "
+            + "and member.user.id = :userId "
+            + "and member.status = :memberStatus "
+            + "group by room.id")
+    Optional<ChatRoomUnreadCount> findUnreadCount(
+            @Param("roomId") Long roomId,
+            @Param("userId") Long userId,
             @Param("memberStatus") MemberStatus memberStatus
     );
 
