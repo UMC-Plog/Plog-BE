@@ -33,6 +33,15 @@ class ProjectJoinDtoTest {
     }
 
     @Test
+    void masksTheInviteCodeInDiagnosticText() {
+        ProjectJoinRequest request = new ProjectJoinRequest("PLOG-SECRET-CODE");
+
+        assertThat(request.toString())
+                .contains("inviteCode=***")
+                .doesNotContain("PLOG-SECRET-CODE");
+    }
+
+    @Test
     void serializesProjectAndMemberStatusesWithoutAmbiguity() {
         ProjectJoinResponse response = new ProjectJoinResponse(
                 10L,
