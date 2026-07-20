@@ -6,6 +6,8 @@ import com.plog.domain.project.service.ProjectCreateService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.ProjectSuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -36,11 +38,19 @@ public class ProjectController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "400",
-                    description = "잘못된 프로젝트 이름, 유형 또는 예상 종료일"
+                    description = "잘못된 프로젝트 이름, 유형 또는 예상 종료일",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class)
+                    )
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "401",
-                    description = "인증이 없거나 유효하지 않은 사용자"
+                    description = "인증이 없거나 유효하지 않은 사용자",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class)
+                    )
             )
     })
     @PostMapping
