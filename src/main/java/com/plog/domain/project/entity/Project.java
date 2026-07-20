@@ -39,6 +39,9 @@ public class Project extends BaseEntity {
     @Column(name = "invite_token_hash", nullable = false)
     private String inviteTokenHash;
 
+    @Column(name = "invite_token_encrypted", length = 1024)
+    private String inviteTokenEncrypted;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "project_type", nullable = false)
     private ProjectType projectType;
