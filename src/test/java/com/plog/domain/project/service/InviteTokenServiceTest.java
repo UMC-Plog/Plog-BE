@@ -227,6 +227,47 @@ class InviteTokenServiceTest {
         verifyNoInteractions(projectRepository);
     }
 
+    @Test
+    void locksTheProjectAndRotatesBothStoredTokenRepresentationsTogether() {
+        enableTransactions();
+        Project project = Project.builder()
+                .id(10L)
+                .inviteTokenHash("old-hash")
+                .inviteTokenEncrypted("old-encrypted-value")
+                .build();
+        String newRawToken = "new-raw-token";
+        given(inviteTokenGenerator.generate()).willReturn(newRawToken);
+        given(projectRepository.findByIdForUpdate(10L)).willReturn(Optional.of(project));
+
+        InviteTokenService.IssuedToken issuedToken = inviteTokenService.rotate(10L);
+
+        assertThat(issuedToken.rawValue()).isEqualTo(newRawToken);
+        assertThat(project.getInviteTokenHash()).isEqualTo(issuedToken.hash());
+        assertThat(project.getInviteTokenEncrypted()).isEqualTo(issuedToken.encryptedValue());
+        assertThat(inviteTokenCipher.decrypt(project.getInviteTokenEncrypted())).isEqualTo(newRawToken);
+        verify(projectRepository).findByIdForUpdate(10L);
+    }
+
+    @Test
+    void rejectsRotationWhenEveryCandidateMatchesTheCurrentToken() {
+        enableTransactions();
+        String currentRawToken = "current-raw-token";
+        Project project = Project.builder()
+                .id(10L)
+                .inviteTokenHash(HashUtil.sha256Hex(currentRawToken))
+                .inviteTokenEncrypted(inviteTokenCipher.encrypt(currentRawToken))
+                .build();
+        given(inviteTokenGenerator.generate()).willReturn(currentRawToken);
+        given(projectRepository.findByIdForUpdate(10L)).willReturn(Optional.of(project));
+
+        assertThatThrownBy(() -> inviteTokenService.rotate(10L))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isEqualTo(ProjectErrorCode.INVITE_TOKEN_GENERATION_ERROR));
+
+        verify(inviteTokenGenerator, times(5)).generate();
+    }
+
     private void enableTransactions() {
         given(transactionManager.getTransaction(any(TransactionDefinition.class)))
                 .willAnswer(invocation -> new SimpleTransactionStatus());

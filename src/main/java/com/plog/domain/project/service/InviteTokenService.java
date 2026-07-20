@@ -69,6 +69,18 @@ public class InviteTokenService {
         return projectRepository.findByInviteTokenHash(HashUtil.sha256Hex(rawToken));
     }
 
+    IssuedToken rotate(Long projectId) {
+        return issueAndPersist(issuedToken -> {
+            Project project = projectRepository.findByIdForUpdate(projectId)
+                    .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
+            if (issuedToken.hash().equals(project.getInviteTokenHash())) {
+                throw new InviteTokenCollisionException();
+            }
+            project.rotateInviteToken(issuedToken.hash(), issuedToken.encryptedValue());
+            return project;
+        }).token();
+    }
+
     private IssuedToken generateCandidate() {
         String rawToken = inviteTokenGenerator.generate();
         return new IssuedToken(
