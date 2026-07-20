@@ -48,6 +48,11 @@ public class ChatRoomReadCursor extends BaseEntity {
     private Long lastReadMessageId;
 
     public static ChatRoomReadCursor create(ChatRoom chatRoom, ProjectMember projectMember) {
+        Long roomProjectId = chatRoom.getProject().getId();
+        Long memberProjectId = projectMember.getProject().getId();
+        if (roomProjectId == null || !roomProjectId.equals(memberProjectId)) {
+            throw new IllegalArgumentException("채팅방과 프로젝트 멤버의 프로젝트가 일치해야 합니다.");
+        }
         return ChatRoomReadCursor.builder()
                 .chatRoom(chatRoom)
                 .projectMember(projectMember)
