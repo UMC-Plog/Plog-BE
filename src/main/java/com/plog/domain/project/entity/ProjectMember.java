@@ -27,9 +27,14 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "project_members", uniqueConstraints = {
         // 같은 유저가 같은 프로젝트에 중복 가입 불가
-        @UniqueConstraint(name = "uk_project_member", columnNames = {"user_id", "project_id"})
+        @UniqueConstraint(
+                name = ProjectMember.UNIQUE_PROJECT_MEMBER_CONSTRAINT,
+                columnNames = {"user_id", "project_id"}
+        )
 })
 public class ProjectMember extends BaseEntity {
+
+    public static final String UNIQUE_PROJECT_MEMBER_CONSTRAINT = "uk_project_member";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -24,8 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProjectJoinService {
 
-    private static final String PROJECT_MEMBER_UNIQUE_CONSTRAINT = "uk_project_member";
-
     private final UserRepository userRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final InviteTokenService inviteTokenService;
@@ -51,30 +49,32 @@ public class ProjectJoinService {
         Project project = inviteTokenService.findProjectByRawToken(request.inviteCode())
                 .orElseThrow(() -> new ApiException(ProjectErrorCode.INVALID_INVITE_CODE));
 
-        ProjectMember member = projectMemberRepository
+        JoinedMember joinedMember = projectMemberRepository
                 .findByProjectIdAndUserIdForUpdate(project.getId(), userId)
                 .map(this::reactivate)
                 .orElseGet(() -> createMember(user, project));
 
-        return toResponse(project, member);
+        return toResponse(project, joinedMember);
     }
 
-    private ProjectMember reactivate(ProjectMember member) {
+    private JoinedMember reactivate(ProjectMember member) {
         if (member.getStatus() == MemberStatus.ACTIVE) {
             throw new ApiException(ProjectErrorCode.PROJECT_ALREADY_JOINED);
         }
         member.reactivateAsMember();
-        return projectMemberRepository.saveAndFlush(member);
+        ProjectMember savedMember = projectMemberRepository.saveAndFlush(member);
+        return new JoinedMember(savedMember, savedMember.getUpdatedAt());
     }
 
-    private ProjectMember createMember(User user, Project project) {
+    private JoinedMember createMember(User user, Project project) {
         try {
-            return projectMemberRepository.saveAndFlush(ProjectMember.builder()
+            ProjectMember savedMember = projectMemberRepository.saveAndFlush(ProjectMember.builder()
                     .user(user)
                     .project(project)
                     .role(ProjectRole.MEMBER)
                     .status(MemberStatus.ACTIVE)
                     .build());
+            return new JoinedMember(savedMember, savedMember.getCreatedAt());
         } catch (DataIntegrityViolationException exception) {
             if (isProjectMemberUniqueViolation(exception)) {
                 throw new ApiException(ProjectErrorCode.PROJECT_ALREADY_JOINED);
@@ -87,8 +87,8 @@ public class ProjectJoinService {
         Throwable cause = exception;
         while (cause != null) {
             if (cause instanceof ConstraintViolationException constraintViolation
-                    && PROJECT_MEMBER_UNIQUE_CONSTRAINT.equalsIgnoreCase(
-                    constraintViolation.getConstraintName())) {
+                    && ProjectMember.UNIQUE_PROJECT_MEMBER_CONSTRAINT.equalsIgnoreCase(
+                            constraintViolation.getConstraintName())) {
                 return true;
             }
             if (cause instanceof PSQLException postgresException
@@ -104,14 +104,12 @@ public class ProjectJoinService {
         ServerErrorMessage serverError = exception.getServerErrorMessage();
         return PSQLState.UNIQUE_VIOLATION.getState().equals(exception.getSQLState())
                 && serverError != null
-                && PROJECT_MEMBER_UNIQUE_CONSTRAINT.equalsIgnoreCase(serverError.getConstraint());
+                && ProjectMember.UNIQUE_PROJECT_MEMBER_CONSTRAINT.equalsIgnoreCase(
+                        serverError.getConstraint());
     }
 
-    private ProjectJoinResponse toResponse(Project project, ProjectMember member) {
-        LocalDateTime joinedAt = member.getCreatedAt();
-        if (member.getUpdatedAt() != null && member.getUpdatedAt().isAfter(member.getCreatedAt())) {
-            joinedAt = member.getUpdatedAt();
-        }
+    private ProjectJoinResponse toResponse(Project project, JoinedMember joinedMember) {
+        ProjectMember member = joinedMember.member();
         return new ProjectJoinResponse(
                 project.getId(),
                 project.getProjectName(),
@@ -119,7 +117,10 @@ public class ProjectJoinService {
                 member.getRole(),
                 project.getStatus(),
                 member.getStatus(),
-                joinedAt
+                joinedMember.joinedAt()
         );
+    }
+
+    private record JoinedMember(ProjectMember member, LocalDateTime joinedAt) {
     }
 }
