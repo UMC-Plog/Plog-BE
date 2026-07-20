@@ -6,6 +6,7 @@ import com.plog.domain.project.service.ProjectCreateService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.ProjectSuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,20 @@ public class ProjectController {
             summary = "프로젝트 생성",
             description = "프로젝트와 생성자 OWNER 멤버십을 생성하고 초대 정보를 발급합니다."
     )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "201",
+                    description = "프로젝트 생성 성공"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "잘못된 프로젝트 이름, 유형 또는 예상 종료일"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증이 없거나 유효하지 않은 사용자"
+            )
+    })
     @PostMapping
     public ResponseEntity<ApiResponse<ProjectCreateResponse>> createProject(
             @AuthenticationPrincipal Long userId,
