@@ -2,10 +2,16 @@ package com.plog.domain.project.repository;
 
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.ProjectMember;
-import java.util.Optional;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.EntityGraph;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
 import java.util.List;
+import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
+import org.springframework.data.repository.query.Param;
 
 public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Long> {
 
@@ -15,6 +21,18 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
     List<ProjectMember> findAllWithUserByProjectId(Long projectId);
 
     Optional<ProjectMember> findByProjectIdAndUserId(Long projectId, Long userId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints({
+            @QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"),
+            @QueryHint(name = "jakarta.persistence.query.timeout", value = "3000")
+    })
+    @Query("select member from ProjectMember member "
+            + "where member.project.id = :projectId and member.user.id = :userId")
+    Optional<ProjectMember> findByProjectIdAndUserIdForUpdate(
+            @Param("projectId") Long projectId,
+            @Param("userId") Long userId
+    );
 
     Optional<ProjectMember> findByProjectIdAndUserIdAndStatus(Long projectId, Long userId, MemberStatus status);
 }
