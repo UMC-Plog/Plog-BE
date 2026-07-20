@@ -81,7 +81,8 @@ class ChatChannelQueryRepositoryIntegrationTest {
         User user = saveUser("channel-owner");
         ChatFixture recent = saveChannel(user, "recent", MemberStatus.ACTIVE);
         ChatFixture older = saveChannel(user, "older", MemberStatus.ACTIVE);
-        ChatFixture empty = saveChannel(user, "empty", MemberStatus.ACTIVE);
+        ChatFixture firstEmpty = saveChannel(user, "empty-first", MemberStatus.ACTIVE);
+        ChatFixture secondEmpty = saveChannel(user, "empty-second", MemberStatus.ACTIVE);
         saveChannel(user, "exited", MemberStatus.EXIT);
 
         ChatMessage read = saveMessage(recent, "read", LocalDateTime.of(2026, 7, 1, 10, 0));
@@ -103,7 +104,7 @@ class ChatChannelQueryRepositoryIntegrationTest {
                 user.getId(), MemberStatus.ACTIVE, PageRequest.of(1, 2)
         );
 
-        assertThat(firstPage.getTotalElements()).isEqualTo(3);
+        assertThat(firstPage.getTotalElements()).isEqualTo(4);
         assertThat(firstPage.getContent()).extracting(ChatChannelSummary::getRoomId)
                 .containsExactly(recent.room().getId(), older.room().getId());
         assertThat(firstPage.getContent().getFirst().getLatestMessage()).isEqualTo("latest");
@@ -111,8 +112,9 @@ class ChatChannelQueryRepositoryIntegrationTest {
                 .isEqualTo(latest.getCreatedAt());
         assertThat(firstPage.getContent().getFirst().getUnreadMessageCount()).isOne();
         assertThat(firstPage.getContent().get(1).getUnreadMessageCount()).isOne();
-        assertThat(secondPage.getContent()).hasSize(1);
-        assertThat(secondPage.getContent().getFirst().getRoomId()).isEqualTo(empty.room().getId());
+        assertThat(secondPage.getContent()).hasSize(2);
+        assertThat(secondPage.getContent()).extracting(ChatChannelSummary::getRoomId)
+                .containsExactly(firstEmpty.room().getId(), secondEmpty.room().getId());
         assertThat(secondPage.getContent().getFirst().getLatestMessage()).isNull();
         assertThat(secondPage.getContent().getFirst().getLatestMessageAt()).isNull();
         assertThat(secondPage.getContent().getFirst().getUnreadMessageCount()).isZero();
