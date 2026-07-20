@@ -46,6 +46,18 @@ app:
     allowed-origins:
       - http://localhost:3000
 
+plog:
+  invite:
+    # 32바이트 AES 키를 Base64로 인코딩한 값. 누락 시 애플리케이션 시작을 중단한다.
+    encryption-key-base64: ${INVITE_TOKEN_ENCRYPTION_KEY_BASE64}
+    base-url: ${INVITE_BASE_URL}
+  # S3 인프라가 준비되기 전까지 비활성화한다. 활성화 시 bucket과 AWS 자격증명이 필요하다.
+  s3:
+    enabled: ${S3_ENABLED:false}
+    bucket: ${S3_BUCKET:}
+    region: ${S3_REGION:ap-northeast-2}
+    endpoint: ${S3_ENDPOINT:}
+
 springdoc:
   api-docs:
     path: /v3/api-docs
