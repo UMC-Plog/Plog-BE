@@ -37,7 +37,20 @@ public class ChatRoom extends BaseEntity {
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
 
+    // 기존 채팅방은 메시지 순번 backfill 후 현재 최댓값으로 채운다.
+    @Builder.Default
+    @Column(name = "last_message_sequence")
+    private Long lastMessageSequence = 0L;
+
     public static ChatRoom create(Project project) {
         return ChatRoom.builder().project(project).build();
+    }
+
+    public long issueNextMessageSequence() {
+        if (lastMessageSequence == null) {
+            throw new IllegalStateException("기존 채팅방의 메시지 순번 backfill이 필요합니다.");
+        }
+        lastMessageSequence += 1L;
+        return lastMessageSequence;
     }
 }
