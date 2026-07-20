@@ -1,5 +1,7 @@
 package com.plog.domain.project.service;
 
+import com.plog.domain.chat.entity.ChatRoom;
+import com.plog.domain.chat.repository.ChatRoomRepository;
 import com.plog.domain.project.dto.request.ProjectCreateRequest;
 import com.plog.domain.project.dto.response.ProjectCreateResponse;
 import com.plog.domain.project.entity.MemberStatus;
@@ -26,6 +28,7 @@ public class ProjectCreateService {
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
+    private final ChatRoomRepository chatRoomRepository;
     private final InviteTokenService inviteTokenService;
     private final String inviteBaseUrl;
 
@@ -33,12 +36,14 @@ public class ProjectCreateService {
             UserRepository userRepository,
             ProjectRepository projectRepository,
             ProjectMemberRepository projectMemberRepository,
+            ChatRoomRepository chatRoomRepository,
             InviteTokenService inviteTokenService,
             @Value("${plog.invite.base-url}") String inviteBaseUrl
     ) {
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
         this.projectMemberRepository = projectMemberRepository;
+        this.chatRoomRepository = chatRoomRepository;
         this.inviteTokenService = inviteTokenService;
         this.inviteBaseUrl = inviteBaseUrl;
     }
@@ -71,6 +76,7 @@ public class ProjectCreateService {
                             .role(ProjectRole.OWNER)
                             .status(MemberStatus.ACTIVE)
                             .build());
+                    chatRoomRepository.save(ChatRoom.create(project));
                     return new CreatedProject(project, creatorMember);
                 });
 
