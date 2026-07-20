@@ -17,10 +17,20 @@ class ProjectTest {
     }
 
     @Test
-    void rejectsABlankEncryptedInviteTokenDuringCreation() {
+    void rejectsANullEncryptedInviteTokenDuringCreation() {
         assertThatThrownBy(() -> Project.builder()
                 .inviteTokenHash("token-hash")
                 .inviteTokenEncrypted(null)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("invite token values must not be blank");
+    }
+
+    @Test
+    void rejectsABlankEncryptedInviteTokenDuringCreation() {
+        assertThatThrownBy(() -> Project.builder()
+                .inviteTokenHash("token-hash")
+                .inviteTokenEncrypted(" ")
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("invite token values must not be blank");
@@ -39,7 +49,7 @@ class ProjectTest {
     }
 
     @Test
-    void rejectsABlankEncryptedInviteTokenDuringRotation() {
+    void rejectsANullEncryptedInviteTokenDuringRotation() {
         Project project = Project.builder()
                 .inviteTokenHash("previous-hash")
                 .inviteTokenEncrypted("previous-encrypted-token")
