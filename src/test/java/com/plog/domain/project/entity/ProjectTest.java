@@ -7,8 +7,31 @@ import org.junit.jupiter.api.Test;
 class ProjectTest {
 
     @Test
+    void rejectsABlankInviteTokenHashDuringCreation() {
+        assertThatThrownBy(() -> Project.builder()
+                .inviteTokenHash(" ")
+                .inviteTokenEncrypted("encrypted-token")
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("invite token values must not be blank");
+    }
+
+    @Test
+    void rejectsABlankEncryptedInviteTokenDuringCreation() {
+        assertThatThrownBy(() -> Project.builder()
+                .inviteTokenHash("token-hash")
+                .inviteTokenEncrypted(null)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("invite token values must not be blank");
+    }
+
+    @Test
     void rejectsABlankInviteTokenHashDuringRotation() {
-        Project project = Project.builder().build();
+        Project project = Project.builder()
+                .inviteTokenHash("previous-hash")
+                .inviteTokenEncrypted("previous-encrypted-token")
+                .build();
 
         assertThatThrownBy(() -> project.rotateInviteToken(" ", "encrypted-token"))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -17,7 +40,10 @@ class ProjectTest {
 
     @Test
     void rejectsABlankEncryptedInviteTokenDuringRotation() {
-        Project project = Project.builder().build();
+        Project project = Project.builder()
+                .inviteTokenHash("previous-hash")
+                .inviteTokenEncrypted("previous-encrypted-token")
+                .build();
 
         assertThatThrownBy(() -> project.rotateInviteToken("token-hash", null))
                 .isInstanceOf(IllegalArgumentException.class)

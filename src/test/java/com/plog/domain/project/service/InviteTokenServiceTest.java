@@ -232,7 +232,11 @@ class InviteTokenServiceTest {
     @Test
     void findsAProjectByHashingTheRawToken() {
         String rawToken = "raw-invite-token";
-        Project project = Project.builder().id(10L).build();
+        Project project = Project.builder()
+                .id(10L)
+                .inviteTokenHash("stored-hash")
+                .inviteTokenEncrypted("stored-encrypted-token")
+                .build();
         given(projectRepository.findByInviteTokenHash(HashUtil.sha256Hex(rawToken)))
                 .willReturn(Optional.of(project));
 
