@@ -45,4 +45,7 @@ public class Post extends BaseEntity {
         this.content = content;
     }
 
+    public void changeNotice(boolean notice) {
+        this.isNotice = notice;
+    }
 }

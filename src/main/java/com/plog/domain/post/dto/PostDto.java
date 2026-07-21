@@ -20,6 +20,7 @@ public final class PostDto {
 
     public record CreateRequest(
             @NotBlank @Size(max = 5000) String content,
+            boolean isNotice,
             @Size(max = 10) List<@Valid AttachmentRequest> attachments
     ) {}
 
@@ -27,6 +28,8 @@ public final class PostDto {
             @Size(min = 1, max = 5000) String content,
             @Size(max = 10) List<@Valid AttachmentRequest> attachments
     ) {}
+
+    public record NoticeRequest(boolean isNotice) {}
 
     public record AttachmentResponse(
             Long postAttachmentId,
@@ -42,6 +45,7 @@ public final class PostDto {
             Long projectMemberId,
             String authorNickname,
             String content,
+            boolean isNotice,
             long likeCount,
             long commentCount,
             boolean likedByMe,
@@ -50,7 +54,11 @@ public final class PostDto {
             Instant updatedAt
     ) {}
 
-    public record FeedResponse(List<Response> posts, String nextCursor, boolean hasNext) {}
+    public record FeedResponse(Response notice, List<Response> posts, String nextCursor, boolean hasNext) {}
+
+    public record NoticeResponse(Long postId, Long projectId, boolean isNotice, Instant updatedAt) {}
+
+    public record LikeResponse(Long postId, boolean liked, long likeCount) {}
 
     public record DeletedResponse(boolean deleted) {}
 }

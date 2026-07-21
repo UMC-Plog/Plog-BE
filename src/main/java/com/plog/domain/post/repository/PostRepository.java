@@ -12,9 +12,14 @@ import org.springframework.data.repository.query.Param;
 public interface PostRepository extends JpaRepository<Post, Long> {
     Optional<Post> findByIdAndProjectMemberProjectId(Long id, Long projectId);
 
+    Optional<Post> findFirstByProjectMemberProjectIdAndIsNoticeTrue(Long projectId);
+
+    List<Post> findAllByProjectMemberProjectIdAndIsNoticeTrue(Long projectId);
+
     @Query("""
             select p from Post p
             where p.projectMember.project.id = :projectId
+              and p.isNotice = false
               and (:cursorTime is null or p.createdAt < :cursorTime
                    or (p.createdAt = :cursorTime and p.id < :cursorId))
             order by p.createdAt desc, p.id desc
