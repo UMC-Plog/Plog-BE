@@ -87,9 +87,11 @@ public class PostService {
         }
         int size = Math.min(requestedSize, 50);
         Cursor decoded = decodeCursor(cursor);
-        List<Post> fetched = postRepository.findFeedPage(
-                projectId, decoded == null ? null : decoded.createdAt(), decoded == null ? null : decoded.postId(),
-                PageRequest.of(0, size + 1));
+        PageRequest pageRequest = PageRequest.of(0, size + 1);
+        List<Post> fetched = decoded == null
+                ? postRepository.findFirstFeedPage(projectId, pageRequest)
+                : postRepository.findFeedPageAfter(
+                        projectId, decoded.createdAt(), decoded.postId(), pageRequest);
         boolean hasNext = fetched.size() > size;
         List<Post> page = hasNext ? fetched.subList(0, size) : fetched;
         List<Long> postIds = page.stream().map(Post::getId).toList();
