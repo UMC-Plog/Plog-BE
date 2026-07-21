@@ -67,4 +67,13 @@ public class ProjectMember extends BaseEntity {
         this.role = ProjectRole.MEMBER;
         this.status = MemberStatus.ACTIVE;
     }
+
+    public void assignRole(ProjectRole role) {
+        this.role = role;
+    }
+
+    public void transferOwnershipTo(ProjectMember targetMember) {
+        this.role = ProjectRole.MEMBER;
+        targetMember.assignRole(ProjectRole.OWNER);
+    }
 }
