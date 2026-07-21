@@ -12,10 +12,11 @@ import com.plog.domain.post.repository.PostAttachmentRepository;
 import com.plog.domain.post.repository.PostLikeRepository;
 import com.plog.domain.post.repository.PostRepository;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.ProjectRole;
+import com.plog.domain.project.exception.ProjectApiErrorCode;
+import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
-import com.plog.domain.project.service.ProjectAccessService;
-import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.infrastructure.s3.FileDeletionEvent;
 import com.plog.infrastructure.s3.FileStorageService;
@@ -44,14 +45,14 @@ public class PostService {
     private final CommentRepository commentRepository;
     private final PostLikeRepository postLikeRepository;
     private final ProjectRepository projectRepository;
-    private final ProjectAccessService projectAccessService;
+    private final ProjectMemberRepository projectMemberRepository;
     private final FileStorageService fileStorageService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public PostDto.Response createPost(Long projectId, Long userId, PostDto.CreateRequest request) {
+    public PostDto.CreateResponse createPost(Long projectId, Long userId, PostDto.CreateRequest request) {
         requireProject(projectId);
-        ProjectMember member = projectAccessService.requireActiveMember(projectId, userId);
+        ProjectMember member = requireActiveMember(projectId, userId);
         if (request.isNotice() && member.getRole() != ProjectRole.OWNER) {
             throw new ApiException(PostErrorCode.NOTICE_PERMISSION_DENIED);
         }
@@ -60,27 +61,30 @@ public class PostService {
         validateAttachments(userId, attachments);
         if (request.isNotice()) {
             projectRepository.findByIdForUpdate(projectId)
-                    .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
+                    .orElseThrow(() -> new ApiException(ProjectApiErrorCode.PROJECT_NOT_FOUND));
             clearNotices(projectId, null);
         }
         Post post = postRepository.saveAndFlush(Post.builder()
                 .projectMember(member).content(content).isNotice(request.isNotice()).build());
         List<PostAttachment> savedAttachments = saveAttachments(post, attachments);
         publishPromotions(savedAttachments);
-        return toResponse(post, member, savedAttachments);
+        return toCreateResponse(post, member, savedAttachments);
     }
 
     public PostDto.Response getPost(Long projectId, Long postId, Long userId) {
         requireProject(projectId);
-        ProjectMember member = projectAccessService.requireActiveMember(projectId, userId);
+        ProjectMember member = requireActiveMember(projectId, userId);
         Post post = requirePost(projectId, postId);
         return toResponse(post, member, attachmentRepository.findAllByPostIdOrderByIdAsc(postId));
     }
 
     public PostDto.FeedResponse getFeed(Long projectId, Long userId, String cursor, int requestedSize) {
         requireProject(projectId);
-        ProjectMember member = projectAccessService.requireActiveMember(projectId, userId);
-        int size = requestedSize <= 0 ? 20 : Math.min(requestedSize, 50);
+        ProjectMember member = requireActiveMember(projectId, userId);
+        if (requestedSize <= 0) {
+            throw new ApiException(PostErrorCode.VALIDATION_ERROR);
+        }
+        int size = Math.min(requestedSize, 50);
         Cursor decoded = decodeCursor(cursor);
         List<Post> fetched = postRepository.findFeedPage(
                 projectId, decoded == null ? null : decoded.createdAt(), decoded == null ? null : decoded.postId(),
@@ -103,9 +107,9 @@ public class PostService {
     }
 
     @Transactional
-    public PostDto.Response updatePost(Long projectId, Long postId, Long userId, PostDto.UpdateRequest request) {
+    public PostDto.UpdateResponse updatePost(Long projectId, Long postId, Long userId, PostDto.UpdateRequest request) {
         requireProject(projectId);
-        ProjectMember member = projectAccessService.requireActiveMember(projectId, userId);
+        ProjectMember member = requireActiveMember(projectId, userId);
         Post post = requirePost(projectId, postId);
         if (!post.getProjectMember().getId().equals(member.getId())) {
             throw new ApiException(PostErrorCode.POST_UPDATE_PERMISSION_DENIED);
@@ -135,13 +139,13 @@ public class PostService {
             resultingAttachments = attachmentRepository.findAllByPostIdOrderByIdAsc(postId);
         }
         postRepository.saveAndFlush(post);
-        return toResponse(post, member, resultingAttachments);
+        return toUpdateResponse(post, member, resultingAttachments);
     }
 
     @Transactional
     public PostDto.DeletedResponse deletePost(Long projectId, Long postId, Long userId) {
         requireProject(projectId);
-        ProjectMember member = projectAccessService.requireActiveMember(projectId, userId);
+        ProjectMember member = requireActiveMember(projectId, userId);
         Post post = requirePost(projectId, postId);
         if (!post.getProjectMember().getId().equals(member.getId()) && member.getRole() != ProjectRole.OWNER) {
             throw new ApiException(PostErrorCode.POST_DELETE_PERMISSION_DENIED);
@@ -162,17 +166,17 @@ public class PostService {
             Long projectId, Long postId, Long userId, PostDto.NoticeRequest request
     ) {
         requireProject(projectId);
-        ProjectMember member = projectAccessService.requireActiveMember(projectId, userId);
+        ProjectMember member = requireActiveMember(projectId, userId);
         if (member.getRole() != ProjectRole.OWNER) {
             throw new ApiException(PostErrorCode.NOTICE_PERMISSION_DENIED);
         }
         projectRepository.findByIdForUpdate(projectId)
-                .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
+                .orElseThrow(() -> new ApiException(ProjectApiErrorCode.PROJECT_NOT_FOUND));
         Post post = requirePost(projectId, postId);
-        if (request.isNotice()) {
+        if (Boolean.TRUE.equals(request.isNotice())) {
             clearNotices(projectId, postId);
         }
-        post.changeNotice(request.isNotice());
+        post.changeNotice(Boolean.TRUE.equals(request.isNotice()));
         postRepository.saveAndFlush(post);
         return new PostDto.NoticeResponse(post.getId(), projectId, post.isNotice(), toInstant(post.getUpdatedAt()));
     }
@@ -182,7 +186,7 @@ public class PostService {
             Long projectId, Long postId, Long userId, CommentDto.CreateRequest request
     ) {
         requireProject(projectId);
-        ProjectMember member = projectAccessService.requireActiveMember(projectId, userId);
+        ProjectMember member = requireActiveMember(projectId, userId);
         Post post = requirePost(projectId, postId);
         String content = requireContent(request.content(), 1000);
         Comment comment = commentRepository.saveAndFlush(Comment.builder()
@@ -192,7 +196,7 @@ public class PostService {
 
     public CommentDto.ListResponse getComments(Long projectId, Long postId, Long userId) {
         requireProject(projectId);
-        projectAccessService.requireActiveMember(projectId, userId);
+        requireActiveMember(projectId, userId);
         requirePost(projectId, postId);
         return new CommentDto.ListResponse(postId,
                 commentRepository.findAllByPostIdOrderByCreatedAtAscIdAsc(postId).stream()
@@ -204,7 +208,7 @@ public class PostService {
             Long projectId, Long postId, Long commentId, Long userId
     ) {
         requireProject(projectId);
-        ProjectMember member = projectAccessService.requireActiveMember(projectId, userId);
+        ProjectMember member = requireActiveMember(projectId, userId);
         requirePost(projectId, postId);
         Comment comment = commentRepository.findByIdAndPostId(commentId, postId)
                 .orElseThrow(() -> new ApiException(PostErrorCode.COMMENT_NOT_FOUND));
@@ -218,7 +222,7 @@ public class PostService {
     @Transactional
     public PostDto.LikeResponse like(Long projectId, Long postId, Long userId) {
         requireProject(projectId);
-        ProjectMember member = projectAccessService.requireActiveMember(projectId, userId);
+        ProjectMember member = requireActiveMember(projectId, userId);
         Post post = requirePost(projectId, postId);
         postLikeRepository.insertIgnore(post.getId(), member.getId());
         return new PostDto.LikeResponse(postId, true, postLikeRepository.countByPostId(postId));
@@ -227,7 +231,7 @@ public class PostService {
     @Transactional
     public PostDto.LikeResponse unlike(Long projectId, Long postId, Long userId) {
         requireProject(projectId);
-        ProjectMember member = projectAccessService.requireActiveMember(projectId, userId);
+        ProjectMember member = requireActiveMember(projectId, userId);
         requirePost(projectId, postId);
         postLikeRepository.findByPostIdAndProjectMemberId(postId, member.getId())
                 .ifPresent(postLikeRepository::delete);
@@ -243,6 +247,34 @@ public class PostService {
                 postLikeRepository.countByPostId(post.getId()), commentRepository.countByPostId(post.getId()),
                 postLikeRepository.existsByPostIdAndProjectMemberId(post.getId(), viewer.getId()), attachmentResponses,
                 toInstant(post.getCreatedAt()), toInstant(post.getUpdatedAt()));
+    }
+
+    private PostDto.CreateResponse toCreateResponse(
+            Post post,
+            ProjectMember viewer,
+            List<PostAttachment> attachments
+    ) {
+        return new PostDto.CreateResponse(
+                post.getId(), post.getProjectMember().getProject().getId(), post.getProjectMember().getId(),
+                post.getContent(), post.isNotice(), postLikeRepository.countByPostId(post.getId()),
+                commentRepository.countByPostId(post.getId()),
+                postLikeRepository.existsByPostIdAndProjectMemberId(post.getId(), viewer.getId()),
+                attachments.stream().map(this::toAttachmentResponse).toList(),
+                toInstant(post.getCreatedAt()));
+    }
+
+    private PostDto.UpdateResponse toUpdateResponse(
+            Post post,
+            ProjectMember viewer,
+            List<PostAttachment> attachments
+    ) {
+        return new PostDto.UpdateResponse(
+                post.getId(), post.getProjectMember().getProject().getId(), post.getProjectMember().getId(),
+                post.getContent(), post.isNotice(), postLikeRepository.countByPostId(post.getId()),
+                commentRepository.countByPostId(post.getId()),
+                postLikeRepository.existsByPostIdAndProjectMemberId(post.getId(), viewer.getId()),
+                attachments.stream().map(this::toAttachmentResponse).toList(),
+                toInstant(post.getUpdatedAt()));
     }
 
     private PostDto.AttachmentResponse toAttachmentResponse(PostAttachment attachment) {
@@ -314,9 +346,20 @@ public class PostService {
 
     private boolean isPrivateLiteral(String host) {
         String normalized = host.toLowerCase(java.util.Locale.ROOT);
-        return normalized.matches("^(10\\.|127\\.|169\\.254\\.|192\\.168\\.|0\\.)")
-                || normalized.equals("::1") || normalized.startsWith("fc")
-                || normalized.startsWith("fd") || normalized.startsWith("fe80:");
+        if (normalized.matches("^\\d{1,3}(\\.\\d{1,3}){3}$")) {
+            String[] parts = normalized.split("\\.");
+            int first = Integer.parseInt(parts[0]);
+            int second = Integer.parseInt(parts[1]);
+            return first == 0 || first == 10 || first == 127
+                    || (first == 169 && second == 254)
+                    || (first == 172 && second >= 16 && second <= 31)
+                    || (first == 192 && second == 168);
+        }
+        return normalized.contains(":") && (normalized.equals("::1")
+                || normalized.equals("::")
+                || normalized.startsWith("fc")
+                || normalized.startsWith("fd")
+                || normalized.startsWith("fe80:"));
     }
 
     private String requireContent(String content, int maxLength) {
@@ -339,8 +382,21 @@ public class PostService {
 
     private void requireProject(Long projectId) {
         if (!projectRepository.existsById(projectId)) {
-            throw new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND);
+            throw new ApiException(ProjectApiErrorCode.PROJECT_NOT_FOUND);
         }
+    }
+
+    private ProjectMember requireActiveMember(Long projectId, Long userId) {
+        if (userId == null) {
+            throw new ApiException(ProjectApiErrorCode.PROJECT_MEMBER_REQUIRED);
+        }
+        ProjectMember member = projectMemberRepository
+                .findByProjectIdAndUserIdAndStatus(projectId, userId, MemberStatus.ACTIVE)
+                .orElseThrow(() -> new ApiException(ProjectApiErrorCode.PROJECT_MEMBER_REQUIRED));
+        if (member.getRole() != ProjectRole.OWNER && member.getRole() != ProjectRole.MEMBER) {
+            throw new ApiException(ProjectApiErrorCode.PROJECT_MEMBER_REQUIRED);
+        }
+        return member;
     }
 
     private Post requirePost(Long projectId, Long postId) {

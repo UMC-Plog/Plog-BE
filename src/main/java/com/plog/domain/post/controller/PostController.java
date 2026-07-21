@@ -27,9 +27,9 @@ public class PostController {
     private final PostService postService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<PostDto.Response>> createPost(
+    public ResponseEntity<ApiResponse<PostDto.CreateResponse>> createPost(
             @PathVariable Long projectId,
-            @AuthenticationPrincipal(expression = "userId") Long userId,
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody PostDto.CreateRequest request
     ) {
         return ResponseEntity.status(SuccessCode.CREATED.getHttpStatus())
@@ -39,7 +39,7 @@ public class PostController {
     @GetMapping
     public ApiResponse<PostDto.FeedResponse> getFeed(
             @PathVariable Long projectId,
-            @AuthenticationPrincipal(expression = "userId") Long userId,
+            @AuthenticationPrincipal Long userId,
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "20") int size
     ) {
@@ -50,16 +50,16 @@ public class PostController {
     public ApiResponse<PostDto.Response> getPost(
             @PathVariable Long projectId,
             @PathVariable Long postId,
-            @AuthenticationPrincipal(expression = "userId") Long userId
+            @AuthenticationPrincipal Long userId
     ) {
         return ApiResponse.success(postService.getPost(projectId, postId, userId));
     }
 
     @PatchMapping("/{postId}")
-    public ApiResponse<PostDto.Response> updatePost(
+    public ApiResponse<PostDto.UpdateResponse> updatePost(
             @PathVariable Long projectId,
             @PathVariable Long postId,
-            @AuthenticationPrincipal(expression = "userId") Long userId,
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody PostDto.UpdateRequest request
     ) {
         return ApiResponse.success(postService.updatePost(projectId, postId, userId, request));
@@ -69,7 +69,7 @@ public class PostController {
     public ApiResponse<PostDto.DeletedResponse> deletePost(
             @PathVariable Long projectId,
             @PathVariable Long postId,
-            @AuthenticationPrincipal(expression = "userId") Long userId
+            @AuthenticationPrincipal Long userId
     ) {
         return ApiResponse.success(postService.deletePost(projectId, postId, userId));
     }
@@ -78,8 +78,8 @@ public class PostController {
     public ApiResponse<PostDto.NoticeResponse> changeNotice(
             @PathVariable Long projectId,
             @PathVariable Long postId,
-            @AuthenticationPrincipal(expression = "userId") Long userId,
-            @RequestBody PostDto.NoticeRequest request
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody PostDto.NoticeRequest request
     ) {
         return ApiResponse.success(postService.changeNotice(projectId, postId, userId, request));
     }
@@ -88,7 +88,7 @@ public class PostController {
     public ResponseEntity<ApiResponse<CommentDto.Response>> createComment(
             @PathVariable Long projectId,
             @PathVariable Long postId,
-            @AuthenticationPrincipal(expression = "userId") Long userId,
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody CommentDto.CreateRequest request
     ) {
         return ResponseEntity.status(SuccessCode.CREATED.getHttpStatus())
@@ -100,7 +100,7 @@ public class PostController {
     public ApiResponse<CommentDto.ListResponse> getComments(
             @PathVariable Long projectId,
             @PathVariable Long postId,
-            @AuthenticationPrincipal(expression = "userId") Long userId
+            @AuthenticationPrincipal Long userId
     ) {
         return ApiResponse.success(postService.getComments(projectId, postId, userId));
     }
@@ -110,7 +110,7 @@ public class PostController {
             @PathVariable Long projectId,
             @PathVariable Long postId,
             @PathVariable Long commentId,
-            @AuthenticationPrincipal(expression = "userId") Long userId
+            @AuthenticationPrincipal Long userId
     ) {
         return ApiResponse.success(postService.deleteComment(projectId, postId, commentId, userId));
     }
@@ -119,7 +119,7 @@ public class PostController {
     public ApiResponse<PostDto.LikeResponse> like(
             @PathVariable Long projectId,
             @PathVariable Long postId,
-            @AuthenticationPrincipal(expression = "userId") Long userId
+            @AuthenticationPrincipal Long userId
     ) {
         return ApiResponse.success(postService.like(projectId, postId, userId));
     }
@@ -128,7 +128,7 @@ public class PostController {
     public ApiResponse<PostDto.LikeResponse> unlike(
             @PathVariable Long projectId,
             @PathVariable Long postId,
-            @AuthenticationPrincipal(expression = "userId") Long userId
+            @AuthenticationPrincipal Long userId
     ) {
         return ApiResponse.success(postService.unlike(projectId, postId, userId));
     }
