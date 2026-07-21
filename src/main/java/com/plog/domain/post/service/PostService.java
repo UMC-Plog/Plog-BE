@@ -19,10 +19,11 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
+import com.plog.infrastructure.s3.AttachmentPolicy;
+import com.plog.infrastructure.s3.AttachmentUsage;
 import com.plog.infrastructure.s3.FileDeletionEvent;
 import com.plog.infrastructure.s3.FileStorageService;
 import com.plog.infrastructure.s3.FilePromotionEvent;
-import java.net.URI;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -48,6 +49,7 @@ public class PostService {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final FileStorageService fileStorageService;
+    private final AttachmentPolicy attachmentPolicy;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
@@ -282,7 +284,9 @@ public class PostService {
 
     private PostDto.AttachmentResponse toAttachmentResponse(PostAttachment attachment) {
         String url = attachment.getAttachmentType() == AttachmentType.FILE
-                ? fileStorageService.createDownloadUrl(attachment.getFileUrl()) : attachment.getFileUrl();
+                ? fileStorageService.createDownloadUrl(
+                        AttachmentUsage.POST, attachment.getFileUrl(), attachment.getFileName())
+                : attachment.getFileUrl();
         return new PostDto.AttachmentResponse(
                 attachment.getId(), attachment.getAttachmentType(), attachment.getFileName(), attachment.getFileSize(), url);
     }
@@ -316,54 +320,22 @@ public class PostService {
     }
 
     private void validateAttachments(Long userId, List<PostDto.AttachmentRequest> requests) {
-        if (requests.size() > 10) {
-            throw new ApiException(PostErrorCode.VALIDATION_ERROR);
-        }
+        attachmentPolicy.validateCount(requests.size(), PostErrorCode.VALIDATION_ERROR);
         for (PostDto.AttachmentRequest request : requests) {
-            if (request == null || request.attachmentType() == null || request.attachmentType() == AttachmentType.EXTERNAL) {
+            if (request == null || request.attachmentType() == null
+                    || request.attachmentType() == AttachmentType.EXTERNAL) {
                 throw new ApiException(PostErrorCode.VALIDATION_ERROR);
             }
             if (request.attachmentType() == AttachmentType.FILE) {
-                if (request.fileName() == null || request.fileSize() == null || request.fileKey() == null) {
-                    throw new ApiException(PostErrorCode.VALIDATION_ERROR);
-                }
-                fileStorageService.verifyUploadedFile(userId, request.fileKey(), request.fileName(), request.fileSize());
+                attachmentPolicy.validateFileAttachment(AttachmentUsage.POST, userId,
+                        request.fileName(), request.fileSize(), request.fileKey(),
+                        PostErrorCode.VALIDATION_ERROR);
             } else {
-                validateLink(request.fileUrl());
+                attachmentPolicy.validateLink(request.fileUrl(), PostErrorCode.INVALID_LINK_URL);
             }
         }
     }
 
-    private void validateLink(String value) {
-        try {
-            URI uri = URI.create(value);
-            String host = uri.getHost();
-            if (!"https".equalsIgnoreCase(uri.getScheme()) || host == null || uri.getUserInfo() != null
-                    || host.equalsIgnoreCase("localhost") || isPrivateLiteral(host)) {
-                throw new ApiException(PostErrorCode.INVALID_LINK_URL);
-            }
-        } catch (IllegalArgumentException exception) {
-            throw new ApiException(PostErrorCode.INVALID_LINK_URL, exception);
-        }
-    }
-
-    private boolean isPrivateLiteral(String host) {
-        String normalized = host.toLowerCase(java.util.Locale.ROOT);
-        if (normalized.matches("^\\d{1,3}(\\.\\d{1,3}){3}$")) {
-            String[] parts = normalized.split("\\.");
-            int first = Integer.parseInt(parts[0]);
-            int second = Integer.parseInt(parts[1]);
-            return first == 0 || first == 10 || first == 127
-                    || (first == 169 && second == 254)
-                    || (first == 172 && second >= 16 && second <= 31)
-                    || (first == 192 && second == 168);
-        }
-        return normalized.contains(":") && (normalized.equals("::1")
-                || normalized.equals("::")
-                || normalized.startsWith("fc")
-                || normalized.startsWith("fd")
-                || normalized.startsWith("fe80:"));
-    }
 
     private String requireContent(String content, int maxLength) {
         String trimmed = content == null ? "" : content.trim();
