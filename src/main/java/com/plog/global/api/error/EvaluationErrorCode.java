@@ -26,7 +26,10 @@ public enum EvaluationErrorCode implements BaseErrorCode {
 
     // 팀원 간 정책
     ALREADY_EVALUATED(HttpStatus.CONFLICT, "EVAL409_1", "이미 해당 팀원을 평가하셨습니다."),
-    CANNOT_EVALUATE_SELF(HttpStatus.FORBIDDEN, "EVAL403_1", "본인은 평가할 수 없습니다.");
+    CANNOT_EVALUATE_SELF(HttpStatus.FORBIDDEN, "EVAL403_1", "본인은 평가할 수 없습니다."),
+
+    // 셀프 피드백 중복 등록 방지
+    ALREADY_SUBMITTED_SELF_FEEDBACK(HttpStatus.CONFLICT, "EVAL409_2", "이미 셀프 피드백을 등록하셨습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
