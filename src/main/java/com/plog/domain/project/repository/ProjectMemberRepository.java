@@ -42,6 +42,32 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
 
     Optional<ProjectMember> findByProjectIdAndUserIdAndStatus(Long projectId, Long userId, MemberStatus status);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints({
+            @QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"),
+            @QueryHint(name = "jakarta.persistence.query.timeout", value = "3000")
+    })
+    @Query("select member from ProjectMember member "
+            + "where member.project.id = :projectId and member.user.id = :userId and member.status = :status")
+    Optional<ProjectMember> findByProjectIdAndUserIdAndStatusForUpdate(
+            @Param("projectId") Long projectId,
+            @Param("userId") Long userId,
+            @Param("status") MemberStatus status
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints({
+            @QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"),
+            @QueryHint(name = "jakarta.persistence.query.timeout", value = "3000")
+    })
+    @Query("select member from ProjectMember member "
+            + "where member.project.id = :projectId and member.id = :memberId and member.status = :status")
+    Optional<ProjectMember> findByProjectIdAndIdAndStatusForUpdate(
+            @Param("projectId") Long projectId,
+            @Param("memberId") Long memberId,
+            @Param("status") MemberStatus status
+    );
+
     @EntityGraph(attributePaths = {"user", "project"})
     List<ProjectMember> findAllByIdIn(Collection<Long> ids);
 
