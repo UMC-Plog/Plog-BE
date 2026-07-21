@@ -51,7 +51,7 @@ public class ProjectListService {
             throw new ApiException(AuthErrorCode.INVALID_TOKEN);
         }
 
-        Slice<ProjectMember> membershipSlice = projectMemberRepository.findProjectPage(
+        Slice<ProjectMember> membershipSlice = projectMemberRepository.findProjectSlice(
                 userId,
                 MemberStatus.ACTIVE,
                 status,

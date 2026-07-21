@@ -70,7 +70,7 @@ class ProjectListServiceTest {
         given(progress.getTotalCount()).willReturn(3L);
         given(progress.getDoneCount()).willReturn(2L);
 
-        given(projectMemberRepository.findProjectPage(
+        given(projectMemberRepository.findProjectSlice(
                 1L,
                 MemberStatus.ACTIVE,
                 ProjectStatus.IN_PROGRESS,

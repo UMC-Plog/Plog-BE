@@ -44,7 +44,7 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
             + "where member.user.id = :userId and member.status = :memberStatus "
             + "and (:projectStatus is null or member.project.status = :projectStatus) "
             + "order by member.project.updatedAt desc, member.project.id desc")
-    Slice<ProjectMember> findProjectPage(
+    Slice<ProjectMember> findProjectSlice(
             @Param("userId") Long userId,
             @Param("memberStatus") MemberStatus memberStatus,
             @Param("projectStatus") ProjectStatus projectStatus,
