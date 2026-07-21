@@ -5,6 +5,7 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.service.ProjectListService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.ProjectSuccessCode;
+import com.plog.global.api.response.SliceResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -53,13 +54,18 @@ public class ProjectListController {
             )
     })
     @GetMapping
-    public ResponseEntity<ApiResponse<ProjectListResponse>> getProjects(
+    public ResponseEntity<ApiResponse<SliceResponse<ProjectListResponse>>> getProjects(
             @AuthenticationPrincipal Long userId,
             @RequestParam(required = false) ProjectStatus status,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
-        ProjectListResponse response = projectListService.getProjects(userId, status, page, size);
+        SliceResponse<ProjectListResponse> response = projectListService.getProjects(
+                userId,
+                status,
+                page,
+                size
+        );
         return ResponseEntity.ok(ApiResponse.success(ProjectSuccessCode.PROJECT_LIST_RETRIEVED, response));
     }
 }

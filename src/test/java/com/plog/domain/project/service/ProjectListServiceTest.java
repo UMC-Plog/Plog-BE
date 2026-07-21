@@ -19,6 +19,7 @@ import com.plog.domain.task.repository.TaskRepository.ProjectTaskProgress;
 import com.plog.domain.user.entity.User;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.api.response.SliceResponse;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -27,8 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.SliceImpl;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectListServiceTest {
@@ -74,13 +75,13 @@ class ProjectListServiceTest {
                 MemberStatus.ACTIVE,
                 ProjectStatus.IN_PROGRESS,
                 PageRequest.of(0, 20)
-        )).willReturn(new PageImpl<>(List.of(myMembership), PageRequest.of(0, 20), 1));
+        )).willReturn(new SliceImpl<>(List.of(myMembership), PageRequest.of(0, 20), true));
         given(projectMemberRepository.findActiveMembers(List.of(10L), MemberStatus.ACTIVE))
                 .willReturn(members);
         given(taskRepository.findProgressByProjectIds(List.of(10L), TaskStatus.DONE))
                 .willReturn(List.of(progress));
 
-        ProjectListResponse response = projectListService.getProjects(
+        SliceResponse<ProjectListResponse> response = projectListService.getProjects(
                 1L,
                 ProjectStatus.IN_PROGRESS,
                 0,
@@ -93,7 +94,9 @@ class ProjectListServiceTest {
         assertThat(response.content().getFirst().memberPreviews()).hasSize(3);
         assertThat(response.content().getFirst().extraMemberCount()).isEqualTo(1);
         assertThat(response.content().getFirst().progressPercent()).isEqualTo(66);
-        assertThat(response.totalElements()).isEqualTo(1);
+        assertThat(response.page()).isZero();
+        assertThat(response.size()).isEqualTo(20);
+        assertThat(response.hasNext()).isTrue();
     }
 
     @Test

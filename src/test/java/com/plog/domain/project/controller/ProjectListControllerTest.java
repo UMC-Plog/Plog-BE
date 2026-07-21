@@ -8,10 +8,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.plog.domain.project.dto.response.ProjectListResponse;
 import com.plog.domain.project.dto.response.ProjectListResponse.MemberPreview;
-import com.plog.domain.project.dto.response.ProjectListResponse.ProjectSummary;
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.service.ProjectListService;
+import com.plog.global.api.response.SliceResponse;
 import com.plog.global.security.jwt.JwtProvider;
 import java.time.LocalDate;
 import java.util.List;
@@ -50,8 +50,8 @@ class ProjectListControllerTest {
     @Test
     void returnsTheProjectListForTheRawLongPrincipal() throws Exception {
         authenticate(1L);
-        ProjectListResponse response = new ProjectListResponse(
-                List.of(new ProjectSummary(
+        SliceResponse<ProjectListResponse> response = new SliceResponse<>(
+                List.of(new ProjectListResponse(
                         10L,
                         "Plog",
                         ProjectType.DEVELOP,
@@ -65,10 +65,7 @@ class ProjectListControllerTest {
                 )),
                 0,
                 20,
-                1,
-                1,
-                true,
-                true
+                false
         );
         given(projectListService.getProjects(1L, ProjectStatus.IN_PROGRESS, 0, 20))
                 .willReturn(response);
@@ -81,7 +78,11 @@ class ProjectListControllerTest {
                 .andExpect(jsonPath("$.result.content[0].projectType").value("DEVELOP"))
                 .andExpect(jsonPath("$.result.content[0].memberPreviews[0].nickname").value("vana"))
                 .andExpect(jsonPath("$.result.content[0].progressPercent").value(66))
-                .andExpect(jsonPath("$.result.totalElements").value(1));
+                .andExpect(jsonPath("$.result.page").value(0))
+                .andExpect(jsonPath("$.result.size").value(20))
+                .andExpect(jsonPath("$.result.hasNext").value(false))
+                .andExpect(jsonPath("$.result.totalElements").doesNotExist())
+                .andExpect(jsonPath("$.result.totalPages").doesNotExist());
     }
 
     @Test
