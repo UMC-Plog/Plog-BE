@@ -16,4 +16,14 @@ public interface PeerEvaluationRepository extends JpaRepository<PeerEvaluation, 
 
     Optional<PeerEvaluation> findByEvaluatorIdAndEvaluateeId(Long evaluatorId, Long evaluateeId);
 
+    @Query("""
+            select count(peerEvaluation)
+            from PeerEvaluation peerEvaluation
+            where peerEvaluation.evaluator.project.id = :projectId
+              and peerEvaluation.evaluatee.project.id = :projectId
+              and peerEvaluation.evaluator.status = com.plog.domain.project.entity.MemberStatus.ACTIVE
+              and peerEvaluation.evaluatee.status = com.plog.domain.project.entity.MemberStatus.ACTIVE
+            """)
+    long countSubmittedByActiveProjectMembers(@Param("projectId") Long projectId);
+
 }

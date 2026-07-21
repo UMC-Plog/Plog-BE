@@ -95,17 +95,26 @@ public class Project extends BaseEntity {
         this.inviteTokenEncrypted = inviteTokenEncrypted;
     }
 
+    public void complete() {
+        this.status = ProjectStatus.COMPLETED;
+    }
+
+    public boolean isCompleted() {
+        return this.status == ProjectStatus.COMPLETED;
+    }
+
     private static void validateInviteTokenValues(String inviteTokenHash, String inviteTokenEncrypted) {
         if (inviteTokenHash == null || inviteTokenHash.isBlank()
                 || inviteTokenEncrypted == null || inviteTokenEncrypted.isBlank()) {
-            throw new IllegalArgumentException("invite token values must not be blank");
+            throw new IllegalArgumentException("초대 토큰값은 비어있을 수 없습니다.");
         }
     }
 
     public boolean isEvaluatingState() {
-        if (this.status == ProjectStatus.COMPLETED) {
-            return false;
-        }
-        return !LocalDate.now().isAfter(this.endDay);
+        return isEvaluatingState(LocalDate.now(java.time.ZoneOffset.UTC));
+    }
+
+    public boolean isEvaluatingState(LocalDate today) {
+        return !isCompleted() && today.isAfter(this.endDay);
     }
 }

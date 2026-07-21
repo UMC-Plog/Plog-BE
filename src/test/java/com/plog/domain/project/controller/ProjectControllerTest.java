@@ -6,16 +6,19 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.plog.domain.project.dto.ProjectStatusDto;
 import com.plog.domain.project.dto.request.ProjectCreateRequest;
 import com.plog.domain.project.dto.response.ProjectCreateResponse;
 import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.service.ProjectCreateService;
+import com.plog.domain.project.service.ProjectStatusService;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -42,6 +45,9 @@ class ProjectControllerTest {
 
     @MockitoBean
     private ProjectCreateService projectCreateService;
+
+    @MockitoBean
+    private ProjectStatusService projectStatusService;
 
     @MockitoBean
     private JwtProvider jwtProvider;
@@ -245,6 +251,34 @@ class ProjectControllerTest {
                         .content(validRequestJson("Plog API")))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH011"));
+    }
+
+    @Test
+    void checksAndUpdatesProjectStatus() throws Exception {
+        Long userId = 1L;
+        Long projectId = 10L;
+        authenticate(userId);
+        given(projectStatusService.checkAndUpdateStatus(
+                eq(projectId),
+                eq(userId),
+                any(ProjectStatusDto.Request.class)
+        )).willReturn(new ProjectStatusDto.Response(projectId, ProjectStatus.COMPLETED, true, true));
+
+        mockMvc.perform(patch("/api/v1/projects/{projectId}/status", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status": "COMPLETED"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.code").value("PROJ200_1"))
+                .andExpect(jsonPath("$.message").value("프로젝트 상태를 성공적으로 확인/갱신했습니다."))
+                .andExpect(jsonPath("$.result.projectId").value(projectId))
+                .andExpect(jsonPath("$.result.currentStatus").value("COMPLETED"))
+                .andExpect(jsonPath("$.result.isTimeoutApplied").value(true))
+                .andExpect(jsonPath("$.result.isPublished").value(true));
     }
 
     private void authenticate(Long userId) {
