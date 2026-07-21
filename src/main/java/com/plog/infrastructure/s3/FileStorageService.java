@@ -88,11 +88,19 @@ public class FileStorageService {
     }
 
     public String createDownloadUrl(String fileKey) {
+        return createDownloadUrl(fileKey, URL_DURATION).downloadUrl();
+    }
+
+    public FileStorageDto.PresignedDownloadResponse createDownloadUrl(
+            String fileKey,
+            Duration duration
+    ) {
         ensureEnabled();
         GetObjectRequest getObject = GetObjectRequest.builder().bucket(bucket).key(fileKey).build();
-        return s3Presigner.presignGetObject(GetObjectPresignRequest.builder()
-                        .signatureDuration(URL_DURATION).getObjectRequest(getObject).build())
+        String downloadUrl = s3Presigner.presignGetObject(GetObjectPresignRequest.builder()
+                        .signatureDuration(duration).getObjectRequest(getObject).build())
                 .url().toString();
+        return new FileStorageDto.PresignedDownloadResponse(downloadUrl, duration.getSeconds());
     }
 
     public void delete(String fileKey) {
