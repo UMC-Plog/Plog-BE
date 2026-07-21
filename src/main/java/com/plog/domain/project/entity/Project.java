@@ -115,6 +115,6 @@ public class Project extends BaseEntity {
     }
 
     public boolean isEvaluatingState(LocalDate today) {
-        return !isCompleted() && today.isAfter(this.endDay);
+        return !isCompleted() && !today.isAfter(this.endDay);
     }
 }
