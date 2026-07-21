@@ -48,6 +48,7 @@ class FileStorageServiceTest {
 
         FileStorageDto.PresignedDownloadResponse response = service.createDownloadUrl(
                 "reports/1/report.pdf",
+                "Plog-report.pdf",
                 Duration.ofSeconds(300)
         );
 
@@ -57,6 +58,8 @@ class FileStorageServiceTest {
         assertThat(captor.getValue().signatureDuration()).isEqualTo(Duration.ofSeconds(300));
         assertThat(captor.getValue().getObjectRequest().bucket()).isEqualTo("plog-test");
         assertThat(captor.getValue().getObjectRequest().key()).isEqualTo("reports/1/report.pdf");
+        assertThat(captor.getValue().getObjectRequest().responseContentDisposition())
+                .isEqualTo("attachment; filename*=UTF-8''Plog-report.pdf");
         assertThat(response.downloadUrl()).isEqualTo("https://storage.test/report.pdf");
         assertThat(response.expiresInSeconds()).isEqualTo(300);
     }

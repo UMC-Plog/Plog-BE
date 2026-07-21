@@ -43,6 +43,7 @@ public class ReportPdfDownloadService {
 
         FileStorageDto.PresignedDownloadResponse presigned = fileStorageService.createDownloadUrl(
                 report.getPdfObjectKey(),
+                report.getPdfFileName(),
                 DOWNLOAD_URL_DURATION
         );
         return new ReportPdfDownloadResponse(

@@ -65,6 +65,7 @@ class ReportPdfDownloadServiceTest {
         given(report.getPdfFileName()).willReturn("Plog-report.pdf");
         given(fileStorageService.createDownloadUrl(
                 "reports/10/report.pdf",
+                "Plog-report.pdf",
                 Duration.ofSeconds(300)
         )).willReturn(new FileStorageDto.PresignedDownloadResponse(
                 "https://storage.test/report.pdf",
@@ -144,6 +145,7 @@ class ReportPdfDownloadServiceTest {
         given(report.getPdfFileName()).willReturn("Plog-report.pdf");
         given(fileStorageService.createDownloadUrl(
                 "reports/10/report.pdf",
+                "Plog-report.pdf",
                 Duration.ofSeconds(300)
         )).willThrow(new ApiException(FileStorageErrorCode.FILE_STORAGE_DISABLED));
 
