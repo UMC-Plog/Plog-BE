@@ -64,7 +64,7 @@ class ProjectRoleControllerE2eTest extends E2eTestBase {
             );
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            assertThat(code(response)).isEqualTo("MEMBER_NOT_FOUND");
+            assertThat(code(response)).isEqualTo("PROJ400_2");
         }
     }
 

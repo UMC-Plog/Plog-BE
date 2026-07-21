@@ -42,7 +42,7 @@ public interface ProjectRoleControllerDoc {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "404",
-                    description = "프로젝트 또는 대상 팀원 없음",
+                    description = "프로젝트를 찾을 수 없음",
                     content = @Content(mediaType = "application/json",
                             schema = @Schema(implementation = ApiResponse.class))
             )
