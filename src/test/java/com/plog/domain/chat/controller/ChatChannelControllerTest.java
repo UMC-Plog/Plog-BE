@@ -7,15 +7,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.plog.domain.chat.dto.response.ChatChannelListResponse;
-import com.plog.domain.chat.dto.response.ChatChannelListResponse.Channel;
-import com.plog.domain.chat.dto.response.ChatChannelListResponse.PageInfo;
-import com.plog.domain.chat.dto.response.ChatChannelSearchResponse;
+import com.plog.domain.chat.dto.response.ChatChannelResponse;
 import com.plog.domain.chat.dto.response.ChatChannelParticipantResponse;
 import com.plog.domain.chat.service.ChatChannelListService;
 import com.plog.domain.chat.service.ChatChannelSearchService;
 import com.plog.global.api.error.ChatErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.api.response.SliceResponse;
 import com.plog.global.security.jwt.JwtProvider;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -59,8 +57,8 @@ class ChatChannelControllerTest {
     @Test
     void returnsChannelsForTheRawLongPrincipalWithDefaultPaging() throws Exception {
         authenticate(1L);
-        ChatChannelListResponse response = new ChatChannelListResponse(
-                List.of(new Channel(
+        SliceResponse<ChatChannelResponse> response = new SliceResponse<>(
+                List.of(new ChatChannelResponse(
                         10L,
                         "Plog",
                         20L,
@@ -74,7 +72,9 @@ class ChatChannelControllerTest {
                                 "https://image.test/1.png"
                         ))
                 )),
-                new PageInfo(0, 20, 1, 1, false)
+                0,
+                20,
+                false
         );
         given(service.getChannels(1L, 0, 20)).willReturn(response);
 
@@ -89,16 +89,22 @@ class ChatChannelControllerTest {
                 .andExpect(jsonPath("$.result.content[0].participants[0].nickname").value("바나"))
                 .andExpect(jsonPath("$.result.content[0].participants[0].profileImageUrl")
                         .value("https://image.test/1.png"))
-                .andExpect(jsonPath("$.result.pageInfo.page").value(0))
-                .andExpect(jsonPath("$.result.pageInfo.hasNext").value(false));
+                .andExpect(jsonPath("$.result.page").value(0))
+                .andExpect(jsonPath("$.result.size").value(20))
+                .andExpect(jsonPath("$.result.hasNext").value(false))
+                .andExpect(jsonPath("$.result.pageInfo").doesNotExist());
     }
 
     @Test
     void includesNullLatestMessageFieldsForAChannelWithoutMessages() throws Exception {
         authenticate(1L);
-        ChatChannelListResponse response = new ChatChannelListResponse(
-                List.of(new Channel(10L, "Plog", 20L, null, null, false, 0L, List.of())),
-                new PageInfo(0, 20, 1, 1, false)
+        SliceResponse<ChatChannelResponse> response = new SliceResponse<>(
+                List.of(new ChatChannelResponse(
+                        10L, "Plog", 20L, null, null, false, 0L, List.of()
+                )),
+                0,
+                20,
+                false
         );
         given(service.getChannels(1L, 0, 20)).willReturn(response);
 
@@ -136,8 +142,8 @@ class ChatChannelControllerTest {
     @Test
     void searchesChannelsWithDefaultPaging() throws Exception {
         authenticate(1L);
-        ChatChannelSearchResponse response = new ChatChannelSearchResponse(
-                List.of(new ChatChannelSearchResponse.SearchChannel(
+        SliceResponse<ChatChannelResponse> response = new SliceResponse<>(
+                List.of(new ChatChannelResponse(
                         10L,
                         "PLOG API",
                         20L,
@@ -147,7 +153,9 @@ class ChatChannelControllerTest {
                         2L,
                         List.of(new ChatChannelParticipantResponse(1L, "바나", null))
                 )),
-                new ChatChannelSearchResponse.SearchPageInfo(0, 20, 1, 1, false)
+                0,
+                20,
+                false
         );
         given(searchService.search(1L, "plog", 0, 20)).willReturn(response);
 
@@ -165,7 +173,9 @@ class ChatChannelControllerTest {
                 .andExpect(jsonPath("$.result.content[0].participants[0].userId").value(1L))
                 .andExpect(jsonPath("$.result.content[0].participants[0].profileImageUrl")
                         .value(nullValue()))
-                .andExpect(jsonPath("$.result.pageInfo.page").value(0));
+                .andExpect(jsonPath("$.result.page").value(0))
+                .andExpect(jsonPath("$.result.hasNext").value(false))
+                .andExpect(jsonPath("$.result.pageInfo").doesNotExist());
     }
 
     @Test

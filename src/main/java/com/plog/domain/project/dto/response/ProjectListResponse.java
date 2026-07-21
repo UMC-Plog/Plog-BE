@@ -6,28 +6,17 @@ import java.time.LocalDate;
 import java.util.List;
 
 public record ProjectListResponse(
-        List<ProjectSummary> content,
-        int page,
-        int size,
-        long totalElements,
-        int totalPages,
-        boolean first,
-        boolean last
+        Long projectId,
+        String projectName,
+        ProjectType projectType,
+        ProjectStatus status,
+        LocalDate endDay,
+        long remainingDays,
+        int memberCount,
+        List<MemberPreview> memberPreviews,
+        int extraMemberCount,
+        int progressPercent
 ) {
-
-    public record ProjectSummary(
-            Long projectId,
-            String projectName,
-            ProjectType projectType,
-            ProjectStatus status,
-            LocalDate endDay,
-            long remainingDays,
-            int memberCount,
-            List<MemberPreview> memberPreviews,
-            int extraMemberCount,
-            int progressPercent
-    ) {
-    }
 
     public record MemberPreview(
             Long userId,

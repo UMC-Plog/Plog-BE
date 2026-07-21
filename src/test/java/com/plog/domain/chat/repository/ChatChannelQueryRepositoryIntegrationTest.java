@@ -25,8 +25,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -97,14 +97,14 @@ class ChatChannelQueryRepositoryIntegrationTest {
         )).isOne();
         entityManager.clear();
 
-        Page<ChatChannelSummary> firstPage = chatRoomRepository.findChannelPage(
+        Slice<ChatChannelSummary> firstPage = chatRoomRepository.findChannelPage(
                 user.getId(), MemberStatus.ACTIVE, PageRequest.of(0, 2)
         );
-        Page<ChatChannelSummary> secondPage = chatRoomRepository.findChannelPage(
+        Slice<ChatChannelSummary> secondPage = chatRoomRepository.findChannelPage(
                 user.getId(), MemberStatus.ACTIVE, PageRequest.of(1, 2)
         );
 
-        assertThat(firstPage.getTotalElements()).isEqualTo(4);
+        assertThat(firstPage.hasNext()).isTrue();
         assertThat(firstPage.getContent()).extracting(ChatChannelSummary::getRoomId)
                 .containsExactly(recent.room().getId(), older.room().getId());
         assertThat(firstPage.getContent().getFirst().getLatestMessage()).isEqualTo("latest");
@@ -113,6 +113,7 @@ class ChatChannelQueryRepositoryIntegrationTest {
         assertThat(firstPage.getContent().getFirst().getUnreadMessageCount()).isOne();
         assertThat(firstPage.getContent().get(1).getUnreadMessageCount()).isOne();
         assertThat(secondPage.getContent()).hasSize(2);
+        assertThat(secondPage.hasNext()).isFalse();
         assertThat(secondPage.getContent()).extracting(ChatChannelSummary::getRoomId)
                 .containsExactly(firstEmpty.room().getId(), secondEmpty.room().getId());
         assertThat(secondPage.getContent().getFirst().getLatestMessage()).isNull();
@@ -124,12 +125,12 @@ class ChatChannelQueryRepositoryIntegrationTest {
     void returnsAnEmptyPageForAUserWithoutActiveChannels() {
         User outsider = saveUser("channel-outsider");
 
-        Page<ChatChannelSummary> page = chatRoomRepository.findChannelPage(
+        Slice<ChatChannelSummary> page = chatRoomRepository.findChannelPage(
                 outsider.getId(), MemberStatus.ACTIVE, PageRequest.of(0, 20)
         );
 
         assertThat(page.getContent()).isEmpty();
-        assertThat(page.getTotalElements()).isZero();
+        assertThat(page.hasNext()).isFalse();
     }
 
     @Test
@@ -141,14 +142,14 @@ class ChatChannelQueryRepositoryIntegrationTest {
         saveChannel(user, "Plog exited", MemberStatus.EXIT);
         saveChannel(saveUser("channel-search-outsider"), "Plog outsider", MemberStatus.ACTIVE);
 
-        Page<ChatChannelSummary> page = chatRoomRepository.findChannelPageByProjectName(
+        Slice<ChatChannelSummary> page = chatRoomRepository.findChannelPageByProjectName(
                 user.getId(),
                 MemberStatus.ACTIVE,
                 "%plog%",
                 PageRequest.of(0, 20)
         );
 
-        assertThat(page.getTotalElements()).isEqualTo(2);
+        assertThat(page.hasNext()).isFalse();
         assertThat(page.getContent()).extracting(ChatChannelSummary::getRoomId)
                 .containsExactly(first.room().getId(), second.room().getId());
     }
@@ -160,14 +161,14 @@ class ChatChannelQueryRepositoryIntegrationTest {
         saveChannel(user, "rateA100B!", MemberStatus.ACTIVE);
         saveChannel(user, "rate_100%X", MemberStatus.ACTIVE);
 
-        Page<ChatChannelSummary> page = chatRoomRepository.findChannelPageByProjectName(
+        Slice<ChatChannelSummary> page = chatRoomRepository.findChannelPageByProjectName(
                 user.getId(),
                 MemberStatus.ACTIVE,
                 "%rate!_100!%!!%",
                 PageRequest.of(0, 20)
         );
 
-        assertThat(page.getTotalElements()).isOne();
+        assertThat(page.hasNext()).isFalse();
         assertThat(page.getContent()).extracting(ChatChannelSummary::getRoomId)
                 .containsExactly(literal.room().getId());
     }

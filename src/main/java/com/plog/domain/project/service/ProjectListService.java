@@ -2,7 +2,6 @@ package com.plog.domain.project.service;
 
 import com.plog.domain.project.dto.response.ProjectListResponse;
 import com.plog.domain.project.dto.response.ProjectListResponse.MemberPreview;
-import com.plog.domain.project.dto.response.ProjectListResponse.ProjectSummary;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
@@ -13,14 +12,15 @@ import com.plog.domain.task.repository.TaskRepository;
 import com.plog.domain.task.repository.TaskRepository.ProjectTaskProgress;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.api.response.SliceResponse;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,23 +41,28 @@ public class ProjectListService {
     }
 
     @Transactional(readOnly = true)
-    public ProjectListResponse getProjects(Long userId, ProjectStatus status, int page, int size) {
+    public SliceResponse<ProjectListResponse> getProjects(
+            Long userId,
+            ProjectStatus status,
+            int page,
+            int size
+    ) {
         if (userId == null) {
             throw new ApiException(AuthErrorCode.INVALID_TOKEN);
         }
 
-        Page<ProjectMember> membershipPage = projectMemberRepository.findProjectPage(
+        Slice<ProjectMember> membershipSlice = projectMemberRepository.findProjectSlice(
                 userId,
                 MemberStatus.ACTIVE,
                 status,
                 PageRequest.of(page, size)
         );
-        List<Project> projects = membershipPage.getContent().stream()
+        List<Project> projects = membershipSlice.getContent().stream()
                 .map(ProjectMember::getProject)
                 .toList();
 
         if (projects.isEmpty()) {
-            return response(membershipPage, List.of());
+            return SliceResponse.of(membershipSlice, List.of());
         }
 
         List<Long> projectIds = projects.stream().map(Project::getId).toList();
@@ -71,7 +76,7 @@ public class ProjectListService {
                 .collect(Collectors.toMap(ProjectTaskProgress::getProjectId, progress -> progress));
 
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        List<ProjectSummary> summaries = projects.stream()
+        List<ProjectListResponse> summaries = projects.stream()
                 .map(project -> summary(
                         project,
                         membersByProject.getOrDefault(project.getId(), List.of()),
@@ -79,10 +84,10 @@ public class ProjectListService {
                         today
                 ))
                 .toList();
-        return response(membershipPage, summaries);
+        return SliceResponse.of(membershipSlice, summaries);
     }
 
-    private ProjectSummary summary(
+    private ProjectListResponse summary(
             Project project,
             List<ProjectMember> members,
             ProjectTaskProgress progress,
@@ -98,7 +103,7 @@ public class ProjectListService {
                 .toList();
         int memberCount = members.size();
 
-        return new ProjectSummary(
+        return new ProjectListResponse(
                 project.getId(),
                 project.getProjectName(),
                 project.getProjectType(),
@@ -119,15 +124,4 @@ public class ProjectListService {
         return (int) (progress.getDoneCount() * 100 / progress.getTotalCount());
     }
 
-    private ProjectListResponse response(Page<ProjectMember> page, List<ProjectSummary> content) {
-        return new ProjectListResponse(
-                content,
-                page.getNumber(),
-                page.getSize(),
-                page.getTotalElements(),
-                page.getTotalPages(),
-                page.isFirst(),
-                page.isLast()
-        );
-    }
 }

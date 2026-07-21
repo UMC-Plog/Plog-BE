@@ -6,7 +6,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.plog.domain.chat.dto.response.ChatChannelSearchResponse;
+import com.plog.domain.chat.dto.response.ChatChannelResponse;
 import com.plog.domain.chat.dto.response.ChatChannelParticipantResponse;
 import com.plog.domain.chat.repository.ChatRoomRepository;
 import com.plog.domain.chat.repository.projection.ChatChannelSummary;
@@ -14,6 +14,7 @@ import com.plog.domain.project.entity.MemberStatus;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.error.ChatErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.api.response.SliceResponse;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -26,8 +27,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.SliceImpl;
 
 @ExtendWith(MockitoExtension.class)
 class ChatChannelSearchServiceTest {
@@ -62,13 +63,13 @@ class ChatChannelSearchServiceTest {
                 MemberStatus.ACTIVE,
                 "%plog!%!_!!%",
                 PageRequest.of(0, 2)
-        )).willReturn(new PageImpl<>(List.of(summary), PageRequest.of(0, 2), 3));
+        )).willReturn(new SliceImpl<>(List.of(summary), PageRequest.of(0, 2), true));
         given(participantService.getParticipantsByProjectIds(List.of(10L)))
                 .willReturn(Map.of(10L, List.of(
                         new ChatChannelParticipantResponse(1L, "바나", null)
                 )));
 
-        ChatChannelSearchResponse response = service.search(1L, "  PLOG%_!  ", 0, 2);
+        SliceResponse<ChatChannelResponse> response = service.search(1L, "  PLOG%_!  ", 0, 2);
 
         assertThat(response.content()).hasSize(1);
         assertThat(response.content().getFirst().projectId()).isEqualTo(10L);
@@ -81,9 +82,9 @@ class ChatChannelSearchServiceTest {
         assertThat(response.content().getFirst().participants()).containsExactly(
                 new ChatChannelParticipantResponse(1L, "바나", null)
         );
-        assertThat(response.pageInfo().totalElements()).isEqualTo(3);
-        assertThat(response.pageInfo().totalPages()).isEqualTo(2);
-        assertThat(response.pageInfo().hasNext()).isTrue();
+        assertThat(response.page()).isZero();
+        assertThat(response.size()).isEqualTo(2);
+        assertThat(response.hasNext()).isTrue();
         verify(chatRoomRepository).findChannelPageByProjectName(
                 1L,
                 MemberStatus.ACTIVE,

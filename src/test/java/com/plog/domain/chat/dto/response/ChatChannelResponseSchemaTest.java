@@ -2,20 +2,26 @@ package com.plog.domain.chat.dto.response;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.Set;
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 class ChatChannelResponseSchemaTest {
 
     @Test
-    void usesDistinctComponentNamesForListAndSearchSchemas() {
-        Set<String> componentNames = Set.of(
-                ChatChannelListResponse.Channel.class.getSimpleName(),
-                ChatChannelListResponse.PageInfo.class.getSimpleName(),
-                ChatChannelSearchResponse.SearchChannel.class.getSimpleName(),
-                ChatChannelSearchResponse.SearchPageInfo.class.getSimpleName()
-        );
+    void usesOneSharedChannelCardSchemaForListAndSearch() {
+        String[] componentNames = Arrays.stream(ChatChannelResponse.class.getRecordComponents())
+                .map(component -> component.getName())
+                .toArray(String[]::new);
 
-        assertThat(componentNames).hasSize(4);
+        assertThat(componentNames).containsExactly(
+                "projectId",
+                "projectName",
+                "roomId",
+                "latestMessage",
+                "latestMessageAt",
+                "hasUnreadMessage",
+                "unreadMessageCount",
+                "participants"
+        );
     }
 }
