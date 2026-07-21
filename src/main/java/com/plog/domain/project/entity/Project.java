@@ -106,7 +106,7 @@ public class Project extends BaseEntity {
     private static void validateInviteTokenValues(String inviteTokenHash, String inviteTokenEncrypted) {
         if (inviteTokenHash == null || inviteTokenHash.isBlank()
                 || inviteTokenEncrypted == null || inviteTokenEncrypted.isBlank()) {
-            throw new IllegalArgumentException("초대 토큰값은 비어있을 수 없습니다.");
+            throw new IllegalArgumentException("invite token values must not be blank");
         }
     }
 
