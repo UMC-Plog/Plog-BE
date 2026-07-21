@@ -7,7 +7,9 @@ services:
     ports:
       - "8080:8080"
     env_file:
-      - .env                        # DB_URL / DB_USERNAME / DB_PASSWORD 주입
+      - .env                        # DB_* / JWT_SECRET / MAIL_* 주입
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      # 저장·연산은 UTC 기준(TimeUtil). 컨테이너 기본값에 기대지 않고 명시해 로그도 DB와 같은 기준으로 남긴다.
+      TZ: UTC
     restart: unless-stopped
