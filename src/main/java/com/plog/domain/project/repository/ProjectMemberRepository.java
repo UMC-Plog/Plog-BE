@@ -7,6 +7,7 @@ import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -38,6 +39,9 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
     );
 
     Optional<ProjectMember> findByProjectIdAndUserIdAndStatus(Long projectId, Long userId, MemberStatus status);
+
+    @EntityGraph(attributePaths = {"user", "project"})
+    List<ProjectMember> findAllByIdIn(Collection<Long> ids);
 
     @EntityGraph(attributePaths = {"project"})
     @Query(
