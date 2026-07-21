@@ -153,6 +153,25 @@ class ChatChannelQueryRepositoryIntegrationTest {
                 .containsExactly(first.room().getId(), second.room().getId());
     }
 
+    @Test
+    void treatsLikeWildcardsAndEscapeCharacterAsProjectNameLiterals() {
+        User user = saveUser("channel-search-literal");
+        ChatFixture literal = saveChannel(user, "rate_100%!", MemberStatus.ACTIVE);
+        saveChannel(user, "rateA100B!", MemberStatus.ACTIVE);
+        saveChannel(user, "rate_100%X", MemberStatus.ACTIVE);
+
+        Page<ChatChannelSummary> page = chatRoomRepository.findChannelPageByProjectName(
+                user.getId(),
+                MemberStatus.ACTIVE,
+                "%rate!_100!%!!%",
+                PageRequest.of(0, 20)
+        );
+
+        assertThat(page.getTotalElements()).isOne();
+        assertThat(page.getContent()).extracting(ChatChannelSummary::getRoomId)
+                .containsExactly(literal.room().getId());
+    }
+
     private ChatFixture saveChannel(User user, String suffix, MemberStatus status) {
         Project project = saveProject(suffix);
         ProjectMember member = projectMemberRepository.save(ProjectMember.builder()
