@@ -58,7 +58,7 @@ plog:
   # S3 인프라가 준비되기 전까지 비활성화한다. 활성화 시 bucket과 AWS 자격증명이 필요하다.
   s3:
     enabled: ${S3_ENABLED:false}
-    bucket: ${S3_BUCKET:}
+    bucket: ${S3_BUCKET:umc-plog-prod}
     region: ${S3_REGION:ap-northeast-2}
     endpoint: ${S3_ENDPOINT:}
   # 운영 환경에서만 활성화하며 인증은 Application Default Credentials를 사용한다.

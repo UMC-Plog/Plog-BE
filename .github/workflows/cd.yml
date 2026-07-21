@@ -52,8 +52,10 @@ jobs:
             set -e
             cd ~/plog-app
 
-            # 시크릿으로 .env 생성 (compose 가 이미지 태그·DB·JWT·메일·초대 설정을 여기서 읽음)
-            # 여기 값들은 전부 기본값이 없어 누락 시 앱이 기동조차 못 한다 (fail-fast).
+            # 시크릿으로 .env 생성 (compose 가 이미지 태그·DB·JWT·메일·초대·S3 설정을 여기서 읽음)
+            # 시크릿으로 받는 값들은 기본값이 없어 누락 시 앱이 기동조차 못 한다 (fail-fast).
+            # S3 자격증명은 EC2 인스턴스 역할에서 오므로 키를 .env 에 두지 않는다.
+            # S3_REGION 은 코드 기본값(ap-northeast-2), S3_ENDPOINT 는 MinIO 등 로컬 전용이라 생략.
             cat > .env <<'EOF'
             DOCKER_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/plog-be:latest
             DB_URL=${{ secrets.DB_URL }}
@@ -64,6 +66,8 @@ jobs:
             MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}
             INVITE_TOKEN_ENCRYPTION_KEY_BASE64=${{ secrets.INVITE_TOKEN_ENCRYPTION_KEY_BASE64 }}
             INVITE_BASE_URL=${{ secrets.INVITE_BASE_URL }}
+            S3_ENABLED=true
+            S3_BUCKET=umc-plog-prod
             EOF
             chmod 600 .env
 
