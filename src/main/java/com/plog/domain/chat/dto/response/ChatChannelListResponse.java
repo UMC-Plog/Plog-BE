@@ -15,7 +15,8 @@ public record ChatChannelListResponse(
             String latestMessage,
             LocalDateTime latestMessageAt,
             boolean hasUnreadMessage,
-            long unreadMessageCount
+            long unreadMessageCount,
+            List<ChatChannelParticipantResponse> participants
     ) {
     }
 

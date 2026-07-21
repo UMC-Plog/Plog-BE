@@ -11,6 +11,7 @@ import com.plog.domain.chat.dto.response.ChatChannelListResponse;
 import com.plog.domain.chat.dto.response.ChatChannelListResponse.Channel;
 import com.plog.domain.chat.dto.response.ChatChannelListResponse.PageInfo;
 import com.plog.domain.chat.dto.response.ChatChannelSearchResponse;
+import com.plog.domain.chat.dto.response.ChatChannelParticipantResponse;
 import com.plog.domain.chat.service.ChatChannelListService;
 import com.plog.domain.chat.service.ChatChannelSearchService;
 import com.plog.global.api.error.ChatErrorCode;
@@ -66,7 +67,12 @@ class ChatChannelControllerTest {
                         "latest",
                         LocalDateTime.of(2026, 7, 20, 12, 0),
                         true,
-                        2L
+                        2L,
+                        List.of(new ChatChannelParticipantResponse(
+                                1L,
+                                "바나",
+                                "https://image.test/1.png"
+                        ))
                 )),
                 new PageInfo(0, 20, 1, 1, false)
         );
@@ -79,6 +85,10 @@ class ChatChannelControllerTest {
                 .andExpect(jsonPath("$.result.content[0].roomId").value(20L))
                 .andExpect(jsonPath("$.result.content[0].hasUnreadMessage").value(true))
                 .andExpect(jsonPath("$.result.content[0].unreadMessageCount").value(2L))
+                .andExpect(jsonPath("$.result.content[0].participants[0].userId").value(1L))
+                .andExpect(jsonPath("$.result.content[0].participants[0].nickname").value("바나"))
+                .andExpect(jsonPath("$.result.content[0].participants[0].profileImageUrl")
+                        .value("https://image.test/1.png"))
                 .andExpect(jsonPath("$.result.pageInfo.page").value(0))
                 .andExpect(jsonPath("$.result.pageInfo.hasNext").value(false));
     }
@@ -87,7 +97,7 @@ class ChatChannelControllerTest {
     void includesNullLatestMessageFieldsForAChannelWithoutMessages() throws Exception {
         authenticate(1L);
         ChatChannelListResponse response = new ChatChannelListResponse(
-                List.of(new Channel(10L, "Plog", 20L, null, null, false, 0L)),
+                List.of(new Channel(10L, "Plog", 20L, null, null, false, 0L, List.of())),
                 new PageInfo(0, 20, 1, 1, false)
         );
         given(service.getChannels(1L, 0, 20)).willReturn(response);

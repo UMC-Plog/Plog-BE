@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.plog.domain.chat.dto.response.ChatChannelListResponse;
+import com.plog.domain.chat.dto.response.ChatChannelParticipantResponse;
 import com.plog.domain.chat.repository.ChatRoomRepository;
 import com.plog.domain.chat.repository.projection.ChatChannelSummary;
 import com.plog.domain.project.entity.MemberStatus;
@@ -13,6 +14,7 @@ import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,11 +32,14 @@ class ChatChannelListServiceTest {
     @Mock
     private ChatChannelSummary summary;
 
+    @Mock
+    private ChatChannelParticipantService participantService;
+
     private ChatChannelListService service;
 
     @BeforeEach
     void setUp() {
-        service = new ChatChannelListService(chatRoomRepository);
+        service = new ChatChannelListService(chatRoomRepository, participantService);
     }
 
     @Test
@@ -49,6 +54,15 @@ class ChatChannelListServiceTest {
         given(chatRoomRepository.findChannelPage(
                 1L, MemberStatus.ACTIVE, PageRequest.of(0, 2)
         )).willReturn(new PageImpl<>(List.of(summary), PageRequest.of(0, 2), 3));
+        given(participantService.getParticipantsByProjectIds(List.of(10L)))
+                .willReturn(Map.of(10L, List.of(
+                        new ChatChannelParticipantResponse(
+                                1L,
+                                "바나",
+                                "https://image.test/1.png"
+                        ),
+                        new ChatChannelParticipantResponse(2L, "팀원", null)
+                )));
 
         ChatChannelListResponse response = service.getChannels(1L, 0, 2);
 
@@ -57,6 +71,10 @@ class ChatChannelListServiceTest {
         assertThat(response.content().getFirst().latestMessageAt()).isEqualTo(latestMessageAt);
         assertThat(response.content().getFirst().hasUnreadMessage()).isTrue();
         assertThat(response.content().getFirst().unreadMessageCount()).isEqualTo(2L);
+        assertThat(response.content().getFirst().participants()).containsExactly(
+                new ChatChannelParticipantResponse(1L, "바나", "https://image.test/1.png"),
+                new ChatChannelParticipantResponse(2L, "팀원", null)
+        );
         assertThat(response.pageInfo().page()).isZero();
         assertThat(response.pageInfo().size()).isEqualTo(2);
         assertThat(response.pageInfo().totalElements()).isEqualTo(3);
@@ -70,6 +88,6 @@ class ChatChannelListServiceTest {
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(AuthErrorCode.INVALID_TOKEN));
 
-        verifyNoInteractions(chatRoomRepository);
+        verifyNoInteractions(chatRoomRepository, participantService);
     }
 }
