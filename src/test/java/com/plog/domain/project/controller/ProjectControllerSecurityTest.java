@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.plog.domain.project.service.ProjectCreateService;
+import com.plog.domain.project.service.ProjectStatusService;
 import com.plog.global.config.CorsProperties;
 import com.plog.global.config.SecurityConfig;
 import com.plog.global.security.jwt.JwtAccessDeniedHandler;
@@ -42,6 +43,9 @@ class ProjectControllerSecurityTest {
 
     @MockitoBean
     private ProjectCreateService projectCreateService;
+
+    @MockitoBean
+    private ProjectStatusService projectStatusService;
 
     @MockitoBean
     private JwtProvider jwtProvider;
