@@ -1,7 +1,9 @@
 package com.plog.domain.report.controller;
 
 import com.plog.domain.report.controller.docs.ReportControllerDoc;
+import com.plog.domain.report.dto.response.ReportPdfDownloadResponse;
 import com.plog.domain.report.dto.response.ReportSearchResponse;
+import com.plog.domain.report.service.ReportPdfDownloadService;
 import com.plog.domain.report.service.ReportSearchService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.ReportSuccessCode;
@@ -13,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReportController implements ReportControllerDoc {
 
     private final ReportSearchService reportSearchService;
+    private final ReportPdfDownloadService reportPdfDownloadService;
 
     @Override
     @GetMapping("/search")
@@ -46,5 +50,21 @@ public class ReportController implements ReportControllerDoc {
                 size
         );
         return ResponseEntity.ok(ApiResponse.success(ReportSuccessCode.REPORT_SEARCHED, response));
+    }
+
+    @Override
+    @GetMapping("/{reportId}/pdf")
+    public ResponseEntity<ApiResponse<ReportPdfDownloadResponse>> createPdfDownloadUrl(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long reportId
+    ) {
+        ReportPdfDownloadResponse response = reportPdfDownloadService.createDownloadUrl(
+                userId,
+                reportId
+        );
+        return ResponseEntity.ok(ApiResponse.success(
+                ReportSuccessCode.REPORT_PDF_DOWNLOAD_URL_ISSUED,
+                response
+        ));
     }
 }

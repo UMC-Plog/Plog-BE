@@ -7,7 +7,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.plog.domain.report.dto.response.ReportSearchResponse;
+import com.plog.domain.report.dto.response.ReportPdfDownloadResponse;
 import com.plog.domain.report.entity.ReportStatus;
+import com.plog.domain.report.service.ReportPdfDownloadService;
 import com.plog.domain.report.service.ReportSearchService;
 import com.plog.global.api.error.ReportErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -38,6 +40,9 @@ class ReportControllerTest {
 
     @MockitoBean
     private ReportSearchService service;
+
+    @MockitoBean
+    private ReportPdfDownloadService pdfDownloadService;
 
     @MockitoBean
     private JwtProvider jwtProvider;
@@ -91,6 +96,50 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$.result.size").value(20))
                 .andExpect(jsonPath("$.result.hasNext").value(false))
                 .andExpect(jsonPath("$.result.totalElements").doesNotExist());
+    }
+
+    @Test
+    void createsAReportPdfDownloadUrlForTheRawLongPrincipal() throws Exception {
+        authenticate(1L);
+        given(pdfDownloadService.createDownloadUrl(1L, 20L))
+                .willReturn(new ReportPdfDownloadResponse(
+                        20L,
+                        "Plog-report.pdf",
+                        "https://storage.test/report.pdf",
+                        300
+                ));
+
+        mockMvc.perform(get("/api/v1/dashboard/reports/20/pdf"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("REPORT002"))
+                .andExpect(jsonPath("$.result.reportId").value(20L))
+                .andExpect(jsonPath("$.result.fileName").value("Plog-report.pdf"))
+                .andExpect(jsonPath("$.result.downloadUrl")
+                        .value("https://storage.test/report.pdf"))
+                .andExpect(jsonPath("$.result.expiresInSeconds").value(300));
+    }
+
+    @Test
+    void returnsTheReportNotFoundErrorForPdfDownload() throws Exception {
+        authenticate(1L);
+        given(pdfDownloadService.createDownloadUrl(1L, 999L))
+                .willThrow(new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
+
+        mockMvc.perform(get("/api/v1/dashboard/reports/999/pdf"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("REPORT003"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "-1"})
+    void rejectsAnInvalidReportIdBeforeCallingTheService(String reportId) throws Exception {
+        authenticate(1L);
+
+        mockMvc.perform(get("/api/v1/dashboard/reports/{reportId}/pdf", reportId))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON400"));
+
+        verifyNoInteractions(pdfDownloadService);
     }
 
     @Test
