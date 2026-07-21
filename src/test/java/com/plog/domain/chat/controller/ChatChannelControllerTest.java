@@ -10,7 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.plog.domain.chat.dto.response.ChatChannelListResponse;
 import com.plog.domain.chat.dto.response.ChatChannelListResponse.Channel;
 import com.plog.domain.chat.dto.response.ChatChannelListResponse.PageInfo;
+import com.plog.domain.chat.dto.response.ChatChannelSearchResponse;
 import com.plog.domain.chat.service.ChatChannelListService;
+import com.plog.domain.chat.service.ChatChannelSearchService;
+import com.plog.global.api.error.ChatErrorCode;
+import com.plog.global.api.exception.ApiException;
 import com.plog.global.security.jwt.JwtProvider;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,6 +40,9 @@ class ChatChannelControllerTest {
 
     @MockitoBean
     private ChatChannelListService service;
+
+    @MockitoBean
+    private ChatChannelSearchService searchService;
 
     @MockitoBean
     private JwtProvider jwtProvider;
@@ -114,6 +121,46 @@ class ChatChannelControllerTest {
                 .andExpect(jsonPath("$.code").value("COMMON400"));
 
         verifyNoInteractions(service);
+    }
+
+    @Test
+    void searchesChannelsWithDefaultPaging() throws Exception {
+        authenticate(1L);
+        ChatChannelSearchResponse response = new ChatChannelSearchResponse(
+                List.of(new ChatChannelSearchResponse.Channel(
+                        10L,
+                        "PLOG API",
+                        20L,
+                        LocalDateTime.of(2026, 7, 20, 12, 0),
+                        true
+                )),
+                new ChatChannelSearchResponse.PageInfo(0, 20, 1, 1, false)
+        );
+        given(searchService.search(1L, "plog", 0, 20)).willReturn(response);
+
+        mockMvc.perform(get("/api/v1/dashboard/channels/search").param("keyword", "plog"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("CHAT002"))
+                .andExpect(jsonPath("$.result.content[0].projectId").value(10L))
+                .andExpect(jsonPath("$.result.content[0].projectName").value("PLOG API"))
+                .andExpect(jsonPath("$.result.content[0].roomId").value(20L))
+                .andExpect(jsonPath("$.result.content[0].latestMessageAt")
+                        .value("2026-07-20T12:00:00"))
+                .andExpect(jsonPath("$.result.content[0].hasUnreadMessage").value(true))
+                .andExpect(jsonPath("$.result.content[0].latestMessage").doesNotExist())
+                .andExpect(jsonPath("$.result.content[0].unreadMessageCount").doesNotExist())
+                .andExpect(jsonPath("$.result.pageInfo.page").value(0));
+    }
+
+    @Test
+    void rejectsAMissingSearchKeyword() throws Exception {
+        authenticate(1L);
+        given(searchService.search(1L, "", 0, 20))
+                .willThrow(new ApiException(ChatErrorCode.INVALID_SEARCH_KEYWORD));
+
+        mockMvc.perform(get("/api/v1/dashboard/channels/search"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CHAT001"));
     }
 
     private void authenticate(Long userId) {
