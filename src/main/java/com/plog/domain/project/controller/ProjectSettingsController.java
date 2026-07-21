@@ -22,7 +22,7 @@ public class ProjectSettingsController {
     @GetMapping
     public ApiResponse<ProjectSettingsDto.Response> getSettings(
             @PathVariable Long projectId,
-            @AuthenticationPrincipal(expression = "userId") Long userId
+            @AuthenticationPrincipal Long userId
     ) {
         return ApiResponse.success(projectSettingsService.getSettings(projectId, userId));
     }
@@ -30,7 +30,7 @@ public class ProjectSettingsController {
     @PatchMapping
     public ApiResponse<ProjectSettingsDto.UpdateResponse> updateSettings(
             @PathVariable Long projectId,
-            @AuthenticationPrincipal(expression = "userId") Long userId,
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody ProjectSettingsDto.UpdateRequest request
     ) {
         return ApiResponse.success(projectSettingsService.updateSettings(projectId, userId, request));

@@ -1,8 +1,10 @@
 package com.plog.domain.post.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.plog.domain.post.entity.AttachmentType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
@@ -29,8 +31,9 @@ public final class PostDto {
             @Size(max = 10) List<@Valid AttachmentRequest> attachments
     ) {}
 
-    public record NoticeRequest(boolean isNotice) {}
+    public record NoticeRequest(@NotNull Boolean isNotice) {}
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record AttachmentResponse(
             Long postAttachmentId,
             AttachmentType attachmentType,
@@ -51,6 +54,32 @@ public final class PostDto {
             boolean likedByMe,
             List<AttachmentResponse> attachments,
             Instant createdAt,
+            Instant updatedAt
+    ) {}
+
+    public record CreateResponse(
+            Long postId,
+            Long projectId,
+            Long projectMemberId,
+            String content,
+            boolean isNotice,
+            long likeCount,
+            long commentCount,
+            boolean likedByMe,
+            List<AttachmentResponse> attachments,
+            Instant createdAt
+    ) {}
+
+    public record UpdateResponse(
+            Long postId,
+            Long projectId,
+            Long projectMemberId,
+            String content,
+            boolean isNotice,
+            long likeCount,
+            long commentCount,
+            boolean likedByMe,
+            List<AttachmentResponse> attachments,
             Instant updatedAt
     ) {}
 
