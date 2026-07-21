@@ -47,4 +47,16 @@ public class TaskAttachment extends BaseEntity {
 
     @Column(name = "file_url", length = 512)
     private String fileUrl;
+
+    // 업무카드 생성 시점에 함께 등록되는 산출물 첨부. Task와 함께 저장된다.
+    public static TaskAttachment create(Task task, AttachmentType attachmentType,
+                                        String fileName, Long fileSize, String fileUrl) {
+        return TaskAttachment.builder()
+                .task(task)
+                .attachmentType(attachmentType)
+                .fileName(fileName)
+                .fileSize(fileSize)
+                .fileUrl(fileUrl)
+                .build();
+    }
 }
