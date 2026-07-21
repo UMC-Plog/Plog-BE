@@ -3,6 +3,7 @@ package com.plog.global.security.jwt;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plog.global.api.code.BaseErrorCode;
 import com.plog.global.api.code.ErrorCode;
+import com.plog.global.api.error.AssignedApiErrorCode;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.response.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,8 +32,19 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     public void commence(HttpServletRequest request, HttpServletResponse response,
                          AuthenticationException authException) throws IOException {
         Object attribute = request.getAttribute(JwtAuthenticationFilter.AUTH_ERROR_ATTRIBUTE);
-        BaseErrorCode errorCode = (attribute instanceof AuthErrorCode code) ? code : ErrorCode.UNAUTHORIZED;
+        BaseErrorCode errorCode;
+        if (isAssignedApi(request.getRequestURI())) {
+            errorCode = AssignedApiErrorCode.UNAUTHORIZED;
+        } else {
+            errorCode = (attribute instanceof AuthErrorCode code) ? code : ErrorCode.UNAUTHORIZED;
+        }
         writeError(response, errorCode);
+    }
+
+    private boolean isAssignedApi(String path) {
+        return path.startsWith("/projects/")
+                || path.equals("/files/presigned-upload-url")
+                || path.equals("/users/me/fcm-token");
     }
 
     private void writeError(HttpServletResponse response, BaseErrorCode errorCode) throws IOException {

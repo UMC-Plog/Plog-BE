@@ -10,6 +10,10 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: update
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
   # Gmail SMTP. 계정/앱비밀번호는 literal 금지 → 환경변수로만 주입
   mail:
     host: smtp.gmail.com
@@ -57,6 +61,10 @@ plog:
     bucket: ${S3_BUCKET:}
     region: ${S3_REGION:ap-northeast-2}
     endpoint: ${S3_ENDPOINT:}
+  # 운영 환경에서만 활성화하며 인증은 Application Default Credentials를 사용한다.
+  fcm:
+    enabled: ${FCM_ENABLED:false}
+    project-id: ${FIREBASE_PROJECT_ID:}
 
 springdoc:
   api-docs:

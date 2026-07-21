@@ -28,6 +28,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17'
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+	implementation 'com.google.firebase:firebase-admin:9.10.0'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 	implementation platform('software.amazon.awssdk:bom:2.31.77')
@@ -46,6 +47,10 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile).configureEach {
+	options.compilerArgs += ['-Xlint:deprecation']
 }
 
 // 실행 가능한 bootJar만 생성 (plain jar 비활성화 → Docker COPY 시 jar 하나만 잡히게)
