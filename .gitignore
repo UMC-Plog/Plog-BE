@@ -54,3 +54,5 @@ logs/
 *.log
 ### Local AI tools ###
 .agents/
+.superpowers
+/docs/superpowers/

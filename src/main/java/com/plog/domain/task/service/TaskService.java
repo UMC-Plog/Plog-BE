@@ -13,7 +13,13 @@ import com.plog.global.api.error.TaskErrorCode;
 import com.plog.domain.task.repository.TaskAttachmentRepository;
 import com.plog.domain.task.repository.TaskRepository;
 import com.plog.global.api.exception.ApiException;
+import com.plog.domain.task.entity.AttachmentType;
+import com.plog.infrastructure.s3.AttachmentPolicy;
+import com.plog.infrastructure.s3.AttachmentUsage;
+import com.plog.infrastructure.s3.FilePromotionEvent;
+import com.plog.infrastructure.s3.FileStorageService;
 import java.util.List;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,15 +30,24 @@ public class TaskService {
     private final TaskAttachmentRepository taskAttachmentRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectAccessService projectAccessService;
+    private final AttachmentPolicy attachmentPolicy;
+    private final FileStorageService fileStorageService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public TaskService(TaskRepository taskRepository,
                        TaskAttachmentRepository taskAttachmentRepository,
                        ProjectMemberRepository projectMemberRepository,
-                       ProjectAccessService projectAccessService) {
+                       ProjectAccessService projectAccessService,
+                       AttachmentPolicy attachmentPolicy,
+                       FileStorageService fileStorageService,
+                       ApplicationEventPublisher eventPublisher) {
         this.taskRepository = taskRepository;
         this.taskAttachmentRepository = taskAttachmentRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.projectAccessService = projectAccessService;
+        this.attachmentPolicy = attachmentPolicy;
+        this.fileStorageService = fileStorageService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -66,20 +81,59 @@ public class TaskService {
         taskRepository.save(task);
 
         // 7) 첨부 자료(선택) 함께 생성
-        List<TaskAttachment> attachments = createAttachments(task, request.attachments());
+        List<TaskAttachment> attachments = createAttachments(task, userId, request.attachments());
 
-        return TaskCreateResponse.from(task, attachments);
+        // 8) 커밋 후 업로드 파일을 영구 파일로 승격 — 빠뜨리면 수명 주기 규칙이 하루 뒤 삭제한다.
+        publishPromotions(attachments);
+
+        List<TaskCreateResponse.AttachmentResponse> attachmentResponses = attachments.stream()
+                .map(attachment -> TaskCreateResponse.AttachmentResponse.of(
+                        attachment, resolveUrl(attachment)))
+                .toList();
+        return TaskCreateResponse.from(task, attachmentResponses);
     }
 
     private List<TaskAttachment> createAttachments(
-            Task task, List<TaskCreateRequest.TaskAttachmentRequest> requests) {
+            Task task, Long userId, List<TaskCreateRequest.TaskAttachmentRequest> requests) {
         if (requests == null || requests.isEmpty()) {
             return List.of();
         }
+        attachmentPolicy.validateCount(requests.size(), TaskErrorCode.INVALID_ATTACHMENT);
+        for (TaskCreateRequest.TaskAttachmentRequest request : requests) {
+            if (request.attachmentType() == AttachmentType.EXTERNAL) {
+                throw new ApiException(TaskErrorCode.INVALID_ATTACHMENT);
+            }
+            if (request.attachmentType() == AttachmentType.FILE) {
+                attachmentPolicy.validateFileAttachment(AttachmentUsage.TASK, userId,
+                        request.fileName(), request.fileSize(), request.fileKey(),
+                        TaskErrorCode.INVALID_ATTACHMENT);
+            } else {
+                attachmentPolicy.validateLink(request.fileUrl(), TaskErrorCode.INVALID_LINK_URL);
+            }
+        }
+        // FILE 은 S3 키를, LINK 는 원본 URL을 저장한다.
         List<TaskAttachment> attachments = requests.stream()
-                .map(r -> TaskAttachment.create(task, r.attachmentType(), r.fileName(), r.fileSize(), r.fileUrl()))
+                .map(r -> TaskAttachment.create(task, r.attachmentType(), r.fileName(), r.fileSize(),
+                        r.attachmentType() == AttachmentType.FILE ? r.fileKey() : r.fileUrl()))
                 .toList();
         taskAttachmentRepository.saveAll(attachments);
         return attachments;
+    }
+
+    private void publishPromotions(List<TaskAttachment> attachments) {
+        List<String> fileKeys = attachments.stream()
+                .filter(attachment -> attachment.getAttachmentType() == AttachmentType.FILE)
+                .map(TaskAttachment::getFileUrl)
+                .toList();
+        if (!fileKeys.isEmpty()) {
+            eventPublisher.publishEvent(new FilePromotionEvent(fileKeys));
+        }
+    }
+
+    private String resolveUrl(TaskAttachment attachment) {
+        return attachment.getAttachmentType() == AttachmentType.FILE
+                ? fileStorageService.createDownloadUrl(
+                        AttachmentUsage.TASK, attachment.getFileUrl(), attachment.getFileName())
+                : attachment.getFileUrl();
     }
 }

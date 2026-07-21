@@ -39,7 +39,8 @@ class FileStorageControllerE2eTest extends E2eTestBase {
                     Map.of(
                             "fileName", "meeting-notes.pdf",
                             "contentType", "application/pdf",
-                            "fileSize", 1024
+                            "fileSize", 1024,
+                            "usage", "POST"
                     )
             );
 
@@ -48,7 +49,7 @@ class FileStorageControllerE2eTest extends E2eTestBase {
             assertThat(result(response).path("uploadUrl").asText())
                     .startsWith("https://storage.test/upload/");
             assertThat(result(response).path("fileKey").asText())
-                    .startsWith("temporary/users/" + userId + "/")
+                    .startsWith("temporary/post/users/" + userId + "/")
                     .endsWith("/meeting-notes.pdf");
             assertThat(result(response).path("signedHeaders").path("content-type").get(0).asText())
                     .isEqualTo("application/pdf");
@@ -62,11 +63,19 @@ class FileStorageControllerE2eTest extends E2eTestBase {
         void policies() {
             Long userId = saveUser("file-policy");
 
+            ResponseEntity<JsonNode> image = request(
+                    HttpMethod.POST,
+                    uploadPath(),
+                    userId,
+                    Map.of("fileName", "photo.png", "contentType", "image/png", "fileSize", 1024, "usage", "POST")
+            );
+            assertThat(image.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
             ResponseEntity<JsonNode> unsupported = request(
                     HttpMethod.POST,
                     uploadPath(),
                     userId,
-                    Map.of("fileName", "photo.png", "contentType", "image/png", "fileSize", 1024)
+                    Map.of("fileName", "logo.svg", "contentType", "image/svg+xml", "fileSize", 1024, "usage", "POST")
             );
             assertThat(code(unsupported)).isEqualTo("UNSUPPORTED_ATTACHMENT_TYPE");
 
@@ -77,7 +86,8 @@ class FileStorageControllerE2eTest extends E2eTestBase {
                     Map.of(
                             "fileName", "archive.zip",
                             "contentType", "application/zip",
-                            "fileSize", 50L * 1024 * 1024 + 1
+                            "fileSize", 50L * 1024 * 1024 + 1,
+                            "usage", "POST"
                     )
             );
             assertThat(code(oversized)).isEqualTo("FILE_SIZE_EXCEEDED");
@@ -86,7 +96,7 @@ class FileStorageControllerE2eTest extends E2eTestBase {
                     HttpMethod.POST,
                     uploadPath(),
                     null,
-                    Map.of("fileName", "notes.pdf", "contentType", "application/pdf", "fileSize", 1024)
+                    Map.of("fileName", "notes.pdf", "contentType", "application/pdf", "fileSize", 1024, "usage", "POST")
             );
             assertThat(unauthorized.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(code(unauthorized)).isEqualTo("UNAUTHORIZED");
@@ -103,7 +113,7 @@ class FileStorageControllerE2eTest extends E2eTestBase {
             Long userId = saveUser("file-post");
             Long projectId = saveProject("file-post");
             saveMember(userId, projectId, "MEMBER", "ACTIVE", "파일 작성자");
-            String fileKey = "temporary/users/" + userId + "/file-id/meeting-notes.pdf";
+            String fileKey = "temporary/post/users/" + userId + "/file-id/meeting-notes.pdf";
 
             ResponseEntity<JsonNode> response = request(
                     HttpMethod.POST,
@@ -136,7 +146,7 @@ class FileStorageControllerE2eTest extends E2eTestBase {
             Long projectId = saveProject("file-delete");
             Long memberId = saveMember(userId, projectId, "MEMBER", "ACTIVE", "삭제자");
             Long postId = savePost(memberId, "삭제 대상", false);
-            String fileKey = "temporary/users/" + userId + "/file-id/delete.pdf";
+            String fileKey = "temporary/post/users/" + userId + "/file-id/delete.pdf";
             jdbc.update("""
                     insert into post_attachments (
                         post_id, attachment_type, file_name, file_size, file_url, created_at, updated_at

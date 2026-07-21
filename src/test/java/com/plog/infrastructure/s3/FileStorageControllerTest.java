@@ -53,14 +53,14 @@ class FileStorageControllerTest {
         given(fileStorageService.createUploadUrl(eq(7L), any(FileStorageDto.PresignedUploadRequest.class)))
                 .willReturn(new FileStorageDto.PresignedUploadResponse(
                         "https://storage.example/upload",
-                        "temporary/users/7/id/document.pdf",
+                        "temporary/post/users/7/id/document.pdf",
                         Map.of("x-amz-tagging", List.of("state=temporary&ownerId=7")),
                         Instant.parse("2026-07-21T01:10:00Z")));
 
         mockMvc.perform(post("/files/presigned-upload-url")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"fileName":"document.pdf","contentType":"application/pdf","fileSize":1024}
+                                {"fileName":"document.pdf","contentType":"application/pdf","fileSize":1024,"usage":"POST"}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.result.uploadUrl").value("https://storage.example/upload"))

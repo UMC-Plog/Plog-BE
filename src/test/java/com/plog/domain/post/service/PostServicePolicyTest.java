@@ -18,6 +18,7 @@ import com.plog.domain.project.exception.ProjectApiErrorCode;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.exception.ApiException;
+import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.FileStorageService;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +37,7 @@ class PostServicePolicyTest {
     @Mock private ProjectRepository projectRepository;
     @Mock private ProjectMemberRepository projectMemberRepository;
     @Mock private FileStorageService fileStorageService;
+    @Mock private AttachmentPolicy attachmentPolicy;
     @Mock private ApplicationEventPublisher eventPublisher;
 
     private PostService service;
@@ -50,6 +52,7 @@ class PostServicePolicyTest {
                 projectRepository,
                 projectMemberRepository,
                 fileStorageService,
+                attachmentPolicy,
                 eventPublisher
         );
     }
