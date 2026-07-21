@@ -2,6 +2,7 @@ package com.plog.domain.chat.service;
 
 import com.plog.domain.chat.dto.response.ChatChannelParticipantResponse;
 import com.plog.domain.chat.dto.response.ChatChannelResponse;
+import com.plog.global.util.TimeUtil;
 import com.plog.domain.chat.repository.ChatRoomRepository;
 import com.plog.domain.chat.repository.projection.ChatChannelSummary;
 import com.plog.domain.project.entity.MemberStatus;
@@ -83,7 +84,7 @@ public class ChatChannelSearchService {
                 summary.getProjectName(),
                 summary.getRoomId(),
                 summary.getLatestMessage(),
-                summary.getLatestMessageAt(),
+                TimeUtil.toInstant(summary.getLatestMessageAt()),
                 summary.getUnreadMessageCount() > 0,
                 summary.getUnreadMessageCount(),
                 participants

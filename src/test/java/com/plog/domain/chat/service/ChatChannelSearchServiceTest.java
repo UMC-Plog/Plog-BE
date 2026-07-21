@@ -16,6 +16,7 @@ import com.plog.global.api.error.ChatErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.SliceResponse;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -76,7 +77,8 @@ class ChatChannelSearchServiceTest {
         assertThat(response.content().getFirst().projectName()).isEqualTo("PLOG API");
         assertThat(response.content().getFirst().roomId()).isEqualTo(20L);
         assertThat(response.content().getFirst().latestMessage()).isEqualTo("latest");
-        assertThat(response.content().getFirst().latestMessageAt()).isEqualTo(latestMessageAt);
+        assertThat(response.content().getFirst().latestMessageAt())
+                .isEqualTo(latestMessageAt.toInstant(ZoneOffset.UTC));
         assertThat(response.content().getFirst().hasUnreadMessage()).isTrue();
         assertThat(response.content().getFirst().unreadMessageCount()).isEqualTo(2L);
         assertThat(response.content().getFirst().participants()).containsExactly(

@@ -20,7 +20,7 @@ import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.security.jwt.JwtProvider;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,7 +65,7 @@ class ProjectJoinControllerTest {
                         ProjectRole.MEMBER,
                         ProjectStatus.IN_PROGRESS,
                         MemberStatus.ACTIVE,
-                        LocalDateTime.of(2026, 7, 20, 21, 0)
+                        Instant.parse("2026-07-20T21:00:00Z")
                 ));
 
         mockMvc.perform(post("/api/v1/projects/join")
@@ -81,7 +81,7 @@ class ProjectJoinControllerTest {
                 .andExpect(jsonPath("$.result.role").value("MEMBER"))
                 .andExpect(jsonPath("$.result.projectStatus").value("IN_PROGRESS"))
                 .andExpect(jsonPath("$.result.memberStatus").value("ACTIVE"))
-                .andExpect(jsonPath("$.result.joinedAt").value("2026-07-20T21:00:00"))
+                .andExpect(jsonPath("$.result.joinedAt").value("2026-07-20T21:00:00Z"))
                 .andExpect(jsonPath("$.result.status").doesNotExist());
 
         verify(projectJoinService).join(1L, new ProjectJoinRequest("valid-invite-code"));

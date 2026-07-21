@@ -13,8 +13,8 @@ import com.plog.domain.task.repository.TaskRepository.ProjectTaskProgress;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.SliceResponse;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
@@ -75,7 +75,7 @@ public class ProjectListService {
                 .stream()
                 .collect(Collectors.toMap(ProjectTaskProgress::getProjectId, progress -> progress));
 
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = TimeUtil.todayUtc();
         List<ProjectListResponse> summaries = projects.stream()
                 .map(project -> summary(
                         project,

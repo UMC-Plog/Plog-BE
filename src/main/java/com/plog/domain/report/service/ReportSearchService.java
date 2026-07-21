@@ -8,6 +8,7 @@ import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.error.ReportErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.SliceResponse;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -40,8 +41,10 @@ public class ReportSearchService {
         }
         validateDateRange(startDate, endDate);
         String projectNamePattern = toSearchPattern(keyword);
-        LocalDateTime startAt = startDate == null ? null : startDate.atStartOfDay();
-        LocalDateTime endExclusive = endDate == null ? null : endDate.plusDays(1).atStartOfDay();
+        // 사용자가 보낸 날짜는 KST 달력 기준이다. 저장값이 UTC라 경계를 옮겨서 넘겨야
+        // "7월 21일 리포트"가 한국 기준 하루와 일치한다.
+        LocalDateTime startAt = startDate == null ? null : TimeUtil.startOfDayUtc(startDate);
+        LocalDateTime endExclusive = endDate == null ? null : TimeUtil.startOfDayUtc(endDate.plusDays(1));
         Slice<ReportSummary> reportSlice = reportRepository.searchAccessibleReportSlice(
                 userId,
                 MemberStatus.ACTIVE,
@@ -88,7 +91,7 @@ public class ReportSearchService {
                 summary.getProjectName(),
                 summary.getReportId(),
                 summary.getReportStatus(),
-                summary.getCompletedAt()
+                TimeUtil.toInstant(summary.getCompletedAt())
         );
     }
 }

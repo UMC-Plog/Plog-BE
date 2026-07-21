@@ -15,7 +15,7 @@ import com.plog.global.api.error.ChatErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.SliceResponse;
 import com.plog.global.security.jwt.JwtProvider;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -63,7 +63,7 @@ class ChatChannelControllerTest {
                         "Plog",
                         20L,
                         "latest",
-                        LocalDateTime.of(2026, 7, 20, 12, 0),
+                        Instant.parse("2026-07-20T12:00:00Z"),
                         true,
                         2L,
                         List.of(new ChatChannelParticipantResponse(
@@ -148,7 +148,7 @@ class ChatChannelControllerTest {
                         "PLOG API",
                         20L,
                         "latest",
-                        LocalDateTime.of(2026, 7, 20, 12, 0),
+                        Instant.parse("2026-07-20T12:00:00Z"),
                         true,
                         2L,
                         List.of(new ChatChannelParticipantResponse(1L, "바나", null))
@@ -167,7 +167,7 @@ class ChatChannelControllerTest {
                 .andExpect(jsonPath("$.result.content[0].roomId").value(20L))
                 .andExpect(jsonPath("$.result.content[0].latestMessage").value("latest"))
                 .andExpect(jsonPath("$.result.content[0].latestMessageAt")
-                        .value("2026-07-20T12:00:00"))
+                        .value("2026-07-20T12:00:00Z"))
                 .andExpect(jsonPath("$.result.content[0].hasUnreadMessage").value(true))
                 .andExpect(jsonPath("$.result.content[0].unreadMessageCount").value(2L))
                 .andExpect(jsonPath("$.result.content[0].participants[0].userId").value(1L))

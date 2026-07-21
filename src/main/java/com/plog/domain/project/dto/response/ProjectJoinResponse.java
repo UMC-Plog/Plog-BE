@@ -3,7 +3,7 @@ package com.plog.domain.project.dto.response;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.entity.ProjectStatus;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record ProjectJoinResponse(
         Long projectId,
@@ -12,6 +12,6 @@ public record ProjectJoinResponse(
         ProjectRole role,
         ProjectStatus projectStatus,
         MemberStatus memberStatus,
-        LocalDateTime joinedAt
+        Instant joinedAt
 ) {
 }

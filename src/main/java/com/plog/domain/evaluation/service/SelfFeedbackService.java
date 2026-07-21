@@ -9,6 +9,7 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.global.api.code.ErrorCode;
 import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.util.TimeUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -38,7 +39,7 @@ public class SelfFeedbackService {
         ProjectMember projectMember = projectMemberRepository.findByProjectIdAndUserId(projectId, userId)
                 .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN));
 
-        if (!projectMember.getProject().isEvaluatingState()) {
+        if (!projectMember.getProject().isEvaluatingState(TimeUtil.todayUtc())) {
             throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
         }
 
