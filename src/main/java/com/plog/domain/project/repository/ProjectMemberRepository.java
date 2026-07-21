@@ -20,6 +20,8 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
 
     List<ProjectMember> findAllByProjectId(Long projectId);
 
+    long countByProjectIdAndStatus(Long projectId, MemberStatus status);
+
     @EntityGraph(attributePaths = {"user"})
     List<ProjectMember> findAllWithUserByProjectId(Long projectId);
 
