@@ -141,8 +141,11 @@ class ChatChannelControllerTest {
                         10L,
                         "PLOG API",
                         20L,
+                        "latest",
                         LocalDateTime.of(2026, 7, 20, 12, 0),
-                        true
+                        true,
+                        2L,
+                        List.of(new ChatChannelParticipantResponse(1L, "바나", null))
                 )),
                 new ChatChannelSearchResponse.SearchPageInfo(0, 20, 1, 1, false)
         );
@@ -154,11 +157,14 @@ class ChatChannelControllerTest {
                 .andExpect(jsonPath("$.result.content[0].projectId").value(10L))
                 .andExpect(jsonPath("$.result.content[0].projectName").value("PLOG API"))
                 .andExpect(jsonPath("$.result.content[0].roomId").value(20L))
+                .andExpect(jsonPath("$.result.content[0].latestMessage").value("latest"))
                 .andExpect(jsonPath("$.result.content[0].latestMessageAt")
                         .value("2026-07-20T12:00:00"))
                 .andExpect(jsonPath("$.result.content[0].hasUnreadMessage").value(true))
-                .andExpect(jsonPath("$.result.content[0].latestMessage").doesNotExist())
-                .andExpect(jsonPath("$.result.content[0].unreadMessageCount").doesNotExist())
+                .andExpect(jsonPath("$.result.content[0].unreadMessageCount").value(2L))
+                .andExpect(jsonPath("$.result.content[0].participants[0].userId").value(1L))
+                .andExpect(jsonPath("$.result.content[0].participants[0].profileImageUrl")
+                        .value(nullValue()))
                 .andExpect(jsonPath("$.result.pageInfo.page").value(0));
     }
 

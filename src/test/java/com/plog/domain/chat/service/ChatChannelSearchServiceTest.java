@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.plog.domain.chat.dto.response.ChatChannelSearchResponse;
+import com.plog.domain.chat.dto.response.ChatChannelParticipantResponse;
 import com.plog.domain.chat.repository.ChatRoomRepository;
 import com.plog.domain.chat.repository.projection.ChatChannelSummary;
 import com.plog.domain.project.entity.MemberStatus;
@@ -15,6 +16,7 @@ import com.plog.global.api.error.ChatErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,11 +38,14 @@ class ChatChannelSearchServiceTest {
     @Mock
     private ChatChannelSummary summary;
 
+    @Mock
+    private ChatChannelParticipantService participantService;
+
     private ChatChannelSearchService service;
 
     @BeforeEach
     void setUp() {
-        service = new ChatChannelSearchService(chatRoomRepository);
+        service = new ChatChannelSearchService(chatRoomRepository, participantService);
     }
 
     @Test
@@ -49,6 +54,7 @@ class ChatChannelSearchServiceTest {
         given(summary.getProjectId()).willReturn(10L);
         given(summary.getProjectName()).willReturn("PLOG API");
         given(summary.getRoomId()).willReturn(20L);
+        given(summary.getLatestMessage()).willReturn("latest");
         given(summary.getLatestMessageAt()).willReturn(latestMessageAt);
         given(summary.getUnreadMessageCount()).willReturn(2L);
         given(chatRoomRepository.findChannelPageByProjectName(
@@ -57,6 +63,10 @@ class ChatChannelSearchServiceTest {
                 "%plog!%!_!!%",
                 PageRequest.of(0, 2)
         )).willReturn(new PageImpl<>(List.of(summary), PageRequest.of(0, 2), 3));
+        given(participantService.getParticipantsByProjectIds(List.of(10L)))
+                .willReturn(Map.of(10L, List.of(
+                        new ChatChannelParticipantResponse(1L, "바나", null)
+                )));
 
         ChatChannelSearchResponse response = service.search(1L, "  PLOG%_!  ", 0, 2);
 
@@ -64,8 +74,13 @@ class ChatChannelSearchServiceTest {
         assertThat(response.content().getFirst().projectId()).isEqualTo(10L);
         assertThat(response.content().getFirst().projectName()).isEqualTo("PLOG API");
         assertThat(response.content().getFirst().roomId()).isEqualTo(20L);
+        assertThat(response.content().getFirst().latestMessage()).isEqualTo("latest");
         assertThat(response.content().getFirst().latestMessageAt()).isEqualTo(latestMessageAt);
         assertThat(response.content().getFirst().hasUnreadMessage()).isTrue();
+        assertThat(response.content().getFirst().unreadMessageCount()).isEqualTo(2L);
+        assertThat(response.content().getFirst().participants()).containsExactly(
+                new ChatChannelParticipantResponse(1L, "바나", null)
+        );
         assertThat(response.pageInfo().totalElements()).isEqualTo(3);
         assertThat(response.pageInfo().totalPages()).isEqualTo(2);
         assertThat(response.pageInfo().hasNext()).isTrue();
@@ -85,7 +100,7 @@ class ChatChannelSearchServiceTest {
                         assertThat(exception.getErrorCode())
                                 .isEqualTo(ChatErrorCode.INVALID_SEARCH_KEYWORD));
 
-        verifyNoInteractions(chatRoomRepository);
+        verifyNoInteractions(chatRoomRepository, participantService);
     }
 
     @Test
@@ -94,7 +109,7 @@ class ChatChannelSearchServiceTest {
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(AuthErrorCode.INVALID_TOKEN));
 
-        verifyNoInteractions(chatRoomRepository);
+        verifyNoInteractions(chatRoomRepository, participantService);
     }
 
     private static Stream<Arguments> invalidKeywords() {

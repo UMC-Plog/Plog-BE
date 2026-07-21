@@ -12,8 +12,11 @@ public record ChatChannelSearchResponse(
             Long projectId,
             String projectName,
             Long roomId,
+            String latestMessage,
             LocalDateTime latestMessageAt,
-            boolean hasUnreadMessage
+            boolean hasUnreadMessage,
+            long unreadMessageCount,
+            List<ChatChannelParticipantResponse> participants
     ) {
     }
 
