@@ -1,6 +1,7 @@
 package com.plog.infrastructure.s3;
 
 import com.plog.global.api.exception.ApiException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
@@ -10,6 +11,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.UriUtils;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
@@ -88,11 +90,43 @@ public class FileStorageService {
     }
 
     public String createDownloadUrl(String fileKey) {
+        return createDownloadUrl(fileKey, URL_DURATION).downloadUrl();
+    }
+
+    public FileStorageDto.PresignedDownloadResponse createDownloadUrl(
+            String fileKey,
+            Duration duration
+    ) {
+        return createPresignedDownloadUrl(fileKey, null, duration);
+    }
+
+    public FileStorageDto.PresignedDownloadResponse createDownloadUrl(
+            String fileKey,
+            String fileName,
+            Duration duration
+    ) {
+        String contentDisposition = "attachment; filename*=UTF-8''"
+                + UriUtils.encode(fileName, StandardCharsets.UTF_8);
+        return createPresignedDownloadUrl(fileKey, contentDisposition, duration);
+    }
+
+    private FileStorageDto.PresignedDownloadResponse createPresignedDownloadUrl(
+            String fileKey,
+            String contentDisposition,
+            Duration duration
+    ) {
         ensureEnabled();
-        GetObjectRequest getObject = GetObjectRequest.builder().bucket(bucket).key(fileKey).build();
-        return s3Presigner.presignGetObject(GetObjectPresignRequest.builder()
-                        .signatureDuration(URL_DURATION).getObjectRequest(getObject).build())
+        GetObjectRequest.Builder getObjectBuilder = GetObjectRequest.builder()
+                .bucket(bucket)
+                .key(fileKey);
+        if (contentDisposition != null) {
+            getObjectBuilder.responseContentDisposition(contentDisposition);
+        }
+        GetObjectRequest getObject = getObjectBuilder.build();
+        String downloadUrl = s3Presigner.presignGetObject(GetObjectPresignRequest.builder()
+                        .signatureDuration(duration).getObjectRequest(getObject).build())
                 .url().toString();
+        return new FileStorageDto.PresignedDownloadResponse(downloadUrl, duration.getSeconds());
     }
 
     public void delete(String fileKey) {

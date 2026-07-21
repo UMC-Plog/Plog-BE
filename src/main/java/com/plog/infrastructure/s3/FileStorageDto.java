@@ -22,4 +22,9 @@ public final class FileStorageDto {
             Map<String, List<String>> signedHeaders,
             Instant expiresAt
     ) {}
+
+    public record PresignedDownloadResponse(
+            String downloadUrl,
+            long expiresInSeconds
+    ) {}
 }
