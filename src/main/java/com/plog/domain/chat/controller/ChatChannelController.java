@@ -1,11 +1,11 @@
 package com.plog.domain.chat.controller;
 
-import com.plog.domain.chat.dto.response.ChatChannelListResponse;
-import com.plog.domain.chat.dto.response.ChatChannelSearchResponse;
+import com.plog.domain.chat.dto.response.ChatChannelResponse;
 import com.plog.domain.chat.service.ChatChannelListService;
 import com.plog.domain.chat.service.ChatChannelSearchService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.ChatSuccessCode;
+import com.plog.global.api.response.SliceResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -55,12 +55,16 @@ public class ChatChannelController {
             )
     })
     @GetMapping
-    public ResponseEntity<ApiResponse<ChatChannelListResponse>> getChannels(
+    public ResponseEntity<ApiResponse<SliceResponse<ChatChannelResponse>>> getChannels(
             @AuthenticationPrincipal Long userId,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
-        ChatChannelListResponse response = chatChannelListService.getChannels(userId, page, size);
+        SliceResponse<ChatChannelResponse> response = chatChannelListService.getChannels(
+                userId,
+                page,
+                size
+        );
         return ResponseEntity.ok(ApiResponse.success(ChatSuccessCode.CHANNEL_LIST_RETRIEVED, response));
     }
 
@@ -87,13 +91,13 @@ public class ChatChannelController {
             )
     })
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<ChatChannelSearchResponse>> searchChannels(
+    public ResponseEntity<ApiResponse<SliceResponse<ChatChannelResponse>>> searchChannels(
             @AuthenticationPrincipal Long userId,
             @RequestParam(defaultValue = "") String keyword,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
-        ChatChannelSearchResponse response = chatChannelSearchService.search(
+        SliceResponse<ChatChannelResponse> response = chatChannelSearchService.search(
                 userId,
                 keyword,
                 page,
