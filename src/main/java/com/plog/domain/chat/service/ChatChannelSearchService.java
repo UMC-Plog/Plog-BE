@@ -1,8 +1,8 @@
 package com.plog.domain.chat.service;
 
 import com.plog.domain.chat.dto.response.ChatChannelSearchResponse;
-import com.plog.domain.chat.dto.response.ChatChannelSearchResponse.Channel;
-import com.plog.domain.chat.dto.response.ChatChannelSearchResponse.PageInfo;
+import com.plog.domain.chat.dto.response.ChatChannelSearchResponse.SearchChannel;
+import com.plog.domain.chat.dto.response.ChatChannelSearchResponse.SearchPageInfo;
 import com.plog.domain.chat.repository.ChatRoomRepository;
 import com.plog.domain.chat.repository.projection.ChatChannelSummary;
 import com.plog.domain.project.entity.MemberStatus;
@@ -38,12 +38,12 @@ public class ChatChannelSearchService {
                 projectNamePattern,
                 PageRequest.of(page, size)
         );
-        List<Channel> content = channelPage.getContent().stream()
+        List<SearchChannel> content = channelPage.getContent().stream()
                 .map(this::toChannel)
                 .toList();
         return new ChatChannelSearchResponse(
                 content,
-                new PageInfo(
+                new SearchPageInfo(
                         channelPage.getNumber(),
                         channelPage.getSize(),
                         channelPage.getTotalElements(),
@@ -68,8 +68,8 @@ public class ChatChannelSearchService {
         return "%" + escaped + "%";
     }
 
-    private Channel toChannel(ChatChannelSummary summary) {
-        return new Channel(
+    private SearchChannel toChannel(ChatChannelSummary summary) {
+        return new SearchChannel(
                 summary.getProjectId(),
                 summary.getProjectName(),
                 summary.getRoomId(),

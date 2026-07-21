@@ -127,14 +127,14 @@ class ChatChannelControllerTest {
     void searchesChannelsWithDefaultPaging() throws Exception {
         authenticate(1L);
         ChatChannelSearchResponse response = new ChatChannelSearchResponse(
-                List.of(new ChatChannelSearchResponse.Channel(
+                List.of(new ChatChannelSearchResponse.SearchChannel(
                         10L,
                         "PLOG API",
                         20L,
                         LocalDateTime.of(2026, 7, 20, 12, 0),
                         true
                 )),
-                new ChatChannelSearchResponse.PageInfo(0, 20, 1, 1, false)
+                new ChatChannelSearchResponse.SearchPageInfo(0, 20, 1, 1, false)
         );
         given(searchService.search(1L, "plog", 0, 20)).willReturn(response);
 

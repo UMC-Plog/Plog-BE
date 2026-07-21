@@ -4,11 +4,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public record ChatChannelSearchResponse(
-        List<Channel> content,
-        PageInfo pageInfo
+        List<SearchChannel> content,
+        SearchPageInfo pageInfo
 ) {
 
-    public record Channel(
+    public record SearchChannel(
             Long projectId,
             String projectName,
             Long roomId,
@@ -17,7 +17,7 @@ public record ChatChannelSearchResponse(
     ) {
     }
 
-    public record PageInfo(
+    public record SearchPageInfo(
             int page,
             int size,
             long totalElements,
