@@ -1,7 +1,9 @@
 package com.plog.domain.chat.controller;
 
 import com.plog.domain.chat.dto.response.ChatChannelListResponse;
+import com.plog.domain.chat.dto.response.ChatChannelSearchResponse;
 import com.plog.domain.chat.service.ChatChannelListService;
+import com.plog.domain.chat.service.ChatChannelSearchService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.ChatSuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ChatChannelController {
 
     private final ChatChannelListService chatChannelListService;
+    private final ChatChannelSearchService chatChannelSearchService;
 
     @Operation(
             summary = "통합 채널 목록 조회",
@@ -59,5 +62,43 @@ public class ChatChannelController {
     ) {
         ChatChannelListResponse response = chatChannelListService.getChannels(userId, page, size);
         return ResponseEntity.ok(ApiResponse.success(ChatSuccessCode.CHANNEL_LIST_RETRIEVED, response));
+    }
+
+    @Operation(
+            summary = "채팅방 검색",
+            description = "ACTIVE 멤버십의 프로젝트 채팅방을 프로젝트명으로 검색합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "채팅방 검색 성공"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "잘못된 검색어 또는 페이지 조건",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증이 없거나 유효하지 않은 사용자",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))
+            )
+    })
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<ChatChannelSearchResponse>> searchChannels(
+            @AuthenticationPrincipal Long userId,
+            @RequestParam(defaultValue = "") String keyword,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
+    ) {
+        ChatChannelSearchResponse response = chatChannelSearchService.search(
+                userId,
+                keyword,
+                page,
+                size
+        );
+        return ResponseEntity.ok(ApiResponse.success(ChatSuccessCode.CHANNEL_SEARCH_RETRIEVED, response));
     }
 }

@@ -9,7 +9,8 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum ChatSuccessCode implements BaseCode {
 
-    CHANNEL_LIST_RETRIEVED(HttpStatus.OK, "CHAT001", "통합 채널 목록을 조회했습니다.");
+    CHANNEL_LIST_RETRIEVED(HttpStatus.OK, "CHAT001", "통합 채널 목록을 조회했습니다."),
+    CHANNEL_SEARCH_RETRIEVED(HttpStatus.OK, "CHAT002", "채팅방 검색 결과를 조회했습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
