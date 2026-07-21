@@ -10,6 +10,7 @@ import com.plog.global.api.code.ErrorCode;
 import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.exception.ApiException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,10 +27,8 @@ public class SelfFeedbackService {
         ProjectMember projectMember = projectMemberRepository.findByProjectIdAndUserId(projectId, userId)
                 .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN));
 
-
         SelfFeedback selfFeedback = selfFeedbackRepository.findByProjectMemberId(projectMember.getId())
                 .orElseThrow(() -> new ApiException(EvaluationErrorCode.SELF_FEEDBACK_NOT_FOUND));
-
 
         return new SelfFeedbackResponse(selfFeedback.getId(), selfFeedback.getContent());
     }
@@ -52,7 +51,11 @@ public class SelfFeedbackService {
                 .content(request.content())
                 .build();
 
-        selfFeedbackRepository.save(selfFeedback);
+        try {
+            selfFeedbackRepository.saveAndFlush(selfFeedback);
+        } catch (DataIntegrityViolationException e) {
+            throw new ApiException(EvaluationErrorCode.ALREADY_SUBMITTED_SELF_FEEDBACK);
+        }
 
         return new SelfFeedbackResponse(selfFeedback.getId(), selfFeedback.getContent());
     }
