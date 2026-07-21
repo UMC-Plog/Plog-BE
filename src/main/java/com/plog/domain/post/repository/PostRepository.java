@@ -20,11 +20,22 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             select p from Post p
             where p.projectMember.project.id = :projectId
               and p.isNotice = false
-              and (:cursorTime is null or p.createdAt < :cursorTime
+            order by p.createdAt desc, p.id desc
+            """)
+    List<Post> findFirstFeedPage(
+            @Param("projectId") Long projectId,
+            Pageable pageable
+    );
+
+    @Query("""
+            select p from Post p
+            where p.projectMember.project.id = :projectId
+              and p.isNotice = false
+              and (p.createdAt < :cursorTime
                    or (p.createdAt = :cursorTime and p.id < :cursorId))
             order by p.createdAt desc, p.id desc
             """)
-    List<Post> findFeedPage(
+    List<Post> findFeedPageAfter(
             @Param("projectId") Long projectId,
             @Param("cursorTime") LocalDateTime cursorTime,
             @Param("cursorId") Long cursorId,
