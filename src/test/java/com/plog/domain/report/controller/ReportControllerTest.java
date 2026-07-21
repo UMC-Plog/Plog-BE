@@ -15,8 +15,8 @@ import com.plog.global.api.error.ReportErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.SliceResponse;
 import com.plog.global.security.jwt.JwtProvider;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -58,7 +58,7 @@ class ReportControllerTest {
     @Test
     void searchesReportsForTheRawLongPrincipalWithDefaultPaging() throws Exception {
         authenticate(1L);
-        LocalDateTime completedAt = LocalDateTime.of(2026, 7, 20, 12, 0);
+        Instant completedAt = Instant.parse("2026-07-20T12:00:00Z");
         SliceResponse<ReportSearchResponse> response = new SliceResponse<>(
                 List.of(new ReportSearchResponse(
                         10L,
@@ -90,8 +90,9 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$.result.content[0].projectName").value("Plog"))
                 .andExpect(jsonPath("$.result.content[0].reportId").value(20L))
                 .andExpect(jsonPath("$.result.content[0].reportStatus").value("COMPLETED"))
+                // 오프셋을 실어 보낸다 — 클라이언트가 서버 타임존을 추측하지 않도록.
                 .andExpect(jsonPath("$.result.content[0].completedAt")
-                        .value("2026-07-20T12:00:00"))
+                        .value("2026-07-20T12:00:00Z"))
                 .andExpect(jsonPath("$.result.page").value(0))
                 .andExpect(jsonPath("$.result.size").value(20))
                 .andExpect(jsonPath("$.result.hasNext").value(false))

@@ -7,6 +7,7 @@ import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.security.jwt.JwtProperties;
 import com.plog.global.util.HashUtil;
+import com.plog.global.util.TimeUtil;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
@@ -36,7 +37,7 @@ public class RefreshTokenService {
     @Transactional
     public String issue(User user) {
         String rawToken = generateRawToken();
-        LocalDateTime expiresAt = LocalDateTime.now().plus(jwtProperties.refreshTokenTtl());
+        LocalDateTime expiresAt = TimeUtil.nowUtc().plus(jwtProperties.refreshTokenTtl());
         refreshTokenRepository.save(RefreshToken.issue(user, HashUtil.sha256Hex(rawToken), expiresAt));
         return rawToken;
     }
@@ -46,7 +47,7 @@ public class RefreshTokenService {
     public RefreshToken validateOrThrow(String rawToken) {
         RefreshToken token = refreshTokenRepository.findByTokenHash(HashUtil.sha256Hex(rawToken))
                 .orElseThrow(() -> new ApiException(AuthErrorCode.INVALID_REFRESH_TOKEN));
-        if (token.isExpired(LocalDateTime.now())) {
+        if (token.isExpired(TimeUtil.nowUtc())) {
             throw new ApiException(AuthErrorCode.INVALID_REFRESH_TOKEN);
         }
         return token;

@@ -141,7 +141,8 @@ class ProjectJoinServiceIntegrationTest {
         assertThat(reactivated.getStatus()).isEqualTo(MemberStatus.ACTIVE);
         assertThat(reactivated.getUpdatedAt()).isAfter(previousUpdatedAt);
         assertThat(response.joinedAt())
-                .isCloseTo(reactivated.getUpdatedAt(), within(1, ChronoUnit.MICROS));
+                .isCloseTo(reactivated.getUpdatedAt().toInstant(java.time.ZoneOffset.UTC),
+                        within(1, ChronoUnit.MICROS));
     }
 
     @Test

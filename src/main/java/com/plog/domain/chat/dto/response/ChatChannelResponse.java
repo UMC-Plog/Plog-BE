@@ -1,6 +1,6 @@
 package com.plog.domain.chat.dto.response;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public record ChatChannelResponse(
@@ -8,7 +8,7 @@ public record ChatChannelResponse(
         String projectName,
         Long roomId,
         String latestMessage,
-        LocalDateTime latestMessageAt,
+        Instant latestMessageAt,
         boolean hasUnreadMessage,
         long unreadMessageCount,
         List<ChatChannelParticipantResponse> participants

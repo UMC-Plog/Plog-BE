@@ -2,6 +2,7 @@ package com.plog.domain.project.service;
 
 import com.plog.domain.project.dto.request.ProjectJoinRequest;
 import com.plog.domain.project.dto.response.ProjectJoinResponse;
+import com.plog.global.util.TimeUtil;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
@@ -117,7 +118,7 @@ public class ProjectJoinService {
                 member.getRole(),
                 project.getStatus(),
                 member.getStatus(),
-                joinedMember.joinedAt()
+                TimeUtil.toInstant(joinedMember.joinedAt())
         );
     }
 

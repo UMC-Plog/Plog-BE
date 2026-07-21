@@ -26,6 +26,7 @@ import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,7 +91,7 @@ class ProjectJoinServiceTest {
         assertThat(response.role()).isEqualTo(ProjectRole.MEMBER);
         assertThat(response.projectStatus()).isEqualTo(ProjectStatus.IN_PROGRESS);
         assertThat(response.memberStatus()).isEqualTo(MemberStatus.ACTIVE);
-        assertThat(response.joinedAt()).isEqualTo(joinedAt);
+        assertThat(response.joinedAt()).isEqualTo(joinedAt.toInstant(ZoneOffset.UTC));
 
         ArgumentCaptor<ProjectMember> memberCaptor = ArgumentCaptor.forClass(ProjectMember.class);
         verify(projectMemberRepository).saveAndFlush(memberCaptor.capture());
@@ -128,7 +129,7 @@ class ProjectJoinServiceTest {
         assertThat(response.projectMemberId()).isEqualTo(25L);
         assertThat(response.role()).isEqualTo(ProjectRole.MEMBER);
         assertThat(response.memberStatus()).isEqualTo(MemberStatus.ACTIVE);
-        assertThat(response.joinedAt()).isEqualTo(rejoinedAt);
+        assertThat(response.joinedAt()).isEqualTo(rejoinedAt.toInstant(ZoneOffset.UTC));
         verify(projectMemberRepository).saveAndFlush(exitedMember);
     }
 

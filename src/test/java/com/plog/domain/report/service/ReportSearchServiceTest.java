@@ -17,6 +17,7 @@ import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.SliceResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,9 +59,10 @@ class ReportSearchServiceTest {
                 MemberStatus.ACTIVE,
                 "%plog!%!_!!%",
                 true,
-                LocalDateTime.of(2026, 7, 1, 0, 0),
+                // 필터는 KST 달력 하루 기준 → UTC 저장값으로 변환해 넘긴다.
+                LocalDateTime.of(2026, 6, 30, 15, 0),
                 true,
-                LocalDateTime.of(2026, 8, 1, 0, 0),
+                LocalDateTime.of(2026, 7, 31, 15, 0),
                 PageRequest.of(0, 2)
         )).willReturn(new SliceImpl<>(List.of(summary), PageRequest.of(0, 2), true));
 
@@ -78,7 +80,7 @@ class ReportSearchServiceTest {
                 "PLOG API",
                 20L,
                 ReportStatus.COMPLETED,
-                completedAt
+                completedAt.toInstant(ZoneOffset.UTC)
         ));
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(2);
@@ -95,7 +97,7 @@ class ReportSearchServiceTest {
                 false,
                 null,
                 true,
-                LocalDateTime.of(2026, 8, 1, 0, 0),
+                LocalDateTime.of(2026, 7, 31, 15, 0),
                 pageable
         )).willReturn(new SliceImpl<>(List.of(), pageable, false));
 
@@ -117,7 +119,7 @@ class ReportSearchServiceTest {
                 false,
                 null,
                 true,
-                LocalDateTime.of(2026, 8, 1, 0, 0),
+                LocalDateTime.of(2026, 7, 31, 15, 0),
                 pageable
         );
     }

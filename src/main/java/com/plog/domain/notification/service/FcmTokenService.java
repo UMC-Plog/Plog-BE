@@ -6,7 +6,7 @@ import com.plog.domain.notification.exception.NotificationErrorCode;
 import com.plog.domain.notification.repository.FcmTokenRepository;
 import com.plog.domain.notification.repository.NotificationUserRepository;
 import com.plog.global.api.exception.ApiException;
-import java.time.ZoneOffset;
+import com.plog.global.util.TimeUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +28,7 @@ public class FcmTokenService {
         FcmToken token = fcmTokenRepository.findByToken(value).orElseThrow();
         return new FcmTokenDto.Response(
                 token.getId(), token.getUser().getId(), token.getToken(),
-                token.getUpdatedAt().toInstant(ZoneOffset.UTC));
+                TimeUtil.toInstant(token.getUpdatedAt()));
     }
 
     @Transactional

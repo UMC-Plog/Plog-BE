@@ -18,6 +18,7 @@ import com.plog.domain.project.exception.ProjectApiErrorCode;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.util.TimeUtil;
 import com.plog.infrastructure.s3.FileDeletionEvent;
 import com.plog.infrastructure.s3.FileStorageService;
 import com.plog.infrastructure.s3.FilePromotionEvent;
@@ -405,7 +406,7 @@ public class PostService {
     }
 
     private Instant toInstant(LocalDateTime value) {
-        return value.toInstant(ZoneOffset.UTC);
+        return TimeUtil.toInstant(value);
     }
 
     private String encodeCursor(Post post) {

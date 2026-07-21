@@ -14,6 +14,7 @@ import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.code.ErrorCode;
 import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.util.TimeUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -94,7 +95,7 @@ public class EvaluationService {
             throw new ApiException(ErrorCode.FORBIDDEN);
         }
 
-        if (!evaluatee.getProject().isEvaluatingState()) {
+        if (!evaluatee.getProject().isEvaluatingState(TimeUtil.todayUtc())) {
             throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
         }
 

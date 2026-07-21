@@ -10,8 +10,8 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,7 +75,7 @@ public class ProjectStatusService {
     }
 
     private boolean isTimeoutReached(LocalDate endDay) {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = TimeUtil.todayUtc();
         return !today.isBefore(endDay.plusDays(TIMEOUT_DAYS_AFTER_END));
     }
 

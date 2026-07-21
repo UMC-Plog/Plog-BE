@@ -110,10 +110,7 @@ public class Project extends BaseEntity {
         }
     }
 
-    public boolean isEvaluatingState() {
-        return isEvaluatingState(LocalDate.now(java.time.ZoneOffset.UTC));
-    }
-
+    /** 오늘 날짜는 호출부가 넘긴다 — 엔티티가 시스템 시계를 직접 읽으면 날짜 경계를 테스트할 수 없다. */
     public boolean isEvaluatingState(LocalDate today) {
         return !isCompleted() && !today.isAfter(this.endDay);
     }

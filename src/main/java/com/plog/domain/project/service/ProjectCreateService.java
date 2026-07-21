@@ -16,8 +16,8 @@ import com.plog.domain.user.repository.UserRepository;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -54,7 +54,7 @@ public class ProjectCreateService {
         }
 
         String projectName = normalizeProjectName(request.projectName());
-        LocalDate startDay = LocalDate.now(ZoneOffset.UTC);
+        LocalDate startDay = TimeUtil.todayUtc();
         validateEndDay(request.endDay(), startDay);
 
         InviteTokenService.IssuedResult<CreatedProject> issuedResult =

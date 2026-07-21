@@ -12,7 +12,7 @@ import com.plog.domain.project.dto.response.ProjectJoinResponse;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.entity.ProjectStatus;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 class ProjectJoinDtoTest {
@@ -50,7 +50,7 @@ class ProjectJoinDtoTest {
                 ProjectRole.MEMBER,
                 ProjectStatus.IN_PROGRESS,
                 MemberStatus.ACTIVE,
-                LocalDateTime.of(2026, 7, 20, 21, 0)
+                Instant.parse("2026-07-20T21:00:00Z")
         );
 
         JsonNode json = objectMapper.valueToTree(response);
@@ -61,7 +61,8 @@ class ProjectJoinDtoTest {
         assertThat(json.path("role").textValue()).isEqualTo("MEMBER");
         assertThat(json.path("projectStatus").textValue()).isEqualTo("IN_PROGRESS");
         assertThat(json.path("memberStatus").textValue()).isEqualTo("ACTIVE");
-        assertThat(json.path("joinedAt").textValue()).isEqualTo("2026-07-20T21:00:00");
+        // 오프셋을 실어 보낸다 — 클라이언트가 서버 타임존을 추측하지 않도록.
+        assertThat(json.path("joinedAt").textValue()).isEqualTo("2026-07-20T21:00:00Z");
         assertThat(json.has("status")).isFalse();
     }
 }

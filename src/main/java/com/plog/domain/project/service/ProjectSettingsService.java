@@ -11,8 +11,8 @@ import com.plog.domain.project.repository.ProjectExternalConnectionRepository;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,7 +44,7 @@ public class ProjectSettingsService {
                 project.getId(), project.getProjectName(), project.getProjectType(), project.getStatus().name(),
                 project.getStartDay(), project.getEndDay(),
                 new ProjectSettingsDto.Invite(inviteUrl, inviteUrl + "/qr"), connections,
-                project.getUpdatedAt().toInstant(ZoneOffset.UTC));
+                TimeUtil.toInstant(project.getUpdatedAt()));
     }
 
     @Transactional
@@ -60,7 +60,7 @@ public class ProjectSettingsService {
             throw new ApiException(ProjectApiErrorCode.VALIDATION_ERROR);
         }
         if (request.endDay() != null
-                && (!request.endDay().isAfter(LocalDate.now(ZoneOffset.UTC))
+                && (!request.endDay().isAfter(TimeUtil.todayUtc())
                 || !request.endDay().isAfter(project.getStartDay()))) {
             throw new ApiException(ProjectApiErrorCode.VALIDATION_ERROR);
         }
@@ -68,7 +68,7 @@ public class ProjectSettingsService {
         projectRepository.saveAndFlush(project);
         return new ProjectSettingsDto.UpdateResponse(
                 project.getId(), project.getProjectName(), project.getProjectType(), project.getEndDay(),
-                project.getUpdatedAt().toInstant(ZoneOffset.UTC));
+                TimeUtil.toInstant(project.getUpdatedAt()));
     }
 
     private Project requireProject(Long projectId) {
