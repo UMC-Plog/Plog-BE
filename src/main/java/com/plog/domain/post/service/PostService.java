@@ -21,6 +21,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
@@ -69,8 +71,13 @@ public class PostService {
                 PageRequest.of(0, size + 1));
         boolean hasNext = fetched.size() > size;
         List<Post> page = hasNext ? fetched.subList(0, size) : fetched;
+        List<Long> postIds = page.stream().map(Post::getId).toList();
+        Map<Long, List<PostAttachment>> attachmentsByPostId = postIds.isEmpty()
+                ? Map.of()
+                : attachmentRepository.findAllByPostIdInOrderByIdAsc(postIds).stream()
+                        .collect(Collectors.groupingBy(attachment -> attachment.getPost().getId()));
         List<PostDto.Response> posts = page.stream()
-                .map(post -> toResponse(post, member, attachmentRepository.findAllByPostIdOrderByIdAsc(post.getId())))
+                .map(post -> toResponse(post, member, attachmentsByPostId.getOrDefault(post.getId(), List.of())))
                 .toList();
         String nextCursor = hasNext && !page.isEmpty() ? encodeCursor(page.get(page.size() - 1)) : null;
         return new PostDto.FeedResponse(posts, nextCursor, hasNext);
