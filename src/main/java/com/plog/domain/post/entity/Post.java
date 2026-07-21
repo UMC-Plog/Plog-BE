@@ -40,4 +40,9 @@ public class Post extends BaseEntity {
     // ERD의 "공지 Field boolean"을 is_notice로 구체화 (팀 확인 필요)
     @Column(name = "is_notice", nullable = false)
     private boolean isNotice;
+
+    public void updateContent(String content) {
+        this.content = content;
+    }
+
 }
