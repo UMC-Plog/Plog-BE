@@ -6,6 +6,8 @@ import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.domain.task.dto.request.TaskCreateRequest;
+import com.plog.domain.task.dto.request.TaskUpdateRequest;
+import com.plog.domain.task.dto.response.TaskUpdateResponse;
 import com.plog.domain.task.dto.response.TaskCreateResponse;
 import com.plog.domain.task.dto.response.TaskDetailResponse;
 import com.plog.domain.task.dto.response.TaskListResponse;
@@ -143,6 +145,57 @@ public class TaskService {
                 .toList();
 
         return TaskDetailResponse.from(task, attachments);
+    }
+
+    // 업무카드 수정
+    @Transactional
+    public TaskUpdateResponse updateTask(Long projectId, Long taskId, Long userId, TaskUpdateRequest request) {
+        // 1) 활성 멤버면 누구나 수정 가능 (담당자 여부와 무관)
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) 소속 검증까지 포함된 단건 조회
+        Task task = taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+
+        // 3) 값이 들어온 필드만 개별적으로 변경 (PATCH 부분 수정)
+        if (request.title() != null) {
+            task.changeTitle(request.title());
+        }
+
+        if (request.projectMemberId() != null) {
+            // 담당자 변경 시 생성 때와 동일한 검증을 다시 거친다 —
+            // 그렇지 않으면 생성에서 막던 "다른 프로젝트 소속/나간 멤버 지정"을 수정으로 우회할 수 있다.
+            ProjectMember newAssignee = projectMemberRepository.findById(request.projectMemberId())
+                    .orElseThrow(() -> new ApiException(TaskErrorCode.ASSIGNEE_NOT_FOUND));
+            if (!newAssignee.getProject().getId().equals(projectId)) {
+                throw new ApiException(TaskErrorCode.ASSIGNEE_PROJECT_MISMATCH);
+            }
+            if (newAssignee.getStatus() != MemberStatus.ACTIVE) {
+                throw new ApiException(TaskErrorCode.ASSIGNEE_NOT_ACTIVE);
+            }
+            task.changeAssignee(newAssignee);
+        }
+
+        if (request.category() != null) {
+            ProjectType projectType = task.getProjectMember().getProject().getProjectType();
+            if (!request.category().isAllowedFor(projectType)) {
+                throw new ApiException(TaskErrorCode.INVALID_CATEGORY_FOR_PROJECT_TYPE);
+            }
+            task.changeCategory(request.category());
+        }
+
+        if (request.endDate() != null) {
+            task.changeEndDate(request.endDate());
+        }
+
+        // 4) 첨부파일은 이번 수정 대상이 아니므로 있는 그대로 응답에만 포함
+        List<TaskUpdateResponse.AttachmentResponse> attachments = taskAttachmentRepository
+                .findAllByTaskId(taskId).stream()
+                .map(attachment -> TaskUpdateResponse.AttachmentResponse.of(
+                        attachment, resolveUrl(attachment)))
+                .toList();
+
+        return TaskUpdateResponse.from(task, attachments);
     }
 
     private List<TaskAttachment> createAttachments(
