@@ -7,6 +7,7 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.domain.task.dto.request.TaskCreateRequest;
 import com.plog.domain.task.dto.response.TaskCreateResponse;
+import com.plog.domain.task.dto.response.TaskDetailResponse;
 import com.plog.domain.task.dto.response.TaskListResponse;
 import com.plog.domain.task.dto.response.TaskSummaryResponse;
 import com.plog.domain.task.entity.Task;
@@ -56,6 +57,7 @@ public class TaskService {
         this.eventPublisher = eventPublisher;
     }
 
+    // 업무 카드 생성
     @Transactional
     public TaskCreateResponse createTask(Long projectId, Long userId, TaskCreateRequest request) {
         // 1) 로그인 사용자가 해당 프로젝트의 활성 멤버인지 검증
@@ -125,6 +127,22 @@ public class TaskService {
                 .toList();
 
         return TaskListResponse.of(content);
+    }
+
+    @Transactional(readOnly = true)
+    public TaskDetailResponse getTaskDetail(Long projectId, Long taskId, Long userId) {
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        Task task = taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+
+        List<TaskDetailResponse.AttachmentResponse> attachments = taskAttachmentRepository
+                .findAllByTaskId(taskId).stream()
+                .map(attachment -> TaskDetailResponse.AttachmentResponse.of(
+                        attachment, resolveUrl(attachment)))
+                .toList();
+
+        return TaskDetailResponse.from(task, attachments);
     }
 
     private List<TaskAttachment> createAttachments(
