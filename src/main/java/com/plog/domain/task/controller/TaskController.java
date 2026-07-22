@@ -1,6 +1,7 @@
 package com.plog.domain.task.controller;
 
 import com.plog.domain.task.dto.request.TaskCreateRequest;
+import com.plog.domain.task.dto.request.TaskStatusUpdateRequest;
 import com.plog.domain.task.dto.request.TaskUpdateRequest;
 import com.plog.domain.task.dto.response.*;
 import com.plog.global.api.response.TaskSuccessCode;
@@ -120,5 +121,33 @@ public class TaskController {
     ) {
         TaskUpdateResponse response = taskService.updateTask(projectId, taskId, userId, request);
         return ApiResponse.success(TaskSuccessCode.TASK_UPDATED, response);
+    }
+
+    @Operation(
+            summary = "업무카드 상태 변경",
+            description = """
+                업무카드의 상태(cardStatus)만 변경합니다.
+                - 프론트 사용처: 예정 카드 상세의 "시작하기" 버튼(cardStatus=IN_PROGRESS),
+                  예정/진행중 카드 상세의 "완료 처리" 버튼(cardStatus=DONE)이 이 API를 호출합니다.
+                - 프로젝트 활성 멤버라면 누구나 변경할 수 있습니다(담당자 본인 제한 없음).
+                - 상태 전이에 제한은 없습니다(완료 → 예정으로 되돌리는 것도 가능).
+                - DONE으로 변경하면 completedAt이 현재 시각으로 기록되고,
+                  DONE에서 다른 상태로 바뀌면 completedAt은 null로 초기화됩니다.
+                - 상세 조회(GET)는 부작용 없는 순수 조회입니다 — 카드를 열람하는 것만으로는
+                  상태가 바뀌지 않습니다.
+                - 제목/담당자/담당 영역/마감일은 이 API의 대상이 아닙니다(업무카드 수정 API 사용).
+                - taskId가 없거나 URL의 projectId 소속이 아니면 TASK007을 반환합니다.
+                - 인증 필요(Access Token).
+                """
+    )
+    @PatchMapping("/{taskId}/status")
+    public ApiResponse<TaskStatusUpdateResponse> updateTaskStatus(
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody TaskStatusUpdateRequest request
+    ) {
+        TaskStatusUpdateResponse response = taskService.updateTaskStatus(projectId, taskId, userId, request);
+        return ApiResponse.success(TaskSuccessCode.TASK_STATUS_UPDATED, response);
     }
 }

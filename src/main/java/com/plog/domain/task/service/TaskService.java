@@ -6,12 +6,9 @@ import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.domain.task.dto.request.TaskCreateRequest;
+import com.plog.domain.task.dto.request.TaskStatusUpdateRequest;
 import com.plog.domain.task.dto.request.TaskUpdateRequest;
-import com.plog.domain.task.dto.response.TaskUpdateResponse;
-import com.plog.domain.task.dto.response.TaskCreateResponse;
-import com.plog.domain.task.dto.response.TaskDetailResponse;
-import com.plog.domain.task.dto.response.TaskListResponse;
-import com.plog.domain.task.dto.response.TaskSummaryResponse;
+import com.plog.domain.task.dto.response.*;
 import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskAttachment;
 import com.plog.global.api.error.TaskErrorCode;
@@ -20,10 +17,8 @@ import com.plog.domain.task.repository.TaskAttachmentRepository.TaskAttachmentCo
 import com.plog.domain.task.repository.TaskRepository;
 import com.plog.global.api.exception.ApiException;
 import com.plog.domain.task.entity.AttachmentType;
-import com.plog.infrastructure.s3.AttachmentPolicy;
-import com.plog.infrastructure.s3.AttachmentUsage;
-import com.plog.infrastructure.s3.FilePromotionEvent;
-import com.plog.infrastructure.s3.FileStorageService;
+import com.plog.infrastructure.s3.*;
+
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -131,6 +126,7 @@ public class TaskService {
         return TaskListResponse.of(content);
     }
 
+    // 업무카드 상세 목록 조회
     @Transactional(readOnly = true)
     public TaskDetailResponse getTaskDetail(Long projectId, Long taskId, Long userId) {
         projectAccessService.requireActiveMember(projectId, userId);
@@ -196,6 +192,24 @@ public class TaskService {
                 .toList();
 
         return TaskUpdateResponse.from(task, attachments);
+    }
+
+    // 업무카드 상태 변경 전용 API
+    @Transactional
+    public TaskStatusUpdateResponse updateTaskStatus(
+            Long projectId, Long taskId, Long userId, TaskStatusUpdateRequest request) {
+        // 1) 활성 멤버면 누구나 상태 변경 가능 (수정/삭제와 동일 정책)
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) 소속 검증까지 포함된 단건 조회
+        Task task = taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+
+        // 3) 상태 전이 제한 없음 — 요청된 상태로 그대로 변경.
+        //    completedAt은 Task.changeStatus() 내부에서 DONE 여부에 따라 자동으로 세팅/초기화된다.
+        task.changeStatus(request.cardStatus());
+
+        return TaskStatusUpdateResponse.from(task);
     }
 
     private List<TaskAttachment> createAttachments(
