@@ -35,7 +35,10 @@ class SelfFeedbackServiceTest {
 
     @BeforeEach
     void setUp() {
-        selfFeedbackService = new SelfFeedbackService(projectMemberRepository, selfFeedbackRepository);
+        selfFeedbackService = new SelfFeedbackService(
+                selfFeedbackRepository,
+                new EvaluationParticipantResolver(projectMemberRepository)
+        );
     }
 
     @Test

@@ -12,7 +12,6 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
-import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,6 +26,7 @@ public class ProjectSettingsService {
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectExternalConnectionRepository externalConnectionRepository;
     private final InviteTokenCipher inviteTokenCipher;
+    private final ProjectSettingsValidator settingsValidator;
 
     @Value("${plog.invite.base-url}")
     private String inviteBaseUrl;
@@ -55,15 +55,8 @@ public class ProjectSettingsService {
     ) {
         Project project = requireProject(projectId);
         requireOwner(projectId, userId);
+        settingsValidator.validate(project, request);
         String projectName = request.projectName() == null ? null : request.projectName().trim();
-        if (projectName != null && (projectName.length() < 2 || projectName.length() > 20)) {
-            throw new ApiException(ProjectApiErrorCode.VALIDATION_ERROR);
-        }
-        if (request.endDay() != null
-                && (!request.endDay().isAfter(TimeUtil.todayUtc())
-                || !request.endDay().isAfter(project.getStartDay()))) {
-            throw new ApiException(ProjectApiErrorCode.VALIDATION_ERROR);
-        }
         project.updateSettings(projectName, request.endDay(), request.projectType());
         projectRepository.saveAndFlush(project);
         return new ProjectSettingsDto.UpdateResponse(

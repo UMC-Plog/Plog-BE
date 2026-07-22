@@ -1,6 +1,7 @@
 package com.plog.domain.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -9,6 +10,8 @@ import com.plog.domain.notification.dto.FcmTokenDto;
 import com.plog.domain.notification.entity.FcmToken;
 import com.plog.domain.notification.repository.FcmTokenRepository;
 import com.plog.domain.notification.repository.NotificationUserRepository;
+import com.plog.domain.notification.exception.NotificationErrorCode;
+import com.plog.global.api.exception.ApiException;
 import com.plog.domain.user.entity.User;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -61,5 +64,15 @@ class FcmTokenServiceTest {
                 7L, new FcmTokenDto.Request("missing-token"));
 
         assertThat(response.deleted()).isTrue();
+    }
+
+    @Test
+    void rejectsOversizedTokenOnDeletionAsWellAsRegistration() {
+        when(userRepository.existsById(7L)).thenReturn(true);
+        String oversizedToken = "a".repeat(513);
+
+        assertThatThrownBy(() -> service.delete(7L, new FcmTokenDto.Request(oversizedToken)))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(NotificationErrorCode.INVALID_FCM_TOKEN));
     }
 }

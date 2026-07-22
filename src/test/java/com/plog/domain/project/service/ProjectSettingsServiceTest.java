@@ -37,7 +37,8 @@ class ProjectSettingsServiceTest {
                 projectRepository,
                 projectMemberRepository,
                 externalConnectionRepository,
-                inviteTokenCipher
+                inviteTokenCipher,
+                new ProjectSettingsValidator()
         );
     }
 

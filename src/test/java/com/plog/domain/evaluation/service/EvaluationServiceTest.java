@@ -37,10 +37,17 @@ class EvaluationServiceTest {
     private PeerEvaluationRepository peerEvaluationRepository;
 
     private EvaluationService evaluationService;
+    private EvaluationParticipantResolver participantResolver;
 
     @BeforeEach
     void setUp() {
-        evaluationService = new EvaluationService(projectRepository, projectMemberRepository, peerEvaluationRepository);
+        participantResolver = new EvaluationParticipantResolver(projectMemberRepository);
+        evaluationService = new EvaluationService(
+                projectRepository,
+                projectMemberRepository,
+                peerEvaluationRepository,
+                participantResolver
+        );
     }
 
     @Test
