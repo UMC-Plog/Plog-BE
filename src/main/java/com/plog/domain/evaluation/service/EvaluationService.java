@@ -126,6 +126,44 @@ public class EvaluationService {
         return new PeerEvaluationCreateResponse(evaluation.getId(), isNudgeTriggered);
     }
 
+    @Transactional
+    public PeerEvaluationCreateResponse updatePeerEvaluation(
+            Long projectId,
+            Long targetMemberId,
+            Long userId,
+            PeerEvaluationCreateRequest request
+    ) {
+        ProjectMember evaluator = projectMemberRepository.findByProjectIdAndUserId(projectId, userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN));
+
+        ProjectMember evaluatee = projectMemberRepository.findById(targetMemberId)
+                .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
+
+        if (!evaluatee.getProject().getId().equals(projectId)) {
+            throw new ApiException(ErrorCode.FORBIDDEN);
+        }
+
+        if (evaluatee.getProject().isCompleted()) {
+            throw new ApiException(EvaluationErrorCode.CANNOT_MODIFY_EVALUATION_AFTER_PUBLISH);
+        }
+
+        PeerEvaluation evaluation = peerEvaluationRepository
+                .findByEvaluatorIdAndEvaluateeId(evaluator.getId(), evaluatee.getId())
+                .orElseThrow(() -> new ApiException(EvaluationErrorCode.EVALUATION_NOT_FOUND));
+
+        evaluation.update(
+                request.collaborationScore(),
+                request.initiativeScore(),
+                request.responsibilityScore(),
+                request.communicationScore(),
+                request.outputScore(),
+                request.keywords(),
+                request.feedback()
+        );
+
+        return new PeerEvaluationCreateResponse(evaluation.getId(), checkNudgeCondition(request));
+    }
+
     private boolean checkNudgeCondition(PeerEvaluationCreateRequest request) {
         int firstScore = request.collaborationScore();
         return firstScore == request.initiativeScore() &&
