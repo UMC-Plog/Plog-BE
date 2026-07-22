@@ -71,6 +71,10 @@ class FcmTokenServiceTest {
         when(userRepository.existsById(7L)).thenReturn(true);
         String oversizedToken = "a".repeat(513);
 
+        assertThatThrownBy(() -> service.put(7L, new FcmTokenDto.Request(oversizedToken)))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(NotificationErrorCode.INVALID_FCM_TOKEN));
+
         assertThatThrownBy(() -> service.delete(7L, new FcmTokenDto.Request(oversizedToken)))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(NotificationErrorCode.INVALID_FCM_TOKEN));
