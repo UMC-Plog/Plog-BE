@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Task", description = "업무카드 API")
 @RestController
-@RequestMapping("/api/v1/projects/{projectId}/tasks")
+@RequestMapping("/api/projects/{projectId}/tasks")
 public class TaskController {
 
     private final TaskService taskService;

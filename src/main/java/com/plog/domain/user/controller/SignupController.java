@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Signup", description = "회원가입 / 닉네임 중복확인 API")
 @Validated
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping("/api/auth")
 public class SignupController {
 
     private final UserService userService;

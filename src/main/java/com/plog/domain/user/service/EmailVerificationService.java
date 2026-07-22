@@ -8,6 +8,7 @@ import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.config.EmailVerificationProperties;
 import com.plog.global.util.HashUtil;
+import com.plog.global.util.TimeUtil;
 import com.plog.infrastructure.mail.MailSender;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -43,7 +44,7 @@ public class EmailVerificationService {
     public void sendCode(String email) {
         assertEmailNotRegistered(email); // 유가입자에게 메일 보내는 낭비 차단
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = TimeUtil.nowUtc();
         EmailVerification verification = emailVerificationRepository.findByEmail(email).orElse(null);
         if (verification != null && verification.isWithinCooldown(now, properties.resendCooldown())) {
             throw new ApiException(AuthErrorCode.VERIFICATION_RESEND_COOLDOWN);
@@ -73,7 +74,7 @@ public class EmailVerificationService {
         if (verification.isAttemptExceeded(properties.maxAttempts())) {
             throw new ApiException(AuthErrorCode.VERIFICATION_ATTEMPT_EXCEEDED);
         }
-        if (verification.isExpired(LocalDateTime.now())) {
+        if (verification.isExpired(TimeUtil.nowUtc())) {
             throw new ApiException(AuthErrorCode.VERIFICATION_CODE_EXPIRED);
         }
         if (!verification.matches(HashUtil.sha256Hex(code))) {

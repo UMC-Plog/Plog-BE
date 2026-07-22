@@ -24,17 +24,18 @@ public record TaskCreateResponse(
             String fileName,
             String fileUrl
     ) {
-        public static AttachmentResponse from(TaskAttachment attachment) {
+        // FILE 첨부는 저장값이 S3 키라 그대로 내보낼 수 없다. 서비스가 발급한 URL을 받는다.
+        public static AttachmentResponse of(TaskAttachment attachment, String resolvedUrl) {
             return new AttachmentResponse(
                     attachment.getId(),
                     attachment.getAttachmentType(),
                     attachment.getFileName(),
-                    attachment.getFileUrl()
+                    resolvedUrl
             );
         }
     }
 
-    public static TaskCreateResponse from(Task task, List<TaskAttachment> attachments) {
+    public static TaskCreateResponse from(Task task, List<AttachmentResponse> attachments) {
         return new TaskCreateResponse(
                 task.getId(),
                 task.getTitle(),
@@ -42,7 +43,7 @@ public record TaskCreateResponse(
                 task.getCardStatus(),
                 task.getEndDate(),
                 task.getProjectMember().getId(),
-                attachments.stream().map(AttachmentResponse::from).toList()
+                attachments
         );
     }
 }

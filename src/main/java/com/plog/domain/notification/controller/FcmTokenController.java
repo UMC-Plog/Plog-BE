@@ -20,7 +20,7 @@ public class FcmTokenController {
 
     @PutMapping
     public ApiResponse<FcmTokenDto.Response> put(
-            @AuthenticationPrincipal(expression = "userId") Long userId,
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody FcmTokenDto.Request request
     ) {
         return ApiResponse.success(fcmTokenService.put(userId, request));
@@ -28,7 +28,7 @@ public class FcmTokenController {
 
     @DeleteMapping
     public ApiResponse<FcmTokenDto.DeletedResponse> delete(
-            @AuthenticationPrincipal(expression = "userId") Long userId,
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody FcmTokenDto.Request request
     ) {
         return ApiResponse.success(fcmTokenService.delete(userId, request));

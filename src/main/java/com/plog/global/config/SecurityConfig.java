@@ -31,12 +31,12 @@ public class SecurityConfig {
     // logout도 공개: Refresh 원문을 가진 본인만 해당 토큰을 폐기 가능하므로 Access 인증 불필요.
     // 오히려 Access 만료/탈취 상황에서 세션 폐기가 확실히 동작해야 한다.
     private static final String[] PUBLIC_AUTH_PATHS = {
-            "/api/v1/auth/email/**",
-            "/api/v1/auth/nickname/**",
-            "/api/v1/auth/signup",
-            "/api/v1/auth/login",
-            "/api/v1/auth/reissue",
-            "/api/v1/auth/logout"
+            "/api/auth/email/**",
+            "/api/auth/nickname/**",
+            "/api/auth/signup",
+            "/api/auth/login",
+            "/api/auth/reissue",
+            "/api/auth/logout"
     };
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;

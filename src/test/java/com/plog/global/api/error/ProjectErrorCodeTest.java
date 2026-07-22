@@ -17,7 +17,9 @@ class ProjectErrorCodeTest {
                 ProjectErrorCode.INVALID_PROJECT_NAME,
                 ProjectErrorCode.INVALID_PROJECT_END_DAY,
                 ProjectErrorCode.INVITE_TOKEN_CONFIGURATION_ERROR,
-                ProjectErrorCode.INVITE_TOKEN_GENERATION_ERROR
+                ProjectErrorCode.INVITE_TOKEN_GENERATION_ERROR,
+                ProjectErrorCode.INVALID_INVITE_CODE,
+                ProjectErrorCode.PROJECT_ALREADY_JOINED
         ))
                 .extracting(ProjectErrorCode::getCode)
                 .containsExactly(
@@ -27,7 +29,9 @@ class ProjectErrorCodeTest {
                         "PROJECT004",
                         "PROJECT005",
                         "PROJECT006",
-                        "PROJECT007"
+                        "PROJECT007",
+                        "PROJECT008",
+                        "PROJECT009"
                 );
     }
 

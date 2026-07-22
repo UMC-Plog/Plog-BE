@@ -4,7 +4,6 @@ import com.plog.global.api.code.SuccessCode;
 import com.plog.global.api.response.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,13 +14,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/files")
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "plog.s3", name = "enabled", havingValue = "true")
 public class FileStorageController {
     private final FileStorageService fileStorageService;
 
     @PostMapping("/presigned-upload-url")
     public ResponseEntity<ApiResponse<FileStorageDto.PresignedUploadResponse>> createPresignedUploadUrl(
-            @AuthenticationPrincipal(expression = "userId") Long userId,
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody FileStorageDto.PresignedUploadRequest request
     ) {
         var response = fileStorageService.createUploadUrl(userId, request);

@@ -30,12 +30,13 @@ public class FileDeletionEventListener {
     }
 
     private void retry(String fileKey, String operation, Runnable action) {
-        for (int attempt = 1; attempt <= 3; attempt++) {
+        int maxRetries = 3;
+        for (int attempt = 1; attempt <= maxRetries + 1; attempt++) {
             try {
                 action.run();
                 return;
             } catch (RuntimeException exception) {
-                if (attempt == 3) {
+                if (attempt > maxRetries) {
                     log.error("s3_file_operation_failed operation={} fileKey={} attempts={}",
                             operation, fileKey, attempt, exception);
                     return;

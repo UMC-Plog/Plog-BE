@@ -1,6 +1,7 @@
 package com.plog.infrastructure.s3;
 
 import com.plog.global.api.exception.ApiException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
@@ -10,6 +11,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.UriUtils;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
@@ -28,13 +30,25 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 @RequiredArgsConstructor
 public class FileStorageService {
     public static final long MAX_FILE_SIZE = 50L * 1024 * 1024;
+    public static final long MAX_IMAGE_SIZE = 10L * 1024 * 1024;
     private static final Duration URL_DURATION = Duration.ofMinutes(10);
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("pdf", "pptx", "docx", "zip");
-    private static final Map<String, Set<String>> ALLOWED_CONTENT_TYPES = Map.of(
-            "pdf", Set.of("application/pdf"),
-            "pptx", Set.of("application/vnd.openxmlformats-officedocument.presentationml.presentation"),
-            "docx", Set.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
-            "zip", Set.of("application/zip", "application/x-zip-compressed")
+    private static final Set<String> IMAGE_EXTENSIONS =
+            Set.of("jpg", "jpeg", "png", "webp", "gif");
+    private static final Set<String> ALLOWED_EXTENSIONS =
+            Set.of("pdf", "pptx", "docx", "zip", "jpg", "jpeg", "png", "webp", "gif");
+    // Map.of 는 최대 10쌍이라 항목이 늘면 컴파일이 깨진다 → ofEntries 로 여유를 둔다.
+    private static final Map<String, Set<String>> ALLOWED_CONTENT_TYPES = Map.ofEntries(
+            Map.entry("pdf", Set.of("application/pdf")),
+            Map.entry("pptx", Set.of(
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation")),
+            Map.entry("docx", Set.of(
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document")),
+            Map.entry("zip", Set.of("application/zip", "application/x-zip-compressed")),
+            Map.entry("jpg", Set.of("image/jpeg")),
+            Map.entry("jpeg", Set.of("image/jpeg")),
+            Map.entry("png", Set.of("image/png")),
+            Map.entry("webp", Set.of("image/webp")),
+            Map.entry("gif", Set.of("image/gif"))
     );
 
     private final S3Client s3Client;
@@ -53,7 +67,7 @@ public class FileStorageService {
         ensureEnabled();
         validateFile(request.fileName(), request.contentType(), request.fileSize());
         String safeName = request.fileName().trim().replaceAll("[^a-zA-Z0-9._-]", "_");
-        String fileKey = ownerPrefix(userId) + UUID.randomUUID() + "/" + safeName;
+        String fileKey = ownerPrefix(request.usage(), userId) + UUID.randomUUID() + "/" + safeName;
         Instant expiresAt = Instant.now().plus(URL_DURATION);
         PutObjectRequest putObject = PutObjectRequest.builder()
                 .bucket(bucket).key(fileKey).contentType(request.contentType()).contentLength(request.fileSize())
@@ -64,10 +78,12 @@ public class FileStorageService {
                 presigned.url().toString(), fileKey, presigned.signedHeaders(), expiresAt);
     }
 
-    public void verifyUploadedFile(Long userId, String fileKey, String fileName, long expectedSize) {
+    // 용도까지 대조해 다른 도메인에 올린 키를 재사용하지 못하게 막는다.
+    public void verifyUploadedFile(AttachmentUsage usage, Long userId, String fileKey,
+                                   String fileName, long expectedSize) {
         ensureEnabled();
         validateFile(fileName, null, expectedSize);
-        if (fileKey == null || !fileKey.startsWith(ownerPrefix(userId))) {
+        if (fileKey == null || !fileKey.startsWith(ownerPrefix(usage, userId))) {
             throw new ApiException(FileStorageErrorCode.INVALID_FILE_KEY);
         }
         try {
@@ -88,11 +104,50 @@ public class FileStorageService {
     }
 
     public String createDownloadUrl(String fileKey) {
+        return createDownloadUrl(fileKey, URL_DURATION).downloadUrl();
+    }
+
+    /** 용도에 맞는 다운로드 URL. POST·TASK 는 내려받기, CHAT 은 인라인 표시. */
+    public String createDownloadUrl(AttachmentUsage usage, String fileKey, String fileName) {
+        return usage.forcesDownload()
+                ? createDownloadUrl(fileKey, fileName, URL_DURATION).downloadUrl()
+                : createDownloadUrl(fileKey, URL_DURATION).downloadUrl();
+    }
+
+    public FileStorageDto.PresignedDownloadResponse createDownloadUrl(
+            String fileKey,
+            Duration duration
+    ) {
+        return createPresignedDownloadUrl(fileKey, null, duration);
+    }
+
+    public FileStorageDto.PresignedDownloadResponse createDownloadUrl(
+            String fileKey,
+            String fileName,
+            Duration duration
+    ) {
+        String contentDisposition = "attachment; filename*=UTF-8''"
+                + UriUtils.encode(fileName, StandardCharsets.UTF_8);
+        return createPresignedDownloadUrl(fileKey, contentDisposition, duration);
+    }
+
+    private FileStorageDto.PresignedDownloadResponse createPresignedDownloadUrl(
+            String fileKey,
+            String contentDisposition,
+            Duration duration
+    ) {
         ensureEnabled();
-        GetObjectRequest getObject = GetObjectRequest.builder().bucket(bucket).key(fileKey).build();
-        return s3Presigner.presignGetObject(GetObjectPresignRequest.builder()
-                        .signatureDuration(URL_DURATION).getObjectRequest(getObject).build())
+        GetObjectRequest.Builder getObjectBuilder = GetObjectRequest.builder()
+                .bucket(bucket)
+                .key(fileKey);
+        if (contentDisposition != null) {
+            getObjectBuilder.responseContentDisposition(contentDisposition);
+        }
+        GetObjectRequest getObject = getObjectBuilder.build();
+        String downloadUrl = s3Presigner.presignGetObject(GetObjectPresignRequest.builder()
+                        .signatureDuration(duration).getObjectRequest(getObject).build())
                 .url().toString();
+        return new FileStorageDto.PresignedDownloadResponse(downloadUrl, duration.getSeconds());
     }
 
     public void delete(String fileKey) {
@@ -114,24 +169,29 @@ public class FileStorageService {
         }
     }
 
-    private String ownerPrefix(Long userId) {
-        if (userId == null || userId <= 0) {
+    private String ownerPrefix(AttachmentUsage usage, Long userId) {
+        if (usage == null || userId == null || userId <= 0) {
             throw new ApiException(FileStorageErrorCode.INVALID_FILE_KEY);
         }
-        return "temporary/users/" + userId + "/";
+        return "temporary/" + usage.keySegment() + "/users/" + userId + "/";
     }
 
+    // 확장자를 먼저 본다 — 확장자를 알아야 적용할 용량 한도가 정해진다.
     private void validateFile(String fileName, String contentType, long fileSize) {
-        if (fileSize > MAX_FILE_SIZE) {
-            throw new ApiException(FileStorageErrorCode.FILE_SIZE_EXCEEDED);
-        }
         String extension = extensionOf(fileName);
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
             throw new ApiException(FileStorageErrorCode.UNSUPPORTED_ATTACHMENT_TYPE);
         }
+        if (fileSize > maxSizeFor(extension)) {
+            throw new ApiException(FileStorageErrorCode.FILE_SIZE_EXCEEDED);
+        }
         if (contentType != null && !ALLOWED_CONTENT_TYPES.get(extension).contains(contentType)) {
             throw new ApiException(FileStorageErrorCode.UNSUPPORTED_ATTACHMENT_TYPE);
         }
+    }
+
+    private long maxSizeFor(String extension) {
+        return IMAGE_EXTENSIONS.contains(extension) ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
     }
 
     private String extensionOf(String fileName) {

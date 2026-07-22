@@ -2,6 +2,7 @@ package com.plog.domain.task.entity;
 
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.global.common.BaseEntity;
+import com.plog.global.util.TimeUtil;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -72,7 +73,7 @@ public class Task extends BaseEntity {
                 .endDate(endDate)
                 .completedAt(
                         cardStatus == TaskStatus.DONE
-                                ? LocalDateTime.now()
+                                ? TimeUtil.nowUtc()
                                 : null
                 )
                 .build();

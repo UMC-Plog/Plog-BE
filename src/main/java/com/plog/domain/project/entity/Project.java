@@ -95,6 +95,14 @@ public class Project extends BaseEntity {
         this.inviteTokenEncrypted = inviteTokenEncrypted;
     }
 
+    public void complete() {
+        this.status = ProjectStatus.COMPLETED;
+    }
+
+    public boolean isCompleted() {
+        return this.status == ProjectStatus.COMPLETED;
+    }
+
     private static void validateInviteTokenValues(String inviteTokenHash, String inviteTokenEncrypted) {
         if (inviteTokenHash == null || inviteTokenHash.isBlank()
                 || inviteTokenEncrypted == null || inviteTokenEncrypted.isBlank()) {
@@ -102,10 +110,7 @@ public class Project extends BaseEntity {
         }
     }
 
-    public boolean isEvaluatingState() {
-        if (this.status == ProjectStatus.COMPLETED) {
-            return false;
-        }
-        return !LocalDate.now().isAfter(this.endDay);
+    public boolean isEvaluatingState(LocalDate today) {
+        return !isCompleted() && !today.isAfter(this.endDay);
     }
 }
