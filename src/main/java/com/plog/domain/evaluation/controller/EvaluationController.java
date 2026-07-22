@@ -61,4 +61,21 @@ public class EvaluationController {
                 .status(EvaluationSuccessCode.EVALUATION_SUBMITTED.getHttpStatus())
                 .body(ApiResponse.success(EvaluationSuccessCode.EVALUATION_SUBMITTED, response));
     }
+
+    @Operation(summary = "동료 평가 수정", description = "등록한 동료 평가 점수와 피드백을 수정합니다.")
+    @PutMapping("/peers/{targetMemberId}")
+    public ResponseEntity<ApiResponse<PeerEvaluationCreateResponse>> updatePeerEvaluation(
+            @PathVariable Long projectId,
+            @PathVariable Long targetMemberId,
+            @Valid @RequestBody PeerEvaluationCreateRequest request,
+            @AuthenticationPrincipal Long userId
+    ) {
+        PeerEvaluationCreateResponse response = evaluationService.updatePeerEvaluation(
+                projectId, targetMemberId, userId, request
+        );
+
+        return ResponseEntity
+                .status(EvaluationSuccessCode.EVALUATION_UPDATED.getHttpStatus())
+                .body(ApiResponse.success(EvaluationSuccessCode.EVALUATION_UPDATED, response));
+    }
 }
