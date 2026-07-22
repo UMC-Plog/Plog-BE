@@ -193,7 +193,42 @@ public class TaskService {
 
         return TaskUpdateResponse.from(task, attachments);
     }
+  
+  // 업무 카드 삭제
+  @Transactional
+  public TaskDeleteResponse deleteTask(Long projectId, Long taskId, Long userId) {
+      // 1) 활성 멤버면 누구나 삭제 가능
+      projectAccessService.requireActiveMember(projectId, userId);
 
+      // 2) 소속 검증까지 포함된 단건 조회
+      Task task = taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
+              .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+
+      // 3) 첨부파일 먼저 조회 — FILE 타입 fileKey는 S3 정리용으로 미리 뽑아둔다
+      List<TaskAttachment> attachments = taskAttachmentRepository.findAllByTaskId(taskId);
+      List<String> fileKeys = attachments.stream()
+              .filter(attachment -> attachment.getAttachmentType() == AttachmentType.FILE)
+              .map(TaskAttachment::getFileUrl)
+              .toList();
+
+      // 4) 자식(TaskAttachment)을 부모(Task)보다 먼저 삭제한다.
+      //    DB에 ON DELETE CASCADE가 없어서, 순서를 반대로 하면
+      //    "삭제된 Task를 참조하는 영속 상태의 TaskAttachment"가 남아 TransientObjectException이 발생한다.
+      taskAttachmentRepository.deleteAll(attachments);
+      taskAttachmentRepository.flush();
+
+      // 5) 이제 자식이 없으니 Task 삭제
+      taskRepository.delete(task);
+      taskRepository.flush();
+
+      // 6) 커밋 이후 S3 실물 파일 삭제를 비동기로 요청
+      if (!fileKeys.isEmpty()) {
+          eventPublisher.publishEvent(new FileDeletionEvent(fileKeys));
+      }
+
+      return new TaskDeleteResponse(true);
+   }
+  
     // 업무카드 상태 변경 전용 API
     @Transactional
     public TaskStatusUpdateResponse updateTaskStatus(
@@ -211,7 +246,7 @@ public class TaskService {
 
         return TaskStatusUpdateResponse.from(task);
     }
-
+  
     private List<TaskAttachment> createAttachments(
             Task task, Long userId, List<TaskCreateRequest.TaskAttachmentRequest> requests) {
         if (requests == null || requests.isEmpty()) {
