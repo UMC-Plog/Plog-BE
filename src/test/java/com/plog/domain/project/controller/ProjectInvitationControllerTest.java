@@ -55,7 +55,7 @@ class ProjectInvitationControllerTest {
                         LocalDate.of(2026, 8, 20)
                 ));
 
-        mockMvc.perform(get("/api/v1/projects/invitations/{inviteCode}", "valid-code"))
+        mockMvc.perform(get("/api/projects/invitations/{inviteCode}", "valid-code"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.code").value("PROJECT008"))
@@ -72,7 +72,7 @@ class ProjectInvitationControllerTest {
         given(previewService.preview(1L, "invalid-code"))
                 .willThrow(new ApiException(ProjectErrorCode.INVALID_INVITE_CODE));
 
-        mockMvc.perform(get("/api/v1/projects/invitations/{inviteCode}", "invalid-code"))
+        mockMvc.perform(get("/api/projects/invitations/{inviteCode}", "invalid-code"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.isSuccess").value(false))
                 .andExpect(jsonPath("$.code").value("PROJECT008"))

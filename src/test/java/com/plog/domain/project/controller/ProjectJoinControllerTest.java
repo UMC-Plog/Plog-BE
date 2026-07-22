@@ -68,7 +68,7 @@ class ProjectJoinControllerTest {
                         Instant.parse("2026-07-20T21:00:00Z")
                 ));
 
-        mockMvc.perform(post("/api/v1/projects/join")
+        mockMvc.perform(post("/api/projects/join")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson()))
                 .andExpect(status().isOk())
@@ -91,7 +91,7 @@ class ProjectJoinControllerTest {
     void rejectsABlankInviteCodeBeforeCallingTheService() throws Exception {
         authenticate(1L);
 
-        mockMvc.perform(post("/api/v1/projects/join")
+        mockMvc.perform(post("/api/projects/join")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"inviteCode\":\" \"}"))
                 .andExpect(status().isBadRequest())
@@ -108,7 +108,7 @@ class ProjectJoinControllerTest {
         given(projectJoinService.join(eq(1L), any(ProjectJoinRequest.class)))
                 .willThrow(new ApiException(ProjectErrorCode.INVALID_INVITE_CODE));
 
-        mockMvc.perform(post("/api/v1/projects/join")
+        mockMvc.perform(post("/api/projects/join")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson()))
                 .andExpect(status().isBadRequest())
@@ -122,7 +122,7 @@ class ProjectJoinControllerTest {
         given(projectJoinService.join(eq(1L), any(ProjectJoinRequest.class)))
                 .willThrow(new ApiException(ProjectErrorCode.PROJECT_ALREADY_JOINED));
 
-        mockMvc.perform(post("/api/v1/projects/join")
+        mockMvc.perform(post("/api/projects/join")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson()))
                 .andExpect(status().isConflict())
@@ -136,7 +136,7 @@ class ProjectJoinControllerTest {
         given(projectJoinService.join(eq(404L), any(ProjectJoinRequest.class)))
                 .willThrow(new ApiException(AuthErrorCode.INVALID_TOKEN));
 
-        mockMvc.perform(post("/api/v1/projects/join")
+        mockMvc.perform(post("/api/projects/join")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson()))
                 .andExpect(status().isUnauthorized())
@@ -148,7 +148,7 @@ class ProjectJoinControllerTest {
         given(projectJoinService.join(isNull(), any(ProjectJoinRequest.class)))
                 .willThrow(new ApiException(AuthErrorCode.INVALID_TOKEN));
 
-        mockMvc.perform(post("/api/v1/projects/join")
+        mockMvc.perform(post("/api/projects/join")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson()))
                 .andExpect(status().isUnauthorized())

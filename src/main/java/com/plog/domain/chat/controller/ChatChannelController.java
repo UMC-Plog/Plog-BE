@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/dashboard/channels")
+@RequestMapping("/api/dashboard/channels")
 public class ChatChannelController implements ChatChannelControllerDoc {
 
     private final ChatChannelListService chatChannelListService;

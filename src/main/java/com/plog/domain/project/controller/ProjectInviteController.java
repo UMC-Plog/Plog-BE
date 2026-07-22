@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Project", description = "프로젝트 API")
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/projects")
+@RequestMapping("/api/projects")
 public class ProjectInviteController {
 
     private final ProjectInviteService projectInviteService;

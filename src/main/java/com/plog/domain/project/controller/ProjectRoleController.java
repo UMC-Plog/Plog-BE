@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/projects")
+@RequestMapping("/api/projects")
 public class ProjectRoleController implements ProjectRoleControllerDoc {
 
     private final ProjectRoleDelegationService projectRoleDelegationService;
