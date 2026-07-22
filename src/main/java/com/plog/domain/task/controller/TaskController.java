@@ -1,10 +1,8 @@
 package com.plog.domain.task.controller;
 
 import com.plog.domain.task.dto.request.TaskCreateRequest;
-import com.plog.domain.task.dto.response.TaskCreateResponse;
-import com.plog.domain.task.dto.response.TaskDetailResponse;
-import com.plog.domain.task.dto.response.TaskListResponse;
-import com.plog.domain.task.dto.response.TaskSummaryResponse;
+import com.plog.domain.task.dto.request.TaskUpdateRequest;
+import com.plog.domain.task.dto.response.*;
 import com.plog.global.api.response.TaskSuccessCode;
 import com.plog.domain.task.service.TaskService;
 import com.plog.global.api.response.ApiResponse;
@@ -99,5 +97,28 @@ public class TaskController {
     ) {
         TaskDetailResponse response = taskService.getTaskDetail(projectId, taskId, userId);
         return ApiResponse.success(TaskSuccessCode.TASK_DETAIL_FOUND, response);
+    }
+
+    @Operation(
+            summary = "업무카드 수정",
+            description = """
+                    업무카드의 제목, 담당자, 담당 영역, 마감일을 수정합니다.
+                    - 요청 필드 중 null인 값은 변경하지 않습니다(부분 수정).
+                    - 프로젝트 활성 멤버라면 누구나 수정할 수 있습니다(담당자 본인 제한 없음).
+                    - 상태 변경, 첨부파일 등록/삭제는 이 API의 대상이 아닙니다(별도 API).
+                    - 담당자를 변경하는 경우 생성 시와 동일한 검증(같은 프로젝트 소속, 활성 멤버)이 적용됩니다.
+                    - taskId가 없거나 URL의 projectId 소속이 아니면 TASK007을 반환합니다.
+                    - 인증 필요(Access Token).
+                    """
+    )
+    @PatchMapping("/{taskId}")
+    public ApiResponse<TaskUpdateResponse> updateTask(
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody TaskUpdateRequest request
+    ) {
+        TaskUpdateResponse response = taskService.updateTask(projectId, taskId, userId, request);
+        return ApiResponse.success(TaskSuccessCode.TASK_UPDATED, response);
     }
 }

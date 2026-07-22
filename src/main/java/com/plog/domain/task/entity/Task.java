@@ -78,4 +78,21 @@ public class Task extends BaseEntity {
                 )
                 .build();
     }
+
+    // 부분 수정(PATCH)에서 값이 들어온 필드만 개별 호출한다.
+    public void changeTitle(String title) {
+        this.title = title;
+    }
+
+    public void changeAssignee(ProjectMember projectMember) {
+        this.projectMember = projectMember;
+    }
+
+    public void changeCategory(TaskCategory category) {
+        this.category = category;
+    }
+
+    public void changeEndDate(LocalDate endDate) {
+        this.endDate = endDate;
+    }
 }
