@@ -53,7 +53,9 @@ public record TaskDetailResponse(
                     attachment.getId(),
                     attachment.getAttachmentType(),
                     attachment.getFileName(),
-                    attachment.getFileSize(),
+                    attachment.getAttachmentType() == AttachmentType.FILE
+                        ? attachment.getFileSize()
+                            : null,
                     resolvedUrl
             );
         }
@@ -69,7 +71,7 @@ public record TaskDetailResponse(
                 task.getCategory(),
                 task.getCardStatus(),
                 task.getEndDate(),
-                task.getCompletedAt(),
+                task.getCardStatus() == TaskStatus.DONE ? task.getCompletedAt() : null,
                 dDay,
                 overdue,
                 isImminent(task, dDay, overdue),
