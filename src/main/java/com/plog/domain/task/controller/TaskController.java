@@ -121,4 +121,25 @@ public class TaskController {
         TaskUpdateResponse response = taskService.updateTask(projectId, taskId, userId, request);
         return ApiResponse.success(TaskSuccessCode.TASK_UPDATED, response);
     }
+
+    @Operation(
+            summary = "업무카드 삭제",
+            description = """
+                    업무카드를 삭제합니다.
+                    - 프로젝트 활성 멤버라면 누구나 삭제할 수 있습니다(담당자 본인 제한 없음).
+                    - 삭제된 업무카드는 복구할 수 없습니다(하드 삭제).
+                    - 첨부파일도 함께 삭제되며, FILE 타입 첨부는 S3 원본 파일도 비동기로 삭제됩니다.
+                    - taskId가 없거나 URL의 projectId 소속이 아니면 TASK007을 반환합니다.
+                    - 인증 필요(Access Token).
+                    """
+    )
+    @DeleteMapping("/{taskId}")
+    public ApiResponse<TaskDeleteResponse> deleteTask(
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal Long userId
+    ) {
+        TaskDeleteResponse response = taskService.deleteTask(projectId, taskId, userId);
+        return ApiResponse.success(TaskSuccessCode.TASK_DELETED, response);
+    }
 }
