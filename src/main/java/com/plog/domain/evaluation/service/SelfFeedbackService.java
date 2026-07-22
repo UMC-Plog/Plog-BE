@@ -2,6 +2,7 @@ package com.plog.domain.evaluation.service;
 
 import com.plog.domain.evaluation.dto.request.SelfFeedbackCreateRequest;
 import com.plog.domain.evaluation.dto.response.SelfFeedbackResponse;
+import com.plog.domain.evaluation.dto.response.SelfFeedbackUpdateResponse;
 import com.plog.domain.evaluation.entity.SelfFeedback;
 import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
 import com.plog.domain.project.entity.ProjectMember;
@@ -59,5 +60,22 @@ public class SelfFeedbackService {
         }
 
         return new SelfFeedbackResponse(selfFeedback.getId(), selfFeedback.getContent());
+    }
+
+    @Transactional
+    public SelfFeedbackUpdateResponse updateSelfFeedback(Long projectId, Long userId, SelfFeedbackCreateRequest request) {
+        ProjectMember projectMember = projectMemberRepository.findByProjectIdAndUserId(projectId, userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN));
+
+        if (projectMember.getProject().isCompleted()) {
+            throw new ApiException(EvaluationErrorCode.CANNOT_MODIFY_FEEDBACK_AFTER_PUBLISH);
+        }
+
+        SelfFeedback selfFeedback = selfFeedbackRepository.findByProjectMemberId(projectMember.getId())
+                .orElseThrow(() -> new ApiException(EvaluationErrorCode.SELF_FEEDBACK_NOT_FOUND));
+
+        selfFeedback.updateContent(request.content());
+
+        return new SelfFeedbackUpdateResponse(selfFeedback.getId());
     }
 }

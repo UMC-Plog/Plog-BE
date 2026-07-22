@@ -16,7 +16,7 @@ import org.springframework.http.ResponseEntity;
 class ProjectRoleControllerE2eTest extends E2eTestBase {
 
     @Nested
-    @DisplayName("PATCH /api/v1/projects/{projectId}/members/{targetMemberId}/role")
+    @DisplayName("PATCH /api/projects/{projectId}/members/{targetMemberId}/role")
     class PatchProjectRole {
 
         @Test
@@ -69,6 +69,6 @@ class ProjectRoleControllerE2eTest extends E2eTestBase {
     }
 
     private String rolePath(Long projectId, Long targetMemberId) {
-        return "/api/v1/projects/" + projectId + "/members/" + targetMemberId + "/role";
+        return "/api/projects/" + projectId + "/members/" + targetMemberId + "/role";
     }
 }
