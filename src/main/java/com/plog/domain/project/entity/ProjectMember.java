@@ -68,6 +68,10 @@ public class ProjectMember extends BaseEntity {
         this.status = MemberStatus.ACTIVE;
     }
 
+    public void leave() {
+        this.status = MemberStatus.EXIT;
+    }
+
     public void assignRole(ProjectRole role) {
         this.role = role;
     }
