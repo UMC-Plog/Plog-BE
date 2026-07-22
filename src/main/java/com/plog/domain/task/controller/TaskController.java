@@ -2,6 +2,8 @@ package com.plog.domain.task.controller;
 
 import com.plog.domain.task.dto.request.TaskCreateRequest;
 import com.plog.domain.task.dto.response.TaskCreateResponse;
+import com.plog.domain.task.dto.response.TaskListResponse;
+import com.plog.domain.task.dto.response.TaskSummaryResponse;
 import com.plog.global.api.response.TaskSuccessCode;
 import com.plog.domain.task.service.TaskService;
 import com.plog.global.api.response.ApiResponse;
@@ -10,11 +12,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @Tag(name = "Task", description = "업무카드 API")
 @RestController
@@ -46,11 +46,32 @@ public class TaskController {
     @PostMapping
     public ResponseEntity<ApiResponse<TaskCreateResponse>> createTask(
             @PathVariable Long projectId,
-            @AuthenticationPrincipal Long userId, // JwtAuthenticationFilter가 세팅한 principal(Long userId)
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody TaskCreateRequest request
     ) {
         TaskCreateResponse response = taskService.createTask(projectId, userId, request);
         return ResponseEntity.status(TaskSuccessCode.TASK_CREATED.getHttpStatus())
                 .body(ApiResponse.success(TaskSuccessCode.TASK_CREATED, response));
+    }
+
+    @Operation(
+            summary = "업무카드 목록 조회",
+            description = """
+                    현재 로그인한 사용자가 참여 중인 프로젝트의 업무카드 목록을 조회합니다.
+                    - 로그인 사용자가 해당 프로젝트의 활성(ACTIVE) 멤버가 아니면 접근할 수 없습니다.
+                    - 생성일(createdAt) 오름차순으로 정렬됩니다.
+                    - 각 업무카드의 담당자 정보(담당자 ProjectMember ID, 닉네임, 프로필 url)를 함께 내려줍니다.
+                    - 마감일이 지났고 상태가 완료(DONE)가 아니면 overdue = true 로 표시됩니다.
+                    - 업무카드가 하나도 없으면 빈 배열을 반환합니다.
+                    - 인증 필요(Access Token).
+                    """
+    )
+    @GetMapping
+    public ApiResponse<TaskListResponse> getTaskList(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal Long userId
+    ) {
+        TaskListResponse response = taskService.getTaskList(projectId, userId);
+        return ApiResponse.success(TaskSuccessCode.TASK_LIST_FOUND, response);
     }
 }

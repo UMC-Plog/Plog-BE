@@ -7,10 +7,13 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.domain.task.dto.request.TaskCreateRequest;
 import com.plog.domain.task.dto.response.TaskCreateResponse;
+import com.plog.domain.task.dto.response.TaskListResponse;
+import com.plog.domain.task.dto.response.TaskSummaryResponse;
 import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskAttachment;
 import com.plog.global.api.error.TaskErrorCode;
 import com.plog.domain.task.repository.TaskAttachmentRepository;
+import com.plog.domain.task.repository.TaskAttachmentRepository.TaskAttachmentCount;
 import com.plog.domain.task.repository.TaskRepository;
 import com.plog.global.api.exception.ApiException;
 import com.plog.domain.task.entity.AttachmentType;
@@ -19,6 +22,9 @@ import com.plog.infrastructure.s3.AttachmentUsage;
 import com.plog.infrastructure.s3.FilePromotionEvent;
 import com.plog.infrastructure.s3.FileStorageService;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -91,6 +97,34 @@ public class TaskService {
                         attachment, resolveUrl(attachment)))
                 .toList();
         return TaskCreateResponse.from(task, attachmentResponses);
+    }
+
+    // 업무카드 목록 조회
+    @Transactional(readOnly = true)
+    public TaskListResponse getTaskList(Long projectId, Long userId) {
+        // 1) 로그인 사용자가 해당 프로젝트의 활성 멤버인지 검증 (프로젝트 존재 여부도 함께 검증됨)
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) Task -> ProjectMember 를 EntityGraph로 함께 조회해 N+1 방지
+        List<Task> tasks = taskRepository.findAllByProjectMember_Project_IdOrderByCreatedAtAsc(projectId);
+        if (tasks.isEmpty()) {
+            return TaskListResponse.of(List.of());
+        }
+
+        // 3) 첨부파일은 이제 "개수"만 필요하므로, 전체 엔티티를 가져오지 않고
+        //    taskId별 count(*) 집계 쿼리 하나로 끝낸다 (다운로드 URL 발급도 필요 없어짐).
+        List<Long> taskIds = tasks.stream().map(Task::getId).toList();
+        Map<Long, Long> attachmentCountByTaskId = taskAttachmentRepository.countByTaskIds(taskIds).stream()
+                .collect(Collectors.toMap(TaskAttachmentCount::getTaskId, TaskAttachmentCount::getCount));
+
+        // 4) Entity를 그대로 넘기지 않고 DTO로 변환
+        List<TaskSummaryResponse> content = tasks.stream()
+                .map(task -> TaskSummaryResponse.from(
+                        task,
+                        attachmentCountByTaskId.getOrDefault(task.getId(), 0L).intValue()))
+                .toList();
+
+        return TaskListResponse.of(content);
     }
 
     private List<TaskAttachment> createAttachments(
