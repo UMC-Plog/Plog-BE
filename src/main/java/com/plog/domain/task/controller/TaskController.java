@@ -2,6 +2,7 @@ package com.plog.domain.task.controller;
 
 import com.plog.domain.task.dto.request.TaskCreateRequest;
 import com.plog.domain.task.dto.response.TaskCreateResponse;
+import com.plog.domain.task.dto.response.TaskDetailResponse;
 import com.plog.domain.task.dto.response.TaskListResponse;
 import com.plog.domain.task.dto.response.TaskSummaryResponse;
 import com.plog.global.api.response.TaskSuccessCode;
@@ -73,5 +74,30 @@ public class TaskController {
     ) {
         TaskListResponse response = taskService.getTaskList(projectId, userId);
         return ApiResponse.success(TaskSuccessCode.TASK_LIST_FOUND, response);
+    }
+
+    @Operation(
+            summary = "업무카드 상세 조회",
+            description = """
+                업무카드 하나의 상세 정보를 조회합니다.
+                - 로그인 사용자가 해당 프로젝트의 활성(ACTIVE) 멤버가 아니면 접근할 수 없습니다.
+                - taskId가 존재하지 않거나 URL의 projectId 소속이 아니면 TASK007을 반환합니다.
+                - 담당자 정보(닉네임, 프로필 이미지)를 assignee 객체로 함께 내려줍니다.
+                - 첨부 산출물 전체 목록(파일명, 용량, 다운로드 URL)을 내려줍니다.
+                - dDay: 마감일까지 남은 일수(음수면 지남).
+                - isOverdue: 마감일이 지났고 완료(DONE)가 아닌 경우 true.
+                - isImminent: 완료되지 않았고 마감일까지 D-3 이내(D-3~D-0)인 경우 true. isOverdue와는 배타적입니다.
+                - completedAt은 상태가 완료(DONE)일 때만 값이 있습니다.
+                - 인증 필요(Access Token).
+                """
+    )
+    @GetMapping("/{taskId}")
+    public ApiResponse<TaskDetailResponse> getTaskDetail(
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal Long userId
+    ) {
+        TaskDetailResponse response = taskService.getTaskDetail(projectId, taskId, userId);
+        return ApiResponse.success(TaskSuccessCode.TASK_DETAIL_FOUND, response);
     }
 }
