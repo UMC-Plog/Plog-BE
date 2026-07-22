@@ -95,4 +95,15 @@ public class Task extends BaseEntity {
     public void changeEndDate(LocalDate endDate) {
         this.endDate = endDate;
     }
+
+    // 상태 변경 전용. DONE으로 바뀌면 완료일을 기록하고, DONE에서 벗어나면 완료일을 지운다.
+    public void changeStatus(TaskStatus cardStatus) {
+        TaskStatus previousStatus = this.cardStatus;
+        this.cardStatus = cardStatus;
+        if (cardStatus == TaskStatus.DONE && previousStatus != TaskStatus.DONE) {
+            this.completedAt = TimeUtil.nowUtc();
+        } else if (cardStatus != TaskStatus.DONE) {
+            this.completedAt = null;
+        }
+    }
 }
