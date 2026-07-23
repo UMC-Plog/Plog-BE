@@ -307,8 +307,14 @@ public class TaskService {
             throw new ApiException(TaskErrorCode.INVALID_ATTACHMENT);
         }
 
-        // 4) 기존 개수 + 이번 1건이 최대치를 넘지 않는지 확인
-        long existingCount = taskAttachmentRepository.findAllByTaskId(taskId).size();
+        // 4) 여기서부터 "개수 확인 -> insert"를 원자적으로 묶는다.
+        //    같은 taskId 행에 PESSIMISTIC_WRITE 락을 걸어, 동시에 들어온 두 요청이
+        //    각자 "9개니까 통과"라고 잘못 판단해서 둘 다 insert하는 것(레이스 컨디션)을 막는다.
+        //    먼저 도착한 트랜잭션이 커밋(또는 롤백)할 때까지 나머지 요청은 이 지점에서 대기한다.
+        taskRepository.findByIdForUpdate(taskId);
+
+        // 5) 전체 목록이 아니라 개수만 조회 (COUNT 쿼리 1번, 락이 걸린 상태라 이 값은 안전하게 최신값)
+        long existingCount = taskAttachmentRepository.countByTaskId(taskId);
         attachmentPolicy.validateCount((int) existingCount + 1, TaskErrorCode.TASK_ATTACHMENT_LIMIT_EXCEEDED);
 
         String storedValue;
@@ -322,7 +328,7 @@ public class TaskService {
             storedValue = request.fileUrl();
         }
 
-        // 5) 저장 + 커밋 후 영구 파일로 승격 (FILE인 경우만)
+        // 6) 저장 — 락을 잡은 채로 insert까지 끝내고 트랜잭션 커밋 시점에 락 해제
         TaskAttachment attachment = TaskAttachment.create(
                 task, request.attachmentType(), request.fileName(), request.fileSize(), storedValue);
         taskAttachmentRepository.save(attachment);

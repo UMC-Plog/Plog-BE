@@ -24,7 +24,11 @@ public interface TaskAttachmentRepository extends JpaRepository<TaskAttachment, 
     @Query("select ta.task.id as taskId, count(ta) as count "
             + "from TaskAttachment ta where ta.task.id in :taskIds "
             + "group by ta.task.id")
+
     List<TaskAttachmentCount> countByTaskIds(@Param("taskIds") List<Long> taskIds);
+
+    // 전체 목록을 안 가져오고 개수만 센다 (COUNT(*) 쿼리 1번)
+    long countByTaskId(Long taskId);
 
     interface TaskAttachmentCount {
         Long getTaskId();
