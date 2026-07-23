@@ -21,9 +21,10 @@ import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
 import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.AttachmentUsage;
-import com.plog.infrastructure.s3.FileDeletionEvent;
-import com.plog.infrastructure.s3.FileStorageService;
+import com.plog.infrastructure.s3.FileKeyLockService;
 import com.plog.infrastructure.s3.FilePromotionEvent;
+import com.plog.infrastructure.s3.FileStorageService;
+import com.plog.infrastructure.s3.PostFileDeletionEvent;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -50,6 +51,7 @@ public class PostService {
     private final ProjectMemberRepository projectMemberRepository;
     private final FileStorageService fileStorageService;
     private final AttachmentPolicy attachmentPolicy;
+    private final FileKeyLockService fileKeyLockService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
@@ -61,6 +63,7 @@ public class PostService {
         }
         String content = requireContent(request.content(), 5000);
         List<PostDto.AttachmentRequest> attachments = safeAttachments(request.attachments());
+        lockPostFileKeys(attachments);
         validateAttachments(userId, attachments);
         if (request.isNotice()) {
             projectRepository.findByIdForUpdate(projectId)
@@ -124,6 +127,7 @@ public class PostService {
         }
         List<PostAttachment> resultingAttachments;
         if (request.attachments() != null) {
+            lockPostFileKeys(request.attachments());
             validateAttachments(userId, request.attachments());
             List<PostAttachment> previous = attachmentRepository.findAllByPostIdOrderByIdAsc(postId);
             List<String> nextFileKeys = request.attachments().stream()
@@ -137,9 +141,7 @@ public class PostService {
             attachmentRepository.flush();
             resultingAttachments = saveAttachments(post, request.attachments());
             publishPromotions(resultingAttachments);
-            if (!removedFileKeys.isEmpty()) {
-                eventPublisher.publishEvent(new FileDeletionEvent(removedFileKeys));
-            }
+            publishPostFileDeletionCandidates(removedFileKeys);
         } else {
             resultingAttachments = attachmentRepository.findAllByPostIdOrderByIdAsc(postId);
         }
@@ -160,9 +162,7 @@ public class PostService {
                 .map(PostAttachment::getFileUrl).toList();
         postRepository.delete(post);
         postRepository.flush();
-        if (!fileKeys.isEmpty()) {
-            eventPublisher.publishEvent(new FileDeletionEvent(fileKeys));
-        }
+        publishPostFileDeletionCandidates(fileKeys);
         return new PostDto.DeletedResponse(true);
     }
 
@@ -317,6 +317,20 @@ public class PostService {
         if (!fileKeys.isEmpty()) {
             eventPublisher.publishEvent(new FilePromotionEvent(fileKeys));
         }
+    }
+
+    private void publishPostFileDeletionCandidates(List<String> candidateFileKeys) {
+        List<String> distinctFileKeys = candidateFileKeys.stream().distinct().toList();
+        if (!distinctFileKeys.isEmpty()) {
+            eventPublisher.publishEvent(new PostFileDeletionEvent(distinctFileKeys));
+        }
+    }
+
+    private void lockPostFileKeys(List<PostDto.AttachmentRequest> requests) {
+        fileKeyLockService.lockAll(requests.stream()
+                .filter(request -> request != null && request.attachmentType() == AttachmentType.FILE)
+                .map(PostDto.AttachmentRequest::fileKey)
+                .toList());
     }
 
     private void validateAttachments(Long userId, List<PostDto.AttachmentRequest> requests) {
