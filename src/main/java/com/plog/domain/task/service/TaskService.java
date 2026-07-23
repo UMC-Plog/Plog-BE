@@ -12,6 +12,7 @@ import com.plog.domain.task.dto.request.TaskUpdateRequest;
 import com.plog.domain.task.dto.response.*;
 import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskAttachment;
+import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.error.TaskErrorCode;
 import com.plog.domain.task.repository.TaskAttachmentRepository;
 import com.plog.domain.task.repository.TaskAttachmentRepository.TaskAttachmentCount;
@@ -367,5 +368,38 @@ public class TaskService {
         }
 
         return new TaskDeleteResponse(true);
+    }
+
+    // 특정 프로젝트 멤버(담당자) 기준 업무카드 목록 조회
+    @Transactional(readOnly = true)
+    public TaskListResponse getTasksByMember(Long projectId, Long projectMemberId, Long userId) {
+        // 1) 로그인 사용자가 해당 프로젝트의 활성 멤버인지 검증
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) 조회 대상 멤버가 실제 이 프로젝트 소속이고, 활성 상태인지 검증
+        ProjectMember targetMember = projectMemberRepository.findById(projectMemberId)
+                .orElseThrow(() -> new ApiException(ProjectErrorCode.MEMBER_NOT_FOUND));
+        if (!targetMember.getProject().getId().equals(projectId) || targetMember.getStatus() != MemberStatus.ACTIVE) {
+            throw new ApiException(ProjectErrorCode.MEMBER_NOT_FOUND);
+        }
+
+
+        // 3) 목록 조회와 동일한 방식으로 EntityGraph + count 집계 재사용
+        List<Task> tasks = taskRepository.findAllByProjectMember_IdOrderByCreatedAtAsc(projectMemberId);
+        if (tasks.isEmpty()) {
+            return TaskListResponse.of(List.of());
+        }
+
+        List<Long> taskIds = tasks.stream().map(Task::getId).toList();
+        Map<Long, Long> attachmentCountByTaskId = taskAttachmentRepository.countByTaskIds(taskIds).stream()
+                .collect(Collectors.toMap(TaskAttachmentCount::getTaskId, TaskAttachmentCount::getCount));
+
+        List<TaskSummaryResponse> content = tasks.stream()
+                .map(task -> TaskSummaryResponse.from(
+                        task,
+                        attachmentCountByTaskId.getOrDefault(task.getId(), 0L).intValue()))
+                .toList();
+
+        return TaskListResponse.of(content);
     }
 }
