@@ -252,7 +252,7 @@ public class TaskService {
         if (requests == null || requests.isEmpty()) {
             return List.of();
         }
-        attachmentPolicy.validateCount(requests.size(), TaskErrorCode.INVALID_ATTACHMENT);
+        attachmentPolicy.validateCount(requests.size(), TaskErrorCode.TASK_ATTACHMENT_LIMIT_EXCEEDED);
         for (TaskCreateRequest.TaskAttachmentRequest request : requests) {
             if (request.attachmentType() == AttachmentType.EXTERNAL) {
                 throw new ApiException(TaskErrorCode.INVALID_ATTACHMENT);
