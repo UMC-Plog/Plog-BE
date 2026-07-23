@@ -7,6 +7,8 @@ import com.plog.domain.chat.repository.ChatRoomRepository;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
+import com.plog.global.api.error.ChatErrorCode;
+import com.plog.global.api.exception.ApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,5 +41,20 @@ public class ChatMessageAppender {
         if (!roomProjectId.equals(memberProjectId) || member.getStatus() != MemberStatus.ACTIVE) {
             throw new IllegalArgumentException("ACTIVE 채팅방 멤버만 메시지를 기록할 수 있습니다.");
         }
+    }
+
+    /** WebSocket 경로 전용: STOMP Principal의 userId로 프로젝트 멤버를 찾아 메시지를 남긴다. */
+    @Transactional
+    public ChatMessage appendByUser(Long chatRoomId, Long userId, String message) {
+        ChatRoom room = chatRoomRepository.findByIdForMessageAppend(chatRoomId)
+                .orElseThrow(() -> new ApiException(ChatErrorCode.FORBIDDEN_CHAT_ROOM_ACCESS));
+        ProjectMember member = projectMemberRepository
+                .findByProjectIdAndUserIdAndStatus(room.getProject().getId(), userId, MemberStatus.ACTIVE)
+                .orElseThrow(() -> new ApiException(ChatErrorCode.FORBIDDEN_CHAT_ROOM_ACCESS));
+
+        long messageSequence = room.issueNextMessageSequence();
+        return chatMessageRepository.save(
+                ChatMessage.create(room, member, message, messageSequence)
+        );
     }
 }
