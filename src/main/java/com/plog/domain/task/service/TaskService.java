@@ -5,6 +5,7 @@ import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.task.dto.request.TaskAttachmentAddRequest;
 import com.plog.domain.task.dto.request.TaskCreateRequest;
 import com.plog.domain.task.dto.request.TaskStatusUpdateRequest;
 import com.plog.domain.task.dto.request.TaskUpdateRequest;
@@ -245,6 +246,7 @@ public class TaskService {
         return TaskStatusUpdateResponse.from(task);
     }
 
+    // 업무카드 생성할 때
     private List<TaskAttachment> createAttachments(
             Task task, Long userId, List<TaskCreateRequest.TaskAttachmentRequest> requests) {
         if (requests == null || requests.isEmpty()) {
@@ -287,5 +289,77 @@ public class TaskService {
                 ? fileStorageService.createDownloadUrl(
                         AttachmentUsage.TASK, attachment.getFileUrl(), attachment.getFileName())
                 : attachment.getFileUrl();
+    }
+
+    // 첨부파일 등록 — 기존 카드에 산출물 단건 추가 (생성 시 함께 등록하는 것과 별개 경로).
+    @Transactional
+    public TaskAttachmentAddResponse addAttachment(
+            Long projectId, Long taskId, Long userId, TaskAttachmentAddRequest request) {
+        // 1) 활성 멤버면 누구나 등록 가능
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) 소속 검증까지 포함된 단건 조회
+        Task task = taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+
+        // 3) EXTERNAL 타입 거부, FILE/LINK 검증
+        if (request.attachmentType() == AttachmentType.EXTERNAL) {
+            throw new ApiException(TaskErrorCode.INVALID_ATTACHMENT);
+        }
+
+        // 4) 기존 개수 + 이번 1건이 최대치를 넘지 않는지 확인
+        long existingCount = taskAttachmentRepository.findAllByTaskId(taskId).size();
+        attachmentPolicy.validateCount((int) existingCount + 1, TaskErrorCode.TASK_ATTACHMENT_LIMIT_EXCEEDED);
+
+        String storedValue;
+        if (request.attachmentType() == AttachmentType.FILE) {
+            attachmentPolicy.validateFileAttachment(AttachmentUsage.TASK, userId,
+                    request.fileName(), request.fileSize(), request.fileKey(),
+                    TaskErrorCode.INVALID_ATTACHMENT);
+            storedValue = request.fileKey();
+        } else {
+            attachmentPolicy.validateLink(request.fileUrl(), TaskErrorCode.INVALID_LINK_URL);
+            storedValue = request.fileUrl();
+        }
+
+        // 5) 저장 + 커밋 후 영구 파일로 승격 (FILE인 경우만)
+        TaskAttachment attachment = TaskAttachment.create(
+                task, request.attachmentType(), request.fileName(), request.fileSize(), storedValue);
+        taskAttachmentRepository.save(attachment);
+        if (request.attachmentType() == AttachmentType.FILE) {
+            eventPublisher.publishEvent(new FilePromotionEvent(List.of(storedValue)));
+        }
+
+        return TaskAttachmentAddResponse.of(attachment, resolveUrl(attachment));
+    }
+
+    // 첨부파일 삭제
+    @Transactional
+    public TaskDeleteResponse deleteAttachment(
+            Long projectId, Long taskId, Long taskAttachmentId, Long userId) {
+        // 1) 활성 멤버면 누구나 삭제 가능
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) taskId가 이 프로젝트 소속인지 먼저 확인
+        taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+
+        // 3) 삭제 대상 첨부파일이 실제로 그 taskId 소속인지 확인
+        //    (다른 카드의 taskAttachmentId를 URL의 taskId에 끼워 넣는 것을 차단)
+        TaskAttachment attachment = taskAttachmentRepository.findByIdAndTaskId(taskAttachmentId, taskId)
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_ATTACHMENT_NOT_FOUND));
+
+        boolean isFile = attachment.getAttachmentType() == AttachmentType.FILE;
+        String fileKey = attachment.getFileUrl();
+
+        taskAttachmentRepository.delete(attachment);
+        taskAttachmentRepository.flush();
+
+        // 4) FILE 타입이면 S3 실물 파일도 커밋 후 비동기 삭제
+        if (isFile) {
+            eventPublisher.publishEvent(new FileDeletionEvent(List.of(fileKey)));
+        }
+
+        return new TaskDeleteResponse(true);
     }
 }
