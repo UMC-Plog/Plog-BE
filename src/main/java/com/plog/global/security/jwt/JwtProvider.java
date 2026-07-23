@@ -2,6 +2,7 @@ package com.plog.global.security.jwt;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -35,13 +36,18 @@ public class JwtProvider {
                 .compact();
     }
 
-    /** 서명·만료 검증 후 subject(userId) 반환. 실패 시 JwtException 계열(ExpiredJwtException 포함)을 던진다. */
+    /** 서명·만료 검증 후 subject(userId) 반환. 실패 시 JwtException 계열(ExpiredJwtException,MalformedJwtException 포함)을 던진다.
+     * subject가 숫자가 아닌 경우도 포함. */
     public Long parseUserId(String token) {
         Claims claims = Jwts.parser()
                 .verifyWith(key)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
-        return Long.valueOf(claims.getSubject());
+        try {
+            return Long.valueOf(claims.getSubject());
+        } catch (NumberFormatException exception) {
+            throw new MalformedJwtException("토큰 subject가 유효한 사용자 ID 형식이 아닙니다.", exception);
+        }
     }
 }

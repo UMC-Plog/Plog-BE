@@ -1,6 +1,7 @@
 package com.plog.global.config;
 
 import com.plog.domain.chat.service.ChatSubscriptionInterceptor;
+import com.plog.infrastructure.websocket.BrokerDestinations;
 import com.plog.infrastructure.websocket.StompAuthChannelInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
@@ -29,7 +30,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         registry.setApplicationDestinationPrefixes("/app");
-        registry.enableSimpleBroker("/topic", "/queue");
+        registry.enableSimpleBroker(BrokerDestinations.PREFIXES);
     }
 
     @Override
