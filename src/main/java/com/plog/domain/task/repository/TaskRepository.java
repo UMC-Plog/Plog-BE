@@ -5,8 +5,10 @@ import com.plog.domain.task.entity.TaskStatus;
 import java.util.List;
 import java.util.Optional;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -31,6 +33,12 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
             @Param("projectIds") List<Long> projectIds,
             @Param("doneStatus") TaskStatus doneStatus
     );
+
+    // 첨부파일 개수 검증 + insert를 원자적으로 만들기 위한 락.
+    // 같은 taskId에 대한 동시 등록 요청을 이 줄에서 직렬화한다 (하나가 커밋될 때까지 나머지는 대기).
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select task from Task task where task.id = :taskId")
+    Optional<Task> findByIdForUpdate(@Param("taskId") Long taskId);
 
     interface ProjectTaskProgress {
         Long getProjectId();

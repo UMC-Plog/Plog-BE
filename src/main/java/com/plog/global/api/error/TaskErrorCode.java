@@ -17,7 +17,9 @@ public enum TaskErrorCode implements BaseErrorCode {
     INVALID_CATEGORY_FOR_PROJECT_TYPE(HttpStatus.BAD_REQUEST, "TASK004", "프로젝트 유형에 맞지 않는 담당 영역입니다."),
     INVALID_ATTACHMENT(HttpStatus.BAD_REQUEST, "TASK005", "첨부 요청이 올바르지 않습니다."),
     INVALID_LINK_URL(HttpStatus.BAD_REQUEST, "TASK006", "허용되지 않는 링크입니다."),
-    TASK_NOT_FOUND(HttpStatus.NOT_FOUND, "TASK007", "업무 카드를 찾을 수 없습니다.");
+    TASK_NOT_FOUND(HttpStatus.NOT_FOUND, "TASK007", "업무 카드를 찾을 수 없습니다."),
+    TASK_ATTACHMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "TASK008", "첨부파일을 찾을 수 없습니다."),
+    TASK_ATTACHMENT_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "TASK009", "첨부파일은 최대 10개까지 등록할 수 있습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
