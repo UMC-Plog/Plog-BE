@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -137,9 +138,7 @@ public class PostService {
             attachmentRepository.flush();
             resultingAttachments = saveAttachments(post, request.attachments());
             publishPromotions(resultingAttachments);
-            if (!removedFileKeys.isEmpty()) {
-                eventPublisher.publishEvent(new FileDeletionEvent(removedFileKeys));
-            }
+            publishDeletionsForUnreferencedFiles(removedFileKeys);
         } else {
             resultingAttachments = attachmentRepository.findAllByPostIdOrderByIdAsc(postId);
         }
@@ -160,9 +159,7 @@ public class PostService {
                 .map(PostAttachment::getFileUrl).toList();
         postRepository.delete(post);
         postRepository.flush();
-        if (!fileKeys.isEmpty()) {
-            eventPublisher.publishEvent(new FileDeletionEvent(fileKeys));
-        }
+        publishDeletionsForUnreferencedFiles(fileKeys);
         return new PostDto.DeletedResponse(true);
     }
 
@@ -316,6 +313,21 @@ public class PostService {
                 .map(PostAttachment::getFileUrl).toList();
         if (!fileKeys.isEmpty()) {
             eventPublisher.publishEvent(new FilePromotionEvent(fileKeys));
+        }
+    }
+
+    private void publishDeletionsForUnreferencedFiles(List<String> candidateFileKeys) {
+        List<String> distinctFileKeys = candidateFileKeys.stream().distinct().toList();
+        if (distinctFileKeys.isEmpty()) {
+            return;
+        }
+        Set<String> referencedFileKeys = Set.copyOf(
+                attachmentRepository.findReferencedFileUrls(AttachmentType.FILE, distinctFileKeys));
+        List<String> unreferencedFileKeys = distinctFileKeys.stream()
+                .filter(fileKey -> !referencedFileKeys.contains(fileKey))
+                .toList();
+        if (!unreferencedFileKeys.isEmpty()) {
+            eventPublisher.publishEvent(new FileDeletionEvent(unreferencedFileKeys));
         }
     }
 

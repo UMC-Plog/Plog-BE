@@ -1,6 +1,10 @@
 package com.plog.e2e.post;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.plog.e2e.support.E2eTestBase;
@@ -12,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 
 @DisplayName("PostController E2E")
 class PostControllerE2eTest extends E2eTestBase {
@@ -172,6 +177,32 @@ class PostControllerE2eTest extends E2eTestBase {
         }
 
         @Test
+        @DisplayName("공유 FILE 첨부를 제거해도 다른 게시글이 참조 중이면 S3 객체를 유지한다")
+        void keepsSharedFileWhenReplacingAttachments() {
+            Long userId = saveUser("update-shared-file");
+            Long projectId = saveProject("update-shared-file");
+            Long memberId = saveMember(userId, projectId, "MEMBER", "ACTIVE", "작성자");
+            Long firstPostId = savePost(memberId, "첫 게시글", false);
+            Long secondPostId = savePost(memberId, "두 번째 게시글", false);
+            String fileKey = "temporary/post/users/" + userId + "/shared/report.pdf";
+            saveFileAttachment(firstPostId, fileKey);
+            saveFileAttachment(secondPostId, fileKey);
+
+            ResponseEntity<JsonNode> response = request(
+                    HttpMethod.PATCH, post(projectId, firstPostId), userId, Map.of("attachments", List.of()));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(count("post_attachments", "post_id", firstPostId)).isZero();
+            assertThat(count("post_attachments", "post_id", secondPostId)).isEqualTo(1L);
+            verify(s3Client, after(500).never()).deleteObject(
+                    argThat((DeleteObjectRequest request) -> fileKey.equals(request.key())));
+
+            request(HttpMethod.DELETE, post(projectId, secondPostId), userId, null);
+            verify(s3Client, timeout(2_000)).deleteObject(
+                    argThat((DeleteObjectRequest request) -> fileKey.equals(request.key())));
+        }
+
+        @Test
         @DisplayName("게시글 작성자가 아니면 수정을 거부한다")
         void authorOnly() {
             Long authorId = saveUser("update-owner");
@@ -191,6 +222,30 @@ class PostControllerE2eTest extends E2eTestBase {
     @Nested
     @DisplayName("DELETE /projects/{projectId}/posts/{postId}")
     class DeletePost {
+
+        @Test
+        @DisplayName("공유 FILE 첨부는 마지막 게시글이 삭제될 때만 S3 객체를 삭제한다")
+        void deletesSharedFileAfterLastReferenceIsRemoved() {
+            Long userId = saveUser("delete-shared-file");
+            Long projectId = saveProject("delete-shared-file");
+            Long memberId = saveMember(userId, projectId, "MEMBER", "ACTIVE", "작성자");
+            Long firstPostId = savePost(memberId, "첫 게시글", false);
+            Long secondPostId = savePost(memberId, "두 번째 게시글", false);
+            String fileKey = "temporary/post/users/" + userId + "/shared/report.pdf";
+            saveFileAttachment(firstPostId, fileKey);
+            saveFileAttachment(secondPostId, fileKey);
+
+            request(HttpMethod.DELETE, post(projectId, firstPostId), userId, null);
+
+            assertThat(count("posts", "post_id", firstPostId)).isZero();
+            assertThat(count("post_attachments", "post_id", secondPostId)).isEqualTo(1L);
+            verify(s3Client, after(500).never()).deleteObject(
+                    argThat((DeleteObjectRequest request) -> fileKey.equals(request.key())));
+
+            request(HttpMethod.DELETE, post(projectId, secondPostId), userId, null);
+            verify(s3Client, timeout(2_000)).deleteObject(
+                    argThat((DeleteObjectRequest request) -> fileKey.equals(request.key())));
+        }
 
         @Test
         @DisplayName("게시글과 첨부·댓글·좋아요를 물리 삭제한다")
@@ -383,6 +438,14 @@ class PostControllerE2eTest extends E2eTestBase {
             assertThat(result(duplicate).path("likeCount").asLong()).isZero();
             assertThat(count("likes", "post_id", postId)).isZero();
         }
+    }
+
+    private void saveFileAttachment(Long postId, String fileKey) {
+        jdbc.update("""
+                insert into post_attachments (
+                    post_id, attachment_type, file_url, file_name, file_size, created_at, updated_at
+                ) values (?, 'FILE', ?, 'report.pdf', 1024, now(), now())
+                """, postId, fileKey);
     }
 
     private long count(String table, String column, Long id) {
