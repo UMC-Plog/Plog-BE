@@ -5,7 +5,8 @@ services:
     image: ${DOCKER_IMAGE}          # 예: <dockerhub-id>/plog-be:latest  (.env 에서 주입)
     container_name: plog-be
     ports:
-      - "8080:8080"
+      # 외부 트래픽은 호스트 nginx(443)만 받고, 앱은 nginx를 통해서만 접근 → 127.0.0.1 바인딩으로 8080 직접노출 차단
+      - "127.0.0.1:8080:8080"
     env_file:
       - .env                        # DB_* / JWT_SECRET / MAIL_* 주입
     environment:
