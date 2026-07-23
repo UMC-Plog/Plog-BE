@@ -12,6 +12,7 @@ import com.plog.domain.task.dto.request.TaskUpdateRequest;
 import com.plog.domain.task.dto.response.*;
 import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskAttachment;
+import com.plog.domain.task.entity.TaskStatus;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.error.TaskErrorCode;
 import com.plog.domain.task.repository.TaskAttachmentRepository;
@@ -21,6 +22,7 @@ import com.plog.global.api.exception.ApiException;
 import com.plog.domain.task.entity.AttachmentType;
 import com.plog.infrastructure.s3.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -390,6 +392,34 @@ public class TaskService {
             return TaskListResponse.of(List.of());
         }
 
+        List<Long> taskIds = tasks.stream().map(Task::getId).toList();
+        Map<Long, Long> attachmentCountByTaskId = taskAttachmentRepository.countByTaskIds(taskIds).stream()
+                .collect(Collectors.toMap(TaskAttachmentCount::getTaskId, TaskAttachmentCount::getCount));
+
+        List<TaskSummaryResponse> content = tasks.stream()
+                .map(task -> TaskSummaryResponse.from(
+                        task,
+                        attachmentCountByTaskId.getOrDefault(task.getId(), 0L).intValue()))
+                .toList();
+
+        return TaskListResponse.of(content);
+    }
+
+    // 마감일 초과 업무카드 조회
+    @Transactional(readOnly = true)
+    public TaskListResponse getOverdueTasks(Long projectId, Long userId) {
+        // 1) 로그인 사용자가 해당 프로젝트의 활성 멤버인지 검증
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) 마감일 < 오늘 && 완료(DONE) 아님 조건으로 필터링된 목록 조회
+        //    (TaskSummaryResponse.isOverdue()와 동일한 판정 기준을 쿼리 레벨에서 재사용)
+        List<Task> tasks = taskRepository.findOverdueTasksByProjectId(
+                projectId, LocalDate.now(), TaskStatus.DONE);
+        if (tasks.isEmpty()) {
+            return TaskListResponse.of(List.of());
+        }
+
+        // 3) 첨부파일 개수 집계는 목록 조회와 동일한 방식으로 재사용
         List<Long> taskIds = tasks.stream().map(Task::getId).toList();
         Map<Long, Long> attachmentCountByTaskId = taskAttachmentRepository.countByTaskIds(taskIds).stream()
                 .collect(Collectors.toMap(TaskAttachmentCount::getTaskId, TaskAttachmentCount::getCount));
