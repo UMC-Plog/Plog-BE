@@ -2,9 +2,13 @@ package com.plog.domain.post.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.plog.domain.post.dto.PostDto;
+import com.plog.domain.post.entity.AttachmentType;
 import com.plog.domain.post.entity.Post;
 import com.plog.domain.post.exception.PostErrorCode;
 import com.plog.domain.post.repository.CommentRepository;
@@ -19,11 +23,15 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.exception.ApiException;
 import com.plog.infrastructure.s3.AttachmentPolicy;
+import com.plog.infrastructure.s3.AttachmentUsage;
+import com.plog.infrastructure.s3.FileKeyLockService;
 import com.plog.infrastructure.s3.FileStorageService;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -38,6 +46,7 @@ class PostServicePolicyTest {
     @Mock private ProjectMemberRepository projectMemberRepository;
     @Mock private FileStorageService fileStorageService;
     @Mock private AttachmentPolicy attachmentPolicy;
+    @Mock private FileKeyLockService fileKeyLockService;
     @Mock private ApplicationEventPublisher eventPublisher;
 
     private PostService service;
@@ -53,6 +62,7 @@ class PostServicePolicyTest {
                 projectMemberRepository,
                 fileStorageService,
                 attachmentPolicy,
+                fileKeyLockService,
                 eventPublisher
         );
     }
@@ -79,6 +89,33 @@ class PostServicePolicyTest {
         assertThatThrownBy(() -> service.getPost(404L, 1L, 7L))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(ProjectApiErrorCode.PROJECT_NOT_FOUND));
+    }
+
+    @Test
+    void locksFileKeyBeforeValidatingNewPostReference() {
+        ProjectMember member = ProjectMember.builder()
+                .id(3L).role(ProjectRole.MEMBER).status(MemberStatus.ACTIVE).build();
+        String fileKey = "temporary/post/users/7/file-id/report.pdf";
+        when(projectRepository.existsById(1L)).thenReturn(true);
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(member));
+        doThrow(new ApiException(PostErrorCode.VALIDATION_ERROR))
+                .when(attachmentPolicy)
+                .validateFileAttachment(
+                        AttachmentUsage.POST, 7L, "report.pdf", 1024L, fileKey,
+                        PostErrorCode.VALIDATION_ERROR);
+        PostDto.AttachmentRequest attachment = new PostDto.AttachmentRequest(
+                AttachmentType.FILE, "report.pdf", 1024L, fileKey, null);
+
+        assertThatThrownBy(() -> service.createPost(
+                1L, 7L, new PostDto.CreateRequest("post", false, List.of(attachment))))
+                .isInstanceOf(ApiException.class);
+
+        InOrder order = inOrder(fileKeyLockService, attachmentPolicy);
+        order.verify(fileKeyLockService).lockAll(List.of(fileKey));
+        order.verify(attachmentPolicy).validateFileAttachment(
+                AttachmentUsage.POST, 7L, "report.pdf", 1024L, fileKey,
+                PostErrorCode.VALIDATION_ERROR);
     }
 
     @Test

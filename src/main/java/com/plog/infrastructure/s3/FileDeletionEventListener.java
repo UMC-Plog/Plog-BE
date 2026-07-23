@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -15,6 +17,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class FileDeletionEventListener {
     private final FileStorageService fileStorageService;
     private final PostAttachmentRepository postAttachmentRepository;
+    private final FileKeyLockService fileKeyLockService;
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -25,8 +28,10 @@ public class FileDeletionEventListener {
     }
 
     @Async
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void deletePostFiles(PostFileDeletionEvent event) {
+        fileKeyLockService.lockAll(event.fileKeys());
         for (String fileKey : event.fileKeys()) {
             retry(fileKey, "delete", () -> {
                 if (!postAttachmentRepository.existsByAttachmentTypeAndFileUrl(AttachmentType.FILE, fileKey)) {

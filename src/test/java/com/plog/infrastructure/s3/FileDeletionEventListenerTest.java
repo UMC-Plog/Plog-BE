@@ -19,12 +19,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class FileDeletionEventListenerTest {
     @Mock private FileStorageService fileStorageService;
     @Mock private PostAttachmentRepository postAttachmentRepository;
+    @Mock private FileKeyLockService fileKeyLockService;
 
     private FileDeletionEventListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new FileDeletionEventListener(fileStorageService, postAttachmentRepository);
+        listener = new FileDeletionEventListener(
+                fileStorageService, postAttachmentRepository, fileKeyLockService);
     }
 
     @Test
@@ -43,10 +45,11 @@ class FileDeletionEventListenerTest {
         String fileKey = "temporary/post/users/1/shared/report.pdf";
         when(postAttachmentRepository.existsByAttachmentTypeAndFileUrl(AttachmentType.FILE, fileKey))
                 .thenReturn(false);
-        InOrder order = inOrder(postAttachmentRepository, fileStorageService);
+        InOrder order = inOrder(fileKeyLockService, postAttachmentRepository, fileStorageService);
 
         listener.deletePostFiles(new PostFileDeletionEvent(List.of(fileKey)));
 
+        order.verify(fileKeyLockService).lockAll(List.of(fileKey));
         order.verify(postAttachmentRepository)
                 .existsByAttachmentTypeAndFileUrl(AttachmentType.FILE, fileKey);
         order.verify(fileStorageService).delete(fileKey);
