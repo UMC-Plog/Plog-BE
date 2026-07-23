@@ -21,7 +21,7 @@ import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
 import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.AttachmentUsage;
-import com.plog.infrastructure.s3.FileDeletionEvent;
+import com.plog.infrastructure.s3.PostFileDeletionEvent;
 import com.plog.infrastructure.s3.FileStorageService;
 import com.plog.infrastructure.s3.FilePromotionEvent;
 import java.time.Instant;
@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -138,7 +137,7 @@ public class PostService {
             attachmentRepository.flush();
             resultingAttachments = saveAttachments(post, request.attachments());
             publishPromotions(resultingAttachments);
-            publishDeletionsForUnreferencedFiles(removedFileKeys);
+            publishPostFileDeletionCandidates(removedFileKeys);
         } else {
             resultingAttachments = attachmentRepository.findAllByPostIdOrderByIdAsc(postId);
         }
@@ -159,7 +158,7 @@ public class PostService {
                 .map(PostAttachment::getFileUrl).toList();
         postRepository.delete(post);
         postRepository.flush();
-        publishDeletionsForUnreferencedFiles(fileKeys);
+        publishPostFileDeletionCandidates(fileKeys);
         return new PostDto.DeletedResponse(true);
     }
 
@@ -316,18 +315,10 @@ public class PostService {
         }
     }
 
-    private void publishDeletionsForUnreferencedFiles(List<String> candidateFileKeys) {
+    private void publishPostFileDeletionCandidates(List<String> candidateFileKeys) {
         List<String> distinctFileKeys = candidateFileKeys.stream().distinct().toList();
-        if (distinctFileKeys.isEmpty()) {
-            return;
-        }
-        Set<String> referencedFileKeys = Set.copyOf(
-                attachmentRepository.findReferencedFileUrls(AttachmentType.FILE, distinctFileKeys));
-        List<String> unreferencedFileKeys = distinctFileKeys.stream()
-                .filter(fileKey -> !referencedFileKeys.contains(fileKey))
-                .toList();
-        if (!unreferencedFileKeys.isEmpty()) {
-            eventPublisher.publishEvent(new FileDeletionEvent(unreferencedFileKeys));
+        if (!distinctFileKeys.isEmpty()) {
+            eventPublisher.publishEvent(new PostFileDeletionEvent(distinctFileKeys));
         }
     }
 
