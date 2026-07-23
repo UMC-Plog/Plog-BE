@@ -216,5 +216,25 @@ public class TaskController {
         TaskDeleteResponse response = taskService.deleteAttachment(projectId, taskId, taskAttachmentId, userId);
         return ApiResponse.success(TaskSuccessCode.TASK_ATTACHMENT_DELETED, response);
     }
+
+    @Operation(
+            summary = "마감일 초과 업무카드 조회",
+            description = """
+                    마감일이 지났고 상태가 완료(DONE)가 아닌 업무카드만 조회합니다.
+                    - 로그인 사용자가 해당 프로젝트의 활성 멤버가 아니면 접근할 수 없습니다.
+                    - 마감일이 오래전에 지난 카드부터(endDate 오름차순) 정렬됩니다.
+                    - 응답 형태는 업무카드 목록 조회(GET /tasks) API와 동일합니다.
+                    - 해당하는 카드가 없으면 빈 배열을 반환합니다.
+                    - 인증 필요(Access Token).
+                    """
+    )
+    @GetMapping("/overdue")
+    public ApiResponse<TaskListResponse> getOverdueTasks(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal Long userId
+    ) {
+        TaskListResponse response = taskService.getOverdueTasks(projectId, userId);
+        return ApiResponse.success(TaskSuccessCode.TASK_LIST_FOUND, response);
+    }
   
 }
