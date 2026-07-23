@@ -45,4 +45,8 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
         long getTotalCount();
         long getDoneCount();
     }
+
+    // 특정 담당자(ProjectMember) 기준 업무카드 조회
+    @EntityGraph(attributePaths = {"projectMember", "projectMember.user"})
+    List<Task> findAllByProjectMember_IdOrderByCreatedAtAsc(Long projectMemberId);
 }
