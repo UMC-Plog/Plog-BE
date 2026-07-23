@@ -12,3 +12,15 @@ spring:
     properties:
       hibernate:
         format_sql: false
+
+# CORS 허용 오리진(프론트가 뜨는 주소). 비밀값이 아니라 여기 직접 나열한다.
+# 프론트 배포 시 https 도메인을 이 목록에 추가하고 재배포하면 된다.
+app:
+  cors:
+    allowed-origins:
+      - http://localhost:5173   # Vite 로컬 프론트 (배포된 API로 개발)
+      - http://localhost:3000
+
+server:
+  # 호스트 nginx가 넘긴 X-Forwarded-Proto를 신뢰 → 앱이 요청을 https로 인식(스웨거/리다이렉트 URL 깨짐 방지)
+  forward-headers-strategy: framework

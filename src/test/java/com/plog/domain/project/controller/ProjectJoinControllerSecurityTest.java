@@ -51,7 +51,7 @@ class ProjectJoinControllerSecurityTest {
 
     @Test
     void rejectsARequestWithoutAuthenticationBeforeCallingTheService() throws Exception {
-        mockMvc.perform(post("/api/v1/projects/join")
+        mockMvc.perform(post("/api/projects/join")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson()))
                 .andExpect(status().isUnauthorized())
@@ -67,7 +67,7 @@ class ProjectJoinControllerSecurityTest {
         given(jwtProvider.parseUserId("invalid-access-token"))
                 .willThrow(new JwtException("invalid token"));
 
-        mockMvc.perform(post("/api/v1/projects/join")
+        mockMvc.perform(post("/api/projects/join")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer invalid-access-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson()))

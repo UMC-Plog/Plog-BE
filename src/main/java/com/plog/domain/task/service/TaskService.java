@@ -6,19 +6,23 @@ import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.domain.task.dto.request.TaskCreateRequest;
-import com.plog.domain.task.dto.response.TaskCreateResponse;
+import com.plog.domain.task.dto.request.TaskStatusUpdateRequest;
+import com.plog.domain.task.dto.request.TaskUpdateRequest;
+import com.plog.domain.task.dto.response.*;
 import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskAttachment;
 import com.plog.global.api.error.TaskErrorCode;
 import com.plog.domain.task.repository.TaskAttachmentRepository;
+import com.plog.domain.task.repository.TaskAttachmentRepository.TaskAttachmentCount;
 import com.plog.domain.task.repository.TaskRepository;
 import com.plog.global.api.exception.ApiException;
 import com.plog.domain.task.entity.AttachmentType;
-import com.plog.infrastructure.s3.AttachmentPolicy;
-import com.plog.infrastructure.s3.AttachmentUsage;
-import com.plog.infrastructure.s3.FilePromotionEvent;
-import com.plog.infrastructure.s3.FileStorageService;
+import com.plog.infrastructure.s3.*;
+
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +54,7 @@ public class TaskService {
         this.eventPublisher = eventPublisher;
     }
 
+    // 업무 카드 생성
     @Transactional
     public TaskCreateResponse createTask(Long projectId, Long userId, TaskCreateRequest request) {
         // 1) 로그인 사용자가 해당 프로젝트의 활성 멤버인지 검증
@@ -91,6 +96,153 @@ public class TaskService {
                         attachment, resolveUrl(attachment)))
                 .toList();
         return TaskCreateResponse.from(task, attachmentResponses);
+    }
+
+    // 업무카드 목록 조회
+    @Transactional(readOnly = true)
+    public TaskListResponse getTaskList(Long projectId, Long userId) {
+        // 1) 로그인 사용자가 해당 프로젝트의 활성 멤버인지 검증 (프로젝트 존재 여부도 함께 검증됨)
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) Task -> ProjectMember 를 EntityGraph로 함께 조회해 N+1 방지
+        List<Task> tasks = taskRepository.findAllByProjectMember_Project_IdOrderByCreatedAtAsc(projectId);
+        if (tasks.isEmpty()) {
+            return TaskListResponse.of(List.of());
+        }
+
+        // 3) 첨부파일은 이제 "개수"만 필요하므로, 전체 엔티티를 가져오지 않고
+        //    taskId별 count(*) 집계 쿼리 하나로 끝낸다 (다운로드 URL 발급도 필요 없어짐).
+        List<Long> taskIds = tasks.stream().map(Task::getId).toList();
+        Map<Long, Long> attachmentCountByTaskId = taskAttachmentRepository.countByTaskIds(taskIds).stream()
+                .collect(Collectors.toMap(TaskAttachmentCount::getTaskId, TaskAttachmentCount::getCount));
+
+        // 4) Entity를 그대로 넘기지 않고 DTO로 변환
+        List<TaskSummaryResponse> content = tasks.stream()
+                .map(task -> TaskSummaryResponse.from(
+                        task,
+                        attachmentCountByTaskId.getOrDefault(task.getId(), 0L).intValue()))
+                .toList();
+
+        return TaskListResponse.of(content);
+    }
+
+    // 업무카드 상세 목록 조회
+    @Transactional(readOnly = true)
+    public TaskDetailResponse getTaskDetail(Long projectId, Long taskId, Long userId) {
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        Task task = taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+
+        List<TaskDetailResponse.AttachmentResponse> attachments = taskAttachmentRepository
+                .findAllByTaskId(taskId).stream()
+                .map(attachment -> TaskDetailResponse.AttachmentResponse.of(
+                        attachment, resolveUrl(attachment)))
+                .toList();
+
+        return TaskDetailResponse.from(task, attachments);
+    }
+
+    // 업무카드 수정
+    @Transactional
+    public TaskUpdateResponse updateTask(Long projectId, Long taskId, Long userId, TaskUpdateRequest request) {
+        // 1) 활성 멤버면 누구나 수정 가능 (담당자 여부와 무관)
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) 소속 검증까지 포함된 단건 조회
+        Task task = taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+
+        // 3) 값이 들어온 필드만 개별적으로 변경 (PATCH 부분 수정)
+        if (request.title() != null) {
+            task.changeTitle(request.title());
+        }
+
+        if (request.projectMemberId() != null) {
+            // 담당자 변경 시 생성 때와 동일한 검증을 다시 거친다 —
+            // 그렇지 않으면 생성에서 막던 "다른 프로젝트 소속/나간 멤버 지정"을 수정으로 우회할 수 있다.
+            ProjectMember newAssignee = projectMemberRepository.findById(request.projectMemberId())
+                    .orElseThrow(() -> new ApiException(TaskErrorCode.ASSIGNEE_NOT_FOUND));
+            if (!newAssignee.getProject().getId().equals(projectId)) {
+                throw new ApiException(TaskErrorCode.ASSIGNEE_PROJECT_MISMATCH);
+            }
+            if (newAssignee.getStatus() != MemberStatus.ACTIVE) {
+                throw new ApiException(TaskErrorCode.ASSIGNEE_NOT_ACTIVE);
+            }
+            task.changeAssignee(newAssignee);
+        }
+
+        if (request.category() != null) {
+            ProjectType projectType = task.getProjectMember().getProject().getProjectType();
+            if (!request.category().isAllowedFor(projectType)) {
+                throw new ApiException(TaskErrorCode.INVALID_CATEGORY_FOR_PROJECT_TYPE);
+            }
+            task.changeCategory(request.category());
+        }
+
+        if (request.endDate() != null) {
+            task.changeEndDate(request.endDate());
+        }
+
+        // 4) 첨부파일은 이번 수정 대상이 아니므로 있는 그대로 응답에만 포함
+        List<TaskUpdateResponse.AttachmentResponse> attachments = taskAttachmentRepository
+                .findAllByTaskId(taskId).stream()
+                .map(attachment -> TaskUpdateResponse.AttachmentResponse.of(
+                        attachment, resolveUrl(attachment)))
+                .toList();
+
+        return TaskUpdateResponse.from(task, attachments);
+    }
+
+    // 업무카드 삭제
+    @Transactional
+    public TaskDeleteResponse deleteTask(Long projectId, Long taskId, Long userId) {
+        // 1) 활성 멤버면 누구나 삭제 가능
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) 소속 검증까지 포함된 단건 조회
+        Task task = taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+
+        // 3) 첨부파일 먼저 조회 — FILE 타입 fileKey는 S3 정리용으로 미리 뽑아둔다
+        List<TaskAttachment> attachments = taskAttachmentRepository.findAllByTaskId(taskId);
+        List<String> fileKeys = attachments.stream()
+                .filter(attachment -> attachment.getAttachmentType() == AttachmentType.FILE)
+                .map(TaskAttachment::getFileUrl)
+                .toList();
+
+        // 4) 자식(TaskAttachment)을 부모(Task)보다 먼저 삭제한다.
+        taskAttachmentRepository.deleteAll(attachments);
+        taskAttachmentRepository.flush();
+
+        // 5) 이제 자식이 없으니 Task 삭제
+        taskRepository.delete(task);
+        taskRepository.flush();
+
+        // 6) 커밋 이후 S3 실물 파일 삭제를 비동기로 요청
+        if (!fileKeys.isEmpty()) {
+            eventPublisher.publishEvent(new FileDeletionEvent(fileKeys));
+        }
+
+        return new TaskDeleteResponse(true);
+    }
+
+    // 업무카드 상태 변경 전용 API
+    @Transactional
+    public TaskStatusUpdateResponse updateTaskStatus(
+            Long projectId, Long taskId, Long userId, TaskStatusUpdateRequest request) {
+        // 1) 활성 멤버면 누구나 상태 변경 가능 (수정/삭제와 동일 정책)
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) 소속 검증까지 포함된 단건 조회
+        Task task = taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+
+        // 3) 상태 전이 제한 없음 — 요청된 상태로 그대로 변경.
+        //    completedAt은 Task.changeStatus() 내부에서 DONE 여부에 따라 자동으로 세팅/초기화된다.
+        task.changeStatus(request.cardStatus());
+
+        return TaskStatusUpdateResponse.from(task);
     }
 
     private List<TaskAttachment> createAttachments(

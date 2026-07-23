@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "External Link", description = "외부 툴 연동 API")
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/projects/{projectId}/me/external-links")
+@RequestMapping("/api/projects/{projectId}/me/external-links")
 public class ExternalLinkController {
 
     private final ExternalLinkService externalLinkService;

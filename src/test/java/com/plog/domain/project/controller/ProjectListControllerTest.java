@@ -70,7 +70,7 @@ class ProjectListControllerTest {
         given(projectListService.getProjects(1L, ProjectStatus.IN_PROGRESS, 0, 20))
                 .willReturn(response);
 
-        mockMvc.perform(get("/api/v1/projects")
+        mockMvc.perform(get("/api/projects")
                         .param("status", "IN_PROGRESS"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("PROJECT007"))
@@ -89,7 +89,7 @@ class ProjectListControllerTest {
     void rejectsAnInvalidPageBeforeCallingTheService() throws Exception {
         authenticate(1L);
 
-        mockMvc.perform(get("/api/v1/projects").param("page", "-1"))
+        mockMvc.perform(get("/api/projects").param("page", "-1"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON400"));
 

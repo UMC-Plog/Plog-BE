@@ -80,7 +80,7 @@ class ReportControllerTest {
                 20
         )).willReturn(response);
 
-        mockMvc.perform(get("/api/v1/dashboard/reports/search")
+        mockMvc.perform(get("/api/dashboard/reports/search")
                         .param("keyword", "plog")
                         .param("startDate", "2026-07-01")
                         .param("endDate", "2026-07-31"))
@@ -110,7 +110,7 @@ class ReportControllerTest {
                         300
                 ));
 
-        mockMvc.perform(get("/api/v1/dashboard/reports/20/pdf"))
+        mockMvc.perform(get("/api/dashboard/reports/20/pdf"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("REPORT002"))
                 .andExpect(jsonPath("$.result.reportId").value(20L))
@@ -126,7 +126,7 @@ class ReportControllerTest {
         given(pdfDownloadService.createDownloadUrl(1L, 999L))
                 .willThrow(new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
 
-        mockMvc.perform(get("/api/v1/dashboard/reports/999/pdf"))
+        mockMvc.perform(get("/api/dashboard/reports/999/pdf"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("REPORT003"));
     }
@@ -136,7 +136,7 @@ class ReportControllerTest {
     void rejectsAnInvalidReportIdBeforeCallingTheService(String reportId) throws Exception {
         authenticate(1L);
 
-        mockMvc.perform(get("/api/v1/dashboard/reports/{reportId}/pdf", reportId))
+        mockMvc.perform(get("/api/dashboard/reports/{reportId}/pdf", reportId))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON400"));
 
@@ -155,7 +155,7 @@ class ReportControllerTest {
                 20
         )).willThrow(new ApiException(ReportErrorCode.INVALID_DATE_RANGE));
 
-        mockMvc.perform(get("/api/v1/dashboard/reports/search")
+        mockMvc.perform(get("/api/dashboard/reports/search")
                         .param("startDate", "2026-08-01")
                         .param("endDate", "2026-07-31"))
                 .andExpect(status().isBadRequest())
@@ -166,7 +166,7 @@ class ReportControllerTest {
     void rejectsAnInvalidPageBeforeCallingTheService() throws Exception {
         authenticate(1L);
 
-        mockMvc.perform(get("/api/v1/dashboard/reports/search").param("page", "-1"))
+        mockMvc.perform(get("/api/dashboard/reports/search").param("page", "-1"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON400"));
 
@@ -178,7 +178,7 @@ class ReportControllerTest {
     void rejectsAnInvalidSizeBeforeCallingTheService(String size) throws Exception {
         authenticate(1L);
 
-        mockMvc.perform(get("/api/v1/dashboard/reports/search").param("size", size))
+        mockMvc.perform(get("/api/dashboard/reports/search").param("size", size))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON400"));
 
@@ -189,7 +189,7 @@ class ReportControllerTest {
     void rejectsAMalformedDateBeforeCallingTheService() throws Exception {
         authenticate(1L);
 
-        mockMvc.perform(get("/api/v1/dashboard/reports/search")
+        mockMvc.perform(get("/api/dashboard/reports/search")
                         .param("startDate", "2026-13-01"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON400"));
