@@ -310,7 +310,8 @@ class ChatRoomReadCursorRepositoryIntegrationTest {
                 room,
                 member,
                 message,
-                room.issueNextMessageSequence()
+                room.issueNextMessageSequence(),
+                null
         ));
     }
 }
