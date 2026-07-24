@@ -5,6 +5,7 @@ import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskAttachment;
 import com.plog.domain.task.entity.TaskCategory;
 import com.plog.domain.task.entity.TaskStatus;
+import com.plog.domain.user.entity.ProfilePreset;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -30,13 +31,13 @@ public record TaskDetailResponse(
     public record AssigneeResponse(
             Long projectMemberId,
             String nickname,
-            String profileImageUrl
+            ProfilePreset profilePreset
     ) {
         public static AssigneeResponse from(Task task) {
             return new AssigneeResponse(
                     task.getProjectMember().getId(),
                     task.getProjectMember().getAnNickname(),
-                    task.getProjectMember().getUser().getProfileImageUrl()
+                    task.getProjectMember().getUser().getProfilePreset()
             );
         }
     }

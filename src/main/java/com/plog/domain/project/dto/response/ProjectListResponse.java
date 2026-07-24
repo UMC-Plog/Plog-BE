@@ -2,6 +2,7 @@ package com.plog.domain.project.dto.response;
 
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
+import com.plog.domain.user.entity.ProfilePreset;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -21,7 +22,7 @@ public record ProjectListResponse(
     public record MemberPreview(
             Long userId,
             String nickname,
-            String profileImageUrl
+            ProfilePreset profilePreset
     ) {
     }
 }

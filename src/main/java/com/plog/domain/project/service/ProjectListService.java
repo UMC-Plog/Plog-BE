@@ -98,7 +98,7 @@ public class ProjectListService {
                 .map(member -> new MemberPreview(
                         member.getUser().getId(),
                         member.getUser().getNickname(),
-                        member.getUser().getProfileImageUrl()
+                        member.getUser().getProfilePreset()
                 ))
                 .toList();
         int memberCount = members.size();

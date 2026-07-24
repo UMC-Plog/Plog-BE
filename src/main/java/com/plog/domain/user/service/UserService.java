@@ -68,7 +68,8 @@ public class UserService {
                 request.email(),
                 passwordEncoder.encode(request.password()),
                 request.name(),
-                request.nickname());
+                request.nickname(),
+                request.profilePreset());
         try {
             // flush로 유니크 위반을 지금 표면화 → 확인~가입 사이 선점(TOCTOU)을 에러코드로 변환
             userRepository.saveAndFlush(user);
