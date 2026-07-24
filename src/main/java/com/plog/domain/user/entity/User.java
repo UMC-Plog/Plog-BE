@@ -55,6 +55,7 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private String nickname;
 
+    @Getter
     @Column(name = "profile_image_url")
     private String profileImageUrl;
 
