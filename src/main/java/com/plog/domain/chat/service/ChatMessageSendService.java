@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ChatMessageSendService {
 
+    private static final int MAX_CLIENT_MESSAGE_ID_LENGTH = 64;
+
     private final ChatMessageAppender chatMessageAppender;
 
     public void send(Long roomId, Long userId, String clientMessageId, String message) {
