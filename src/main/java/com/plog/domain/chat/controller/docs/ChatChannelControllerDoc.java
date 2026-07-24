@@ -17,7 +17,11 @@ public interface ChatChannelControllerDoc {
 
     @Operation(
             summary = "통합 채널 목록 조회",
-            description = "ACTIVE 멤버십의 프로젝트 채팅방을 최신 메시지 시각순으로 조회합니다."
+            description = """
+                    ACTIVE 멤버십의 프로젝트 채팅방을 최신 메시지 시각순으로 Slice 조회합니다.
+                    각 프로젝트는 채팅방 1개를 가지며, 응답에는 제목(projectName), 마지막 메시지/시각,
+                    읽지 않은 메시지 여부/개수, 채팅방 이미지 구성에 사용할 참여자 프로필 목록이 포함됩니다.
+                    """
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -45,7 +49,10 @@ public interface ChatChannelControllerDoc {
 
     @Operation(
             summary = "채팅방 검색",
-            description = "ACTIVE 멤버십의 프로젝트 채팅방을 프로젝트명으로 검색합니다."
+            description = """
+                    ACTIVE 멤버십의 프로젝트 채팅방을 프로젝트명으로 검색합니다.
+                    빈 keyword면 일반 목록과 같은 기준으로 조회되며, 응답 필드는 통합 채널 목록 조회와 동일합니다.
+                    """
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
