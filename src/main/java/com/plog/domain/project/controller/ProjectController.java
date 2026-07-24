@@ -1,5 +1,6 @@
 package com.plog.domain.project.controller;
 
+import com.plog.domain.project.controller.docs.ProjectControllerDoc;
 import com.plog.domain.project.dto.request.ProjectCreateRequest;
 import com.plog.domain.project.dto.ProjectStatusDto;
 import com.plog.domain.project.dto.response.ProjectCreateResponse;
@@ -8,9 +9,6 @@ import com.plog.domain.project.service.ProjectStatusService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.ProjectSuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,37 +25,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/projects")
-public class ProjectController {
+public class ProjectController implements ProjectControllerDoc {
 
     private final ProjectCreateService projectCreateService;
     private final ProjectStatusService projectStatusService;
 
-    @Operation(
-            summary = "프로젝트 생성",
-            description = "프로젝트와 생성자 OWNER 멤버십을 생성하고 초대 정보를 발급합니다."
-    )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "201",
-                    description = "프로젝트 생성 성공"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "400",
-                    description = "잘못된 프로젝트 이름, 유형 또는 예상 종료일",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ApiResponse.class)
-                    )
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "401",
-                    description = "인증이 없거나 유효하지 않은 사용자",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = ApiResponse.class)
-                    )
-            )
-    })
+    @Override
     @PostMapping
     public ResponseEntity<ApiResponse<ProjectCreateResponse>> createProject(
             @AuthenticationPrincipal Long userId,

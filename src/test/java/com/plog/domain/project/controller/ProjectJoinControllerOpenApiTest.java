@@ -2,6 +2,7 @@ package com.plog.domain.project.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.plog.domain.project.controller.docs.ProjectJoinControllerDoc;
 import com.plog.domain.project.dto.request.ProjectJoinRequest;
 import com.plog.global.api.response.ApiResponse;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -20,7 +21,13 @@ class ProjectJoinControllerOpenApiTest {
                 ProjectJoinRequest.class
         );
 
-        ApiResponses responses = joinProject.getAnnotation(ApiResponses.class);
+        Method documentedJoinProject = ProjectJoinControllerDoc.class.getMethod(
+                "joinProject",
+                Long.class,
+                ProjectJoinRequest.class
+        );
+
+        ApiResponses responses = documentedJoinProject.getAnnotation(ApiResponses.class);
 
         assertThat(responses).isNotNull();
         assertThat(responses.value())
@@ -35,5 +42,6 @@ class ProjectJoinControllerOpenApiTest {
                     assertThat(content[0].mediaType()).isEqualTo("application/json");
                     assertThat(content[0].schema().implementation()).isEqualTo(ApiResponse.class);
                 });
+        assertThat(joinProject.getDeclaredAnnotation(ApiResponses.class)).isNull();
     }
 }

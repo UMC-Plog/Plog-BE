@@ -7,7 +7,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.plog.domain.integration.dto.response.ExternalLinkStatusResponse;
+import com.plog.domain.integration.dto.response.IntegrationStatusResponse;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.IntegrationCredentialType;
 import com.plog.domain.integration.entity.ProjectIntegration;
@@ -28,7 +28,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class ExternalLinkServiceTest {
+class IntegrationServiceTest {
 
     @Mock
     private ProjectRepository projectRepository;
@@ -40,11 +40,11 @@ class ExternalLinkServiceTest {
     private ProjectIntegrationRepository projectIntegrationRepository;
 
     @InjectMocks
-    private ExternalLinkService externalLinkService;
+    private IntegrationService integrationService;
 
     @Test
     @DisplayName("활성 프로젝트 멤버의 외부 툴 연동 상태를 LinkType 순서로 조회한다")
-    void getMyExternalLinksReturnsStatusesInLinkTypeOrder() {
+    void getProjectIntegrationsReturnsStatusesInLinkTypeOrder() {
         Long projectId = 1L;
         Long userId = 10L;
         ProjectMember projectMember = projectMember();
@@ -56,27 +56,27 @@ class ExternalLinkServiceTest {
         given(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId))
                 .willReturn(List.of(notion, github));
 
-        ExternalLinkStatusResponse response = externalLinkService.getMyExternalLinks(projectId, userId);
+        IntegrationStatusResponse response = integrationService.getProjectIntegrations(projectId, userId);
 
         assertThat(response.projectId()).isEqualTo(projectId);
         assertThat(response.projectMemberId()).isEqualTo(100L);
-        assertThat(response.links()).extracting("linkType")
+        assertThat(response.integrations()).extracting("linkType")
                 .containsExactly(LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION, LinkType.GOOGLE);
-        assertThat(response.links()).extracting("linked")
+        assertThat(response.integrations()).extracting("linked")
                 .containsExactly(true, false, true, false);
-        assertThat(response.links()).extracting("connectedAccountName")
+        assertThat(response.integrations()).extracting("connectedAccountName")
                 .containsExactly("github-user", null, "notion-user", null);
         verify(projectIntegrationRepository).findAllByProjectIdOrderByLinkTypeAsc(projectId);
     }
 
     @Test
     @DisplayName("프로젝트가 없으면 PROJECT_NOT_FOUND를 던지고 권한과 연결을 조회하지 않는다")
-    void getMyExternalLinksThrowsProjectNotFound() {
+    void getProjectIntegrationsThrowsProjectNotFound() {
         Long projectId = 404L;
         Long userId = 10L;
         given(projectRepository.existsById(projectId)).willReturn(false);
 
-        assertThatThrownBy(() -> externalLinkService.getMyExternalLinks(projectId, userId))
+        assertThatThrownBy(() -> integrationService.getProjectIntegrations(projectId, userId))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(ProjectErrorCode.PROJECT_NOT_FOUND)
                 );
@@ -87,14 +87,14 @@ class ExternalLinkServiceTest {
 
     @Test
     @DisplayName("활성 프로젝트 멤버가 아니면 PROJECT_MEMBER_REQUIRED를 전파한다")
-    void getMyExternalLinksRequiresActiveProjectMember() {
+    void getProjectIntegrationsRequiresActiveProjectMember() {
         Long projectId = 1L;
         Long userId = 10L;
         given(projectRepository.existsById(projectId)).willReturn(true);
         given(projectAccessService.requireActiveMember(projectId, userId))
                 .willThrow(new ApiException(ProjectErrorCode.PROJECT_MEMBER_REQUIRED));
 
-        assertThatThrownBy(() -> externalLinkService.getMyExternalLinks(projectId, userId))
+        assertThatThrownBy(() -> integrationService.getProjectIntegrations(projectId, userId))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(ProjectErrorCode.PROJECT_MEMBER_REQUIRED)
                 );
@@ -104,7 +104,7 @@ class ExternalLinkServiceTest {
 
     @Test
     @DisplayName("연결 row가 있어도 externalAccountId가 null이면 미연결로 응답한다")
-    void getMyExternalLinksTreatsNullExternalAccountIdAsUnlinked() {
+    void getProjectIntegrationsTreatsNullExternalAccountIdAsUnlinked() {
         Long projectId = 1L;
         Long userId = 10L;
         ProjectMember projectMember = projectMember();
@@ -113,13 +113,13 @@ class ExternalLinkServiceTest {
         given(projectAccessService.requireActiveMember(projectId, userId)).willReturn(projectMember);
         given(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId)).willReturn(List.of(figma));
 
-        ExternalLinkStatusResponse response = externalLinkService.getMyExternalLinks(projectId, userId);
+        IntegrationStatusResponse response = integrationService.getProjectIntegrations(projectId, userId);
 
-        assertThat(response.links()).extracting("linkType")
+        assertThat(response.integrations()).extracting("linkType")
                 .containsExactly(LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION, LinkType.GOOGLE);
-        assertThat(response.links()).extracting("linked")
+        assertThat(response.integrations()).extracting("linked")
                 .containsExactly(false, false, false, false);
-        assertThat(response.links()).extracting("connectedAccountName")
+        assertThat(response.integrations()).extracting("connectedAccountName")
                 .containsExactly(null, null, null, null);
         verify(projectIntegrationRepository).findAllByProjectIdOrderByLinkTypeAsc(projectId);
     }

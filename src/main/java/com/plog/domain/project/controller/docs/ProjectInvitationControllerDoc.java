@@ -14,7 +14,11 @@ public interface ProjectInvitationControllerDoc {
 
     @Operation(
             summary = "초대 코드 프로젝트 미리보기",
-            description = "초대 코드를 검증하고 상태 변경 없이 프로젝트 정보를 조회합니다."
+            description = """
+                    초대 코드를 검증하고 상태 변경 없이 초대 대상 프로젝트 정보를 조회합니다.
+                    프론트의 초대 수락 화면에서 프로젝트명, 유형, 종료일을 보여주기 위한 API입니다.
+                    실제 참여 처리는 POST /api/projects/join에서 수행합니다.
+                    """
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(

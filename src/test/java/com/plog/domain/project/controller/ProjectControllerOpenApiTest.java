@@ -2,6 +2,7 @@ package com.plog.domain.project.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.plog.domain.project.controller.docs.ProjectControllerDoc;
 import com.plog.domain.project.dto.request.ProjectCreateRequest;
 import com.plog.global.api.response.ApiResponse;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -20,7 +21,13 @@ class ProjectControllerOpenApiTest {
                 ProjectCreateRequest.class
         );
 
-        ApiResponses responses = createProject.getAnnotation(ApiResponses.class);
+        Method documentedCreateProject = ProjectControllerDoc.class.getMethod(
+                "createProject",
+                Long.class,
+                ProjectCreateRequest.class
+        );
+
+        ApiResponses responses = documentedCreateProject.getAnnotation(ApiResponses.class);
 
         assertThat(responses).isNotNull();
         assertThat(responses.value())
@@ -36,5 +43,6 @@ class ProjectControllerOpenApiTest {
                     assertThat(content[0].mediaType()).isEqualTo("application/json");
                     assertThat(content[0].schema().implementation()).isEqualTo(ApiResponse.class);
                 });
+        assertThat(createProject.getDeclaredAnnotation(ApiResponses.class)).isNull();
     }
 }
