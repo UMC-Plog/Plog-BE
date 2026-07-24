@@ -28,15 +28,21 @@ class ProjectSettingsControllerE2eTest extends E2eTestBase {
             Long projectId = saveProject("settings-read");
             Long memberId = saveMember(userId, projectId, "MEMBER", "ACTIVE", "리더");
             jdbc.update("""
-                    insert into external_connection (
-                        project_member_id, link_type, external_account_id, created_at, updated_at
-                    ) values (?, 'GITHUB', 'github-account', now(), now())
-                    """, memberId);
+                    insert into project_integrations (
+                        project_id, connected_by_project_member_id, link_type, credential_type,
+                        external_account_id, external_account_name, provider_connection_id,
+                        created_at, updated_at
+                    ) values (?, ?, 'GITHUB', 'APP_INSTALLATION',
+                        'github-account', 'github-account', 'github-installation', now(), now())
+                    """, projectId, memberId);
             jdbc.update("""
-                    insert into external_connection (
-                        project_member_id, link_type, external_account_id, created_at, updated_at
-                    ) values (?, 'FIGMA', null, now(), now())
-                    """, memberId);
+                    insert into project_integrations (
+                        project_id, connected_by_project_member_id, link_type, credential_type,
+                        external_account_id, external_account_name, provider_connection_id,
+                        created_at, updated_at
+                    ) values (?, ?, 'FIGMA', 'OAUTH',
+                        'figma-account', 'figma-account', '', now(), now())
+                    """, projectId, memberId);
 
             ResponseEntity<JsonNode> response = request(
                     HttpMethod.GET, settings(projectId), userId, null);

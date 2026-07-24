@@ -8,10 +8,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.plog.domain.integration.config.IntegrationRedirectProperties;
 import com.plog.domain.integration.dto.response.ExternalLinkItemResponse;
 import com.plog.domain.integration.dto.response.ExternalLinkStatusResponse;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.service.ExternalLinkService;
+import com.plog.domain.integration.service.FigmaIntegrationService;
+import com.plog.domain.integration.service.GithubIntegrationService;
+import com.plog.domain.integration.service.GoogleIntegrationService;
+import com.plog.domain.integration.service.NotionIntegrationService;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.security.jwt.JwtProvider;
@@ -39,6 +44,21 @@ class ExternalLinkControllerTest {
     private ExternalLinkService externalLinkService;
 
     @MockitoBean
+    private GithubIntegrationService githubIntegrationService;
+
+    @MockitoBean
+    private FigmaIntegrationService figmaIntegrationService;
+
+    @MockitoBean
+    private NotionIntegrationService notionIntegrationService;
+
+    @MockitoBean
+    private GoogleIntegrationService googleIntegrationService;
+
+    @MockitoBean
+    private IntegrationRedirectProperties integrationRedirectProperties;
+
+    @MockitoBean
     private JwtProvider jwtProvider;
 
     @MockitoBean
@@ -59,7 +79,8 @@ class ExternalLinkControllerTest {
                 .willReturn(new ExternalLinkStatusResponse(projectId, 100L, List.of(
                         new ExternalLinkItemResponse(LinkType.GITHUB, true, "github-user"),
                         new ExternalLinkItemResponse(LinkType.FIGMA, false, null),
-                        new ExternalLinkItemResponse(LinkType.NOTION, true, "notion-user")
+                        new ExternalLinkItemResponse(LinkType.NOTION, true, "notion-user"),
+                        new ExternalLinkItemResponse(LinkType.GOOGLE, false, null)
                 )));
 
         mockMvc.perform(get("/api/projects/{projectId}/me/external-links", projectId))
@@ -78,9 +99,13 @@ class ExternalLinkControllerTest {
                 .andExpect(jsonPath("$.result.links[2].linkType").value("NOTION"))
                 .andExpect(jsonPath("$.result.links[2].linked").value(true))
                 .andExpect(jsonPath("$.result.links[2].connectedAccountName").value("notion-user"))
+                .andExpect(jsonPath("$.result.links[3].linkType").value("GOOGLE"))
+                .andExpect(jsonPath("$.result.links[3].linked").value(false))
+                .andExpect(jsonPath("$.result.links[3].connectedAccountName").value(nullValue()))
                 .andExpect(jsonPath("$.result.links[0].accessToken").doesNotExist())
                 .andExpect(jsonPath("$.result.links[1].accessToken").doesNotExist())
-                .andExpect(jsonPath("$.result.links[2].accessToken").doesNotExist());
+                .andExpect(jsonPath("$.result.links[2].accessToken").doesNotExist())
+                .andExpect(jsonPath("$.result.links[3].accessToken").doesNotExist());
     }
 
     @Test
