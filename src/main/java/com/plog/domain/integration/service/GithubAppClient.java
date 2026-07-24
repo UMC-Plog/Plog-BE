@@ -15,10 +15,13 @@ public class GithubAppClient {
     private static final String API_BASE_URL = "https://api.github.com";
 
     private final GithubAppJwtFactory appJwtFactory;
-    private final RestClient restClient = RestClient.builder().baseUrl(API_BASE_URL).build();
+    private final RestClient restClient = ProviderRestClientFactory.create(API_BASE_URL);
 
     public Installation installation(String installationId) {
         JsonNode body = getWithAppJwt("/app/installations/" + installationId);
+        if (body == null) {
+            throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED);
+        }
         JsonNode account = body.path("account");
         return new Installation(
                 body.path("id").asText(),

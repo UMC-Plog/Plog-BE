@@ -15,6 +15,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -58,6 +59,10 @@ public class IntegrationAuthorizationState extends BaseEntity {
 
     @Column(name = "consumed_at")
     private Instant consumedAt;
+
+    @Version
+    @Column(name = "version")
+    private Long version;
 
     public boolean isUsableAt(Instant now) {
         return consumedAt == null && now.isBefore(expiresAt);

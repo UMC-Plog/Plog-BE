@@ -14,6 +14,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,17 +48,22 @@ public class IntegrationAuthorizationStateService {
         if (state == null || state.isBlank()) {
             throw new ApiException(IntegrationErrorCode.AUTHORIZATION_STATE_INVALID);
         }
-        IntegrationAuthorizationState authorizationState = authorizationStateRepository
-                .findByStateHash(sha256(state))
-                .orElseThrow(() -> new ApiException(IntegrationErrorCode.AUTHORIZATION_STATE_INVALID));
-        if (authorizationState.getLinkType() != linkType) {
-            throw new ApiException(IntegrationErrorCode.AUTHORIZATION_STATE_INVALID);
+        try {
+            IntegrationAuthorizationState authorizationState = authorizationStateRepository
+                    .findByStateHashForUpdate(sha256(state))
+                    .orElseThrow(() -> new ApiException(IntegrationErrorCode.AUTHORIZATION_STATE_INVALID));
+            Instant now = Instant.now();
+            if (authorizationState.getLinkType() != linkType || authorizationState.getConsumedAt() != null) {
+                throw new ApiException(IntegrationErrorCode.AUTHORIZATION_STATE_INVALID);
+            }
+            if (!authorizationState.isUsableAt(now)) {
+                throw new ApiException(IntegrationErrorCode.AUTHORIZATION_STATE_EXPIRED);
+            }
+            authorizationState.consume(now);
+            return authorizationStateRepository.saveAndFlush(authorizationState);
+        } catch (ObjectOptimisticLockingFailureException | PessimisticLockingFailureException exception) {
+            throw new ApiException(IntegrationErrorCode.AUTHORIZATION_STATE_INVALID, exception);
         }
-        if (!authorizationState.isUsableAt(Instant.now())) {
-            throw new ApiException(IntegrationErrorCode.AUTHORIZATION_STATE_EXPIRED);
-        }
-        authorizationState.consume(Instant.now());
-        return authorizationState;
     }
 
     private String sha256(String state) {

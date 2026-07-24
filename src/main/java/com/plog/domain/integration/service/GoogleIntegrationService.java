@@ -42,7 +42,7 @@ public class GoogleIntegrationService {
     private final ProjectAccessService projectAccessService;
     private final IntegrationAuthorizationStateService authorizationStateService;
     private final ProjectIntegrationService projectIntegrationService;
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient = ProviderRestClientFactory.create();
 
     @Transactional
     public IntegrationAuthorizationResponse issueAuthorizationUrl(Long projectId, Long userId) {
@@ -67,8 +67,10 @@ public class GoogleIntegrationService {
     @Transactional
     public IntegrationConnectionResponse completeCallback(String state, String code) {
         IntegrationAuthorizationState authorizationState = authorizationStateService.consume(state, LinkType.GOOGLE);
+        projectIntegrationService.requireNotConnected(authorizationState.getProject().getId(), LinkType.GOOGLE);
         JsonNode token = exchangeCode(code);
         String accessToken = requiredField(token, "access_token");
+        String refreshToken = requiredRefreshToken(token);
         JsonNode profile = profile(accessToken);
         String externalAccountId = requiredField(profile, "sub");
         String externalAccountName = profile.path("email").asText(profile.path("name").asText(externalAccountId));
@@ -80,7 +82,7 @@ public class GoogleIntegrationService {
                 externalAccountName,
                 externalAccountId,
                 accessToken,
-                token.path("refresh_token").asText(null),
+                refreshToken,
                 Instant.now().plusSeconds(token.path("expires_in").asLong())
         );
         return new IntegrationConnectionResponse(
@@ -131,6 +133,14 @@ public class GoogleIntegrationService {
     private String requiredField(JsonNode node, String field) {
         String value = node == null ? null : node.path(field).asText();
         return require(value);
+    }
+
+    private String requiredRefreshToken(JsonNode node) {
+        String value = node == null ? null : node.path("refresh_token").asText(null);
+        if (value == null || value.isBlank()) {
+            throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED);
+        }
+        return value;
     }
 
     private String require(String value) {

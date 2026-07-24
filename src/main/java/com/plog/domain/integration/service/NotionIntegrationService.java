@@ -31,7 +31,7 @@ public class NotionIntegrationService {
     private final ProjectAccessService projectAccessService;
     private final IntegrationAuthorizationStateService authorizationStateService;
     private final ProjectIntegrationService projectIntegrationService;
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient = ProviderRestClientFactory.create();
 
     @Transactional
     public IntegrationAuthorizationResponse issueAuthorizationUrl(Long projectId, Long userId) {
@@ -57,6 +57,7 @@ public class NotionIntegrationService {
         String workspaceId = requiredField(token, "workspace_id");
         String workspaceName = token.path("workspace_name").asText(workspaceId);
         String botId = token.path("bot_id").asText(workspaceId);
+        projectIntegrationService.requireNotConnected(authorizationState.getProject().getId(), LinkType.NOTION);
         ProjectIntegration integration = projectIntegrationService.connect(
                 authorizationState.getProjectMember(),
                 LinkType.NOTION,

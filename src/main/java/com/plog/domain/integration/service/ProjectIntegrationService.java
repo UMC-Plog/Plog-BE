@@ -9,6 +9,7 @@ import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,7 +22,6 @@ public class ProjectIntegrationService {
     @Transactional(readOnly = true)
     public void requireNotConnected(Long projectId, LinkType linkType) {
         projectIntegrationRepository.findByProjectIdAndLinkType(projectId, linkType)
-                .filter(ProjectIntegration::isConnected)
                 .ifPresent(integration -> {
                     throw new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_ALREADY_CONNECTED);
                 });
@@ -39,23 +39,11 @@ public class ProjectIntegrationService {
             String refreshToken,
             Instant accessTokenExpiresAt
     ) {
+        requireNotConnected(projectMember.getProject().getId(), linkType);
         String encryptedAccessToken = encrypt(accessToken);
         String encryptedRefreshToken = encrypt(refreshToken);
-        return projectIntegrationRepository.findByProjectIdAndLinkType(projectMember.getProject().getId(), linkType)
-                .map(integration -> {
-                    integration.updateConnection(
-                            projectMember,
-                            credentialType,
-                            externalAccountId,
-                            externalAccountName,
-                            providerConnectionId,
-                            encryptedAccessToken,
-                            encryptedRefreshToken,
-                            accessTokenExpiresAt
-                    );
-                    return integration;
-                })
-                .orElseGet(() -> projectIntegrationRepository.save(ProjectIntegration.builder()
+        try {
+            return projectIntegrationRepository.saveAndFlush(ProjectIntegration.builder()
                         .project(projectMember.getProject())
                         .connectedByProjectMember(projectMember)
                         .linkType(linkType)
@@ -66,7 +54,10 @@ public class ProjectIntegrationService {
                         .accessTokenEncrypted(encryptedAccessToken)
                         .refreshTokenEncrypted(encryptedRefreshToken)
                         .accessTokenExpiresAt(accessTokenExpiresAt)
-                        .build()));
+                        .build());
+        } catch (DataIntegrityViolationException exception) {
+            throw new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_ALREADY_CONNECTED, exception);
+        }
     }
 
     public String decryptAccessToken(ProjectIntegration integration) {

@@ -41,7 +41,7 @@ public class FigmaIntegrationService {
     private final ProjectAccessService projectAccessService;
     private final IntegrationAuthorizationStateService authorizationStateService;
     private final ProjectIntegrationService projectIntegrationService;
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient = ProviderRestClientFactory.create();
 
     @Transactional
     public IntegrationAuthorizationResponse issueAuthorizationUrl(Long projectId, Long userId) {
@@ -61,6 +61,7 @@ public class FigmaIntegrationService {
     @Transactional
     public IntegrationConnectionResponse completeCallback(String state, String code) {
         IntegrationAuthorizationState authorizationState = authorizationStateService.consume(state, LinkType.FIGMA);
+        projectIntegrationService.requireNotConnected(authorizationState.getProject().getId(), LinkType.FIGMA);
         JsonNode token = exchangeCode(code);
         String accessToken = requiredField(token, "access_token");
         JsonNode profile = profile(accessToken);

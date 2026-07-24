@@ -45,6 +45,7 @@ public class GithubIntegrationService {
     @Transactional
     public IntegrationConnectionResponse completeCallback(String state, String installationId) {
         IntegrationAuthorizationState authorizationState = authorizationStateService.consume(state, LinkType.GITHUB);
+        projectIntegrationService.requireNotConnected(authorizationState.getProject().getId(), LinkType.GITHUB);
         if (installationId == null || installationId.isBlank()) {
             throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED);
         }
