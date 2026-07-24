@@ -10,6 +10,7 @@ import com.plog.domain.chat.dto.response.ChatChannelParticipantResponse;
 import com.plog.domain.chat.repository.ChatRoomRepository;
 import com.plog.domain.chat.repository.projection.ChatChannelSummary;
 import com.plog.domain.project.entity.MemberStatus;
+import com.plog.domain.user.entity.ProfilePreset;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.SliceResponse;
@@ -61,7 +62,7 @@ class ChatChannelListServiceTest {
                         new ChatChannelParticipantResponse(
                                 1L,
                                 "바나",
-                                "https://image.test/1.png"
+                                ProfilePreset.OTTER
                         ),
                         new ChatChannelParticipantResponse(2L, "팀원", null)
                 )));
@@ -75,7 +76,7 @@ class ChatChannelListServiceTest {
         assertThat(response.content().getFirst().hasUnreadMessage()).isTrue();
         assertThat(response.content().getFirst().unreadMessageCount()).isEqualTo(2L);
         assertThat(response.content().getFirst().participants()).containsExactly(
-                new ChatChannelParticipantResponse(1L, "바나", "https://image.test/1.png"),
+                new ChatChannelParticipantResponse(1L, "바나", ProfilePreset.OTTER),
                 new ChatChannelParticipantResponse(2L, "팀원", null)
         );
         assertThat(response.page()).isZero();

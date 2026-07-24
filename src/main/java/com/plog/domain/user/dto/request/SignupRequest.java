@@ -1,6 +1,7 @@
 package com.plog.domain.user.dto.request;
 
 import com.plog.domain.user.entity.AgreementType;
+import com.plog.domain.user.entity.ProfilePreset;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -10,8 +11,9 @@ import jakarta.validation.constraints.Pattern;
 import java.util.List;
 
 /**
- * 2단계 폼이지만 가입은 1 API. 1단계(실명/이메일/비밀번호) + 2단계(닉네임) + 약관 동의를 한 번에 수신.
+ * 2단계 폼이지만 가입은 1 API. 1단계(실명/이메일/비밀번호) + 2단계(닉네임/프로필) + 약관 동의를 한 번에 수신.
  * 비밀번호 규칙은 서버에서도 검증(@Pattern) — 클라이언트 검증을 신뢰하지 않는다.
+ * profilePreset은 선택 — null이면 기본(회색) 아바타. 커스텀 업로드는 없다.
  */
 public record SignupRequest(
         @NotBlank String name,
@@ -23,6 +25,7 @@ public record SignupRequest(
         )
         String password,
         @NotBlank String nickname,
+        ProfilePreset profilePreset,
         @NotEmpty @Valid List<AgreementItem> agreements
 ) {
     public record AgreementItem(

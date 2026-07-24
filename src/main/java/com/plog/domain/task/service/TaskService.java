@@ -5,12 +5,15 @@ import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.task.dto.request.TaskAttachmentAddRequest;
 import com.plog.domain.task.dto.request.TaskCreateRequest;
 import com.plog.domain.task.dto.request.TaskStatusUpdateRequest;
 import com.plog.domain.task.dto.request.TaskUpdateRequest;
 import com.plog.domain.task.dto.response.*;
 import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskAttachment;
+import com.plog.domain.task.entity.TaskStatus;
+import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.error.TaskErrorCode;
 import com.plog.domain.task.repository.TaskAttachmentRepository;
 import com.plog.domain.task.repository.TaskAttachmentRepository.TaskAttachmentCount;
@@ -19,6 +22,7 @@ import com.plog.global.api.exception.ApiException;
 import com.plog.domain.task.entity.AttachmentType;
 import com.plog.infrastructure.s3.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -245,12 +249,13 @@ public class TaskService {
         return TaskStatusUpdateResponse.from(task);
     }
 
+    // 업무카드 생성할 때
     private List<TaskAttachment> createAttachments(
             Task task, Long userId, List<TaskCreateRequest.TaskAttachmentRequest> requests) {
         if (requests == null || requests.isEmpty()) {
             return List.of();
         }
-        attachmentPolicy.validateCount(requests.size(), TaskErrorCode.INVALID_ATTACHMENT);
+        attachmentPolicy.validateCount(requests.size(), TaskErrorCode.TASK_ATTACHMENT_LIMIT_EXCEEDED);
         for (TaskCreateRequest.TaskAttachmentRequest request : requests) {
             if (request.attachmentType() == AttachmentType.EXTERNAL) {
                 throw new ApiException(TaskErrorCode.INVALID_ATTACHMENT);
@@ -287,5 +292,144 @@ public class TaskService {
                 ? fileStorageService.createDownloadUrl(
                         AttachmentUsage.TASK, attachment.getFileUrl(), attachment.getFileName())
                 : attachment.getFileUrl();
+    }
+
+    // 첨부파일 등록 — 기존 카드에 산출물 단건 추가 (생성 시 함께 등록하는 것과 별개 경로).
+    @Transactional
+    public TaskAttachmentAddResponse addAttachment(
+            Long projectId, Long taskId, Long userId, TaskAttachmentAddRequest request) {
+        // 1) 활성 멤버면 누구나 등록 가능
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) 소속 검증까지 포함된 단건 조회
+        Task task = taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+
+        // 3) EXTERNAL 타입 거부, FILE/LINK 검증
+        if (request.attachmentType() == AttachmentType.EXTERNAL) {
+            throw new ApiException(TaskErrorCode.INVALID_ATTACHMENT);
+        }
+
+        // 4) 여기서부터 "개수 확인 -> insert"를 원자적으로 묶는다.
+        //    같은 taskId 행에 PESSIMISTIC_WRITE 락을 걸어, 동시에 들어온 두 요청이
+        //    각자 "9개니까 통과"라고 잘못 판단해서 둘 다 insert하는 것(레이스 컨디션)을 막는다.
+        //    먼저 도착한 트랜잭션이 커밋(또는 롤백)할 때까지 나머지 요청은 이 지점에서 대기한다.
+        taskRepository.findByIdForUpdate(taskId);
+
+        // 5) 전체 목록이 아니라 개수만 조회 (COUNT 쿼리 1번, 락이 걸린 상태라 이 값은 안전하게 최신값)
+        long existingCount = taskAttachmentRepository.countByTaskId(taskId);
+        attachmentPolicy.validateCount((int) existingCount + 1, TaskErrorCode.TASK_ATTACHMENT_LIMIT_EXCEEDED);
+
+        String storedValue;
+        if (request.attachmentType() == AttachmentType.FILE) {
+            attachmentPolicy.validateFileAttachment(AttachmentUsage.TASK, userId,
+                    request.fileName(), request.fileSize(), request.fileKey(),
+                    TaskErrorCode.INVALID_ATTACHMENT);
+            storedValue = request.fileKey();
+        } else {
+            attachmentPolicy.validateLink(request.fileUrl(), TaskErrorCode.INVALID_LINK_URL);
+            storedValue = request.fileUrl();
+        }
+
+        // 6) 저장 — 락을 잡은 채로 insert까지 끝내고 트랜잭션 커밋 시점에 락 해제
+        TaskAttachment attachment = TaskAttachment.create(
+                task, request.attachmentType(), request.fileName(), request.fileSize(), storedValue);
+        taskAttachmentRepository.save(attachment);
+        if (request.attachmentType() == AttachmentType.FILE) {
+            eventPublisher.publishEvent(new FilePromotionEvent(List.of(storedValue)));
+        }
+
+        return TaskAttachmentAddResponse.of(attachment, resolveUrl(attachment));
+    }
+
+    // 첨부파일 삭제
+    @Transactional
+    public TaskDeleteResponse deleteAttachment(
+            Long projectId, Long taskId, Long taskAttachmentId, Long userId) {
+        // 1) 활성 멤버면 누구나 삭제 가능
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) taskId가 이 프로젝트 소속인지 먼저 확인
+        taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+
+        // 3) 삭제 대상 첨부파일이 실제로 그 taskId 소속인지 확인
+        //    (다른 카드의 taskAttachmentId를 URL의 taskId에 끼워 넣는 것을 차단)
+        TaskAttachment attachment = taskAttachmentRepository.findByIdAndTaskId(taskAttachmentId, taskId)
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_ATTACHMENT_NOT_FOUND));
+
+        boolean isFile = attachment.getAttachmentType() == AttachmentType.FILE;
+        String fileKey = attachment.getFileUrl();
+
+        taskAttachmentRepository.delete(attachment);
+        taskAttachmentRepository.flush();
+
+        // 4) FILE 타입이면 S3 실물 파일도 커밋 후 비동기 삭제
+        if (isFile) {
+            eventPublisher.publishEvent(new FileDeletionEvent(List.of(fileKey)));
+        }
+
+        return new TaskDeleteResponse(true);
+    }
+
+    // 특정 프로젝트 멤버(담당자) 기준 업무카드 목록 조회
+    @Transactional(readOnly = true)
+    public TaskListResponse getTasksByMember(Long projectId, Long projectMemberId, Long userId) {
+        // 1) 로그인 사용자가 해당 프로젝트의 활성 멤버인지 검증
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) 조회 대상 멤버가 실제 이 프로젝트 소속이고, 활성 상태인지 검증
+        ProjectMember targetMember = projectMemberRepository.findById(projectMemberId)
+                .orElseThrow(() -> new ApiException(ProjectErrorCode.MEMBER_NOT_FOUND));
+        if (!targetMember.getProject().getId().equals(projectId) || targetMember.getStatus() != MemberStatus.ACTIVE) {
+            throw new ApiException(ProjectErrorCode.MEMBER_NOT_FOUND);
+        }
+
+
+        // 3) 목록 조회와 동일한 방식으로 EntityGraph + count 집계 재사용
+        List<Task> tasks = taskRepository.findAllByProjectMember_IdOrderByCreatedAtAsc(projectMemberId);
+        if (tasks.isEmpty()) {
+            return TaskListResponse.of(List.of());
+        }
+
+        List<Long> taskIds = tasks.stream().map(Task::getId).toList();
+        Map<Long, Long> attachmentCountByTaskId = taskAttachmentRepository.countByTaskIds(taskIds).stream()
+                .collect(Collectors.toMap(TaskAttachmentCount::getTaskId, TaskAttachmentCount::getCount));
+
+        List<TaskSummaryResponse> content = tasks.stream()
+                .map(task -> TaskSummaryResponse.from(
+                        task,
+                        attachmentCountByTaskId.getOrDefault(task.getId(), 0L).intValue()))
+                .toList();
+
+        return TaskListResponse.of(content);
+    }
+
+    // 마감일 초과 업무카드 조회
+    @Transactional(readOnly = true)
+    public TaskListResponse getOverdueTasks(Long projectId, Long userId) {
+        // 1) 로그인 사용자가 해당 프로젝트의 활성 멤버인지 검증
+        projectAccessService.requireActiveMember(projectId, userId);
+
+        // 2) 마감일 < 오늘 && 완료(DONE) 아님 조건으로 필터링된 목록 조회
+        //    (TaskSummaryResponse.isOverdue()와 동일한 판정 기준을 쿼리 레벨에서 재사용)
+        List<Task> tasks = taskRepository.findOverdueTasksByProjectId(
+                projectId, LocalDate.now(), TaskStatus.DONE);
+        if (tasks.isEmpty()) {
+            return TaskListResponse.of(List.of());
+        }
+
+        // 3) 첨부파일 개수 집계는 목록 조회와 동일한 방식으로 재사용
+        List<Long> taskIds = tasks.stream().map(Task::getId).toList();
+        Map<Long, Long> attachmentCountByTaskId = taskAttachmentRepository.countByTaskIds(taskIds).stream()
+                .collect(Collectors.toMap(TaskAttachmentCount::getTaskId, TaskAttachmentCount::getCount));
+
+        List<TaskSummaryResponse> content = tasks.stream()
+                .map(task -> TaskSummaryResponse.from(
+                        task,
+                        attachmentCountByTaskId.getOrDefault(task.getId(), 0L).intValue()))
+                .toList();
+
+        return TaskListResponse.of(content);
     }
 }

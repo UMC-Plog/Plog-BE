@@ -1,5 +1,6 @@
 package com.plog.domain.task.controller;
 
+import com.plog.domain.task.dto.request.TaskAttachmentAddRequest;
 import com.plog.domain.task.dto.request.TaskCreateRequest;
 import com.plog.domain.task.dto.request.TaskStatusUpdateRequest;
 import com.plog.domain.task.dto.request.TaskUpdateRequest;
@@ -148,13 +149,13 @@ public class TaskController {
             summary = "업무카드 상태 변경",
             description = """
                 업무카드의 상태(cardStatus)만 변경합니다.
-                - 프론트 사용처: 예정 카드 상세의 "시작하기" 버튼(cardStatus=IN_PROGRESS),
+                - 프론트: 예정 카드 상세의 "진행 중" 버튼(cardStatus=IN_PROGRESS),
                   예정/진행중 카드 상세의 "완료 처리" 버튼(cardStatus=DONE)이 이 API를 호출합니다.
                 - 프로젝트 활성 멤버라면 누구나 변경할 수 있습니다(담당자 본인 제한 없음).
                 - 상태 전이에 제한은 없습니다(완료 → 예정으로 되돌리는 것도 가능).
                 - DONE으로 변경하면 completedAt이 현재 시각으로 기록되고,
                   DONE에서 다른 상태로 바뀌면 completedAt은 null로 초기화됩니다.
-                - 상세 조회(GET)는 부작용 없는 순수 조회입니다 — 카드를 열람하는 것만으로는
+                - 상세 조회(GET)는 순수 조회입니다 — 카드를 열람하는 것만으로는
                   상태가 바뀌지 않습니다.
                 - 제목/담당자/담당 영역/마감일은 이 API의 대상이 아닙니다(업무카드 수정 API 사용).
                 - taskId가 없거나 URL의 projectId 소속이 아니면 TASK007을 반환합니다.
@@ -170,6 +171,70 @@ public class TaskController {
     ) {
         TaskStatusUpdateResponse response = taskService.updateTaskStatus(projectId, taskId, userId, request);
         return ApiResponse.success(TaskSuccessCode.TASK_STATUS_UPDATED, response);
+    }
+
+    @Operation(
+            summary = "업무카드 첨부파일 등록",
+            description = """
+                    업무카드에 산출물(파일 또는 링크)을 하나 추가합니다.
+                    - 프로젝트 활성 멤버라면 누구나 등록할 수 있습니다.
+                    - EXTERNAL 타입은 허용되지 않습니다.
+                    - 카드당 첨부파일은 최대 10개까지 등록 가능합니다.
+                    - FILE 타입은 fileKey를, LINK 타입은 fileUrl을 사용합니다.
+                    - 인증 필요(Access Token).
+                    """
+    )
+    @PostMapping("/{taskId}/attachments")
+    public ResponseEntity<ApiResponse<TaskAttachmentAddResponse>> addAttachment(
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody TaskAttachmentAddRequest request
+    ) {
+        TaskAttachmentAddResponse response = taskService.addAttachment(projectId, taskId, userId, request);
+        return ResponseEntity.status(TaskSuccessCode.TASK_ATTACHMENT_ADDED.getHttpStatus())
+                .body(ApiResponse.success(TaskSuccessCode.TASK_ATTACHMENT_ADDED, response));
+    }
+
+    @Operation(
+            summary = "업무카드 첨부파일 삭제",
+            description = """
+                    업무카드에 등록된 첨부파일 하나를 삭제합니다.
+                    - 프로젝트 활성 멤버라면 누구나 삭제할 수 있습니다.
+                    - taskAttachmentId가 URL의 taskId 소속이 아니면 TASK008을 반환합니다.
+                    - FILE 타입 첨부는 S3 원본 파일도 비동기로 삭제됩니다.
+                    - 인증 필요(Access Token).
+                    """
+    )
+    @DeleteMapping("/{taskId}/attachments/{taskAttachmentId}")
+    public ApiResponse<TaskDeleteResponse> deleteAttachment(
+            @PathVariable Long projectId,
+            @PathVariable Long taskId,
+            @PathVariable Long taskAttachmentId,
+            @AuthenticationPrincipal Long userId
+    ) {
+        TaskDeleteResponse response = taskService.deleteAttachment(projectId, taskId, taskAttachmentId, userId);
+        return ApiResponse.success(TaskSuccessCode.TASK_ATTACHMENT_DELETED, response);
+    }
+
+    @Operation(
+            summary = "마감일 초과 업무카드 조회",
+            description = """
+                    마감일이 지났고 상태가 완료(DONE)가 아닌 업무카드만 조회합니다.
+                    - 로그인 사용자가 해당 프로젝트의 활성 멤버가 아니면 접근할 수 없습니다.
+                    - 마감일이 오래전에 지난 카드부터(endDate 오름차순) 정렬됩니다.
+                    - 응답 형태는 업무카드 목록 조회(GET /tasks) API와 동일합니다.
+                    - 해당하는 카드가 없으면 빈 배열을 반환합니다.
+                    - 인증 필요(Access Token).
+                    """
+    )
+    @GetMapping("/overdue")
+    public ApiResponse<TaskListResponse> getOverdueTasks(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal Long userId
+    ) {
+        TaskListResponse response = taskService.getOverdueTasks(projectId, userId);
+        return ApiResponse.success(TaskSuccessCode.TASK_LIST_FOUND, response);
     }
   
 }

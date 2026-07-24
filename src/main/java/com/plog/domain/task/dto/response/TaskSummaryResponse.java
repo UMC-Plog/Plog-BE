@@ -5,6 +5,7 @@ import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskAttachment;
 import com.plog.domain.task.entity.TaskCategory;
 import com.plog.domain.task.entity.TaskStatus;
+import com.plog.domain.user.entity.ProfilePreset;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -22,13 +23,13 @@ public record TaskSummaryResponse(
     public record AssigneeResponse(
             Long projectMemberId,
             String nickname,
-            String profileImageUrl // ChatChannelParticipantResponse/ProjectListResponse와 동일한 필드명 컨벤션
+            ProfilePreset profilePreset // ChatChannelParticipantResponse/ProjectListResponse와 동일한 필드명 컨벤션
     ) {
         public static AssigneeResponse from(Task task) {
             return new AssigneeResponse(
                     task.getProjectMember().getId(),
                     task.getProjectMember().getAnNickname(),
-                    task.getProjectMember().getUser().getProfileImageUrl()
+                    task.getProjectMember().getUser().getProfilePreset()
             );
         }
     }

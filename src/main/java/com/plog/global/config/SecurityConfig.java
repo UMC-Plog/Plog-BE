@@ -36,7 +36,8 @@ public class SecurityConfig {
             "/api/auth/signup",
             "/api/auth/login",
             "/api/auth/reissue",
-            "/api/auth/logout"
+            "/api/auth/logout",
+            "/ws-stomp/**"
     };
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
