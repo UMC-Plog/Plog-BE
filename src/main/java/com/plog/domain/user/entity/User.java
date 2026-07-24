@@ -55,8 +55,10 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private String nickname;
 
-    @Column(name = "profile_image_url")
-    private String profileImageUrl;
+    // 프리셋 아바타. null = 기본(회색) 아바타. 커스텀 업로드는 없음(프론트가 프리셋 이미지 소유).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "profile_preset")
+    private ProfilePreset profilePreset;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "provider_type")
@@ -65,13 +67,21 @@ public class User extends BaseEntity {
     @Column(name = "provider_id")
     private String providerId;
 
-    // 이메일 가입: password만 세팅, provider 접근 불가 → XOR 제약을 애초에 위반할 수 없음
+    // 프리셋 미선택(기본 아바타) 가입.
     public static User createLocal(String email, String encodedPassword, String name, String nickname) {
+        return createLocal(email, encodedPassword, name, nickname, null);
+    }
+
+    // 이메일 가입: password만 세팅, provider 접근 불가 → XOR 제약을 애초에 위반할 수 없음
+    // profilePreset은 선택(null=기본 아바타).
+    public static User createLocal(String email, String encodedPassword, String name, String nickname,
+                                   ProfilePreset profilePreset) {
         return User.builder()
                 .email(email)
                 .password(encodedPassword)
                 .name(name)
                 .nickname(nickname)
+                .profilePreset(profilePreset)
                 .build();
     }
 
@@ -90,5 +100,10 @@ public class User extends BaseEntity {
     // 로그인 방식은 provider 존재 여부로 유도 (별도 login_type 컬럼 불필요 — is_linked와 같은 원칙)
     public boolean isSocialUser() {
         return providerType != null;
+    }
+
+    // 프리셋 아바타 변경. 변경 API는 8종 중 하나만 전달(기획상 "기본으로 되돌림" 옵션 없음).
+    public void changeProfilePreset(ProfilePreset profilePreset) {
+        this.profilePreset = profilePreset;
     }
 }

@@ -39,7 +39,7 @@ public class ChatChannelParticipantService {
         return new ChatChannelParticipantResponse(
                 member.getUser().getId(),
                 member.getUser().getNickname(),
-                member.getUser().getProfileImageUrl()
+                member.getUser().getProfilePreset()
         );
     }
 }
