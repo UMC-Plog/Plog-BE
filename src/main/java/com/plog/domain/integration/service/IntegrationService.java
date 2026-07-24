@@ -1,8 +1,8 @@
 package com.plog.domain.integration.service;
 
-import com.plog.domain.integration.dto.response.ExternalLinkItemResponse;
-import com.plog.domain.integration.dto.response.ExternalLinkStatusResponse;
+import com.plog.domain.integration.dto.response.IntegrationItemResponse;
 import com.plog.domain.integration.dto.response.IntegrationDisconnectionResponse;
+import com.plog.domain.integration.dto.response.IntegrationStatusResponse;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.ProjectIntegrationRepository;
@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class ExternalLinkService {
+public class IntegrationService {
 
     private static final List<LinkType> SUPPORTED_LINK_TYPES = List.of(
             LinkType.GITHUB,
@@ -36,7 +36,7 @@ public class ExternalLinkService {
     private final ProjectAccessService projectAccessService;
     private final ProjectIntegrationRepository projectIntegrationRepository;
 
-    public ExternalLinkStatusResponse getMyExternalLinks(Long projectId, Long userId) {
+    public IntegrationStatusResponse getProjectIntegrations(Long projectId, Long userId) {
         if (!projectRepository.existsById(projectId)) {
             throw new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND);
         }
@@ -52,11 +52,11 @@ public class ExternalLinkService {
                         (existing, ignored) -> existing
                 ));
 
-        List<ExternalLinkItemResponse> links = SUPPORTED_LINK_TYPES.stream()
+        List<IntegrationItemResponse> integrations = SUPPORTED_LINK_TYPES.stream()
                 .map(linkType -> toResponse(linkType, connectionsByType.get(linkType)))
                 .toList();
 
-        return new ExternalLinkStatusResponse(projectId, projectMember.getId(), links);
+        return new IntegrationStatusResponse(projectId, projectMember.getId(), integrations);
     }
 
     @Transactional
@@ -74,12 +74,12 @@ public class ExternalLinkService {
         return new IntegrationDisconnectionResponse(projectId, linkType);
     }
 
-    private ExternalLinkItemResponse toResponse(LinkType linkType, ProjectIntegration integration) {
+    private IntegrationItemResponse toResponse(LinkType linkType, ProjectIntegration integration) {
         if (integration == null || !integration.isConnected()) {
-            return new ExternalLinkItemResponse(linkType, false, null);
+            return new IntegrationItemResponse(linkType, false, null);
         }
 
-        return new ExternalLinkItemResponse(
+        return new IntegrationItemResponse(
                 linkType,
                 true,
                 integration.getExternalAccountName()

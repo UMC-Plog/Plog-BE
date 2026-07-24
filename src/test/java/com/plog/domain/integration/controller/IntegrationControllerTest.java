@@ -9,13 +9,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.plog.domain.integration.config.IntegrationRedirectProperties;
-import com.plog.domain.integration.dto.response.ExternalLinkItemResponse;
-import com.plog.domain.integration.dto.response.ExternalLinkStatusResponse;
+import com.plog.domain.integration.dto.response.IntegrationItemResponse;
+import com.plog.domain.integration.dto.response.IntegrationStatusResponse;
 import com.plog.domain.integration.entity.LinkType;
-import com.plog.domain.integration.service.ExternalLinkService;
 import com.plog.domain.integration.service.FigmaIntegrationService;
 import com.plog.domain.integration.service.GithubIntegrationService;
 import com.plog.domain.integration.service.GoogleIntegrationService;
+import com.plog.domain.integration.service.IntegrationService;
 import com.plog.domain.integration.service.NotionIntegrationService;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -33,15 +33,15 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(ExternalLinkController.class)
+@WebMvcTest(IntegrationController.class)
 @AutoConfigureMockMvc(addFilters = false)
-class ExternalLinkControllerTest {
+class IntegrationControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
     @MockitoBean
-    private ExternalLinkService externalLinkService;
+    private IntegrationService integrationService;
 
     @MockitoBean
     private GithubIntegrationService githubIntegrationService;
@@ -71,53 +71,53 @@ class ExternalLinkControllerTest {
 
     @Test
     @DisplayName("내 외부 툴 연동 상태를 공통 ApiResponse 형식으로 조회하고 accessToken은 노출하지 않는다")
-    void getMyExternalLinksReturnsApiResponse() throws Exception {
+    void getProjectIntegrationsReturnsApiResponse() throws Exception {
         Long projectId = 1L;
         Long userId = 10L;
         authenticate(userId);
-        given(externalLinkService.getMyExternalLinks(eq(projectId), eq(userId)))
-                .willReturn(new ExternalLinkStatusResponse(projectId, 100L, List.of(
-                        new ExternalLinkItemResponse(LinkType.GITHUB, true, "github-user"),
-                        new ExternalLinkItemResponse(LinkType.FIGMA, false, null),
-                        new ExternalLinkItemResponse(LinkType.NOTION, true, "notion-user"),
-                        new ExternalLinkItemResponse(LinkType.GOOGLE, false, null)
+        given(integrationService.getProjectIntegrations(eq(projectId), eq(userId)))
+                .willReturn(new IntegrationStatusResponse(projectId, 100L, List.of(
+                        new IntegrationItemResponse(LinkType.GITHUB, true, "github-user"),
+                        new IntegrationItemResponse(LinkType.FIGMA, false, null),
+                        new IntegrationItemResponse(LinkType.NOTION, true, "notion-user"),
+                        new IntegrationItemResponse(LinkType.GOOGLE, false, null)
                 )));
 
-        mockMvc.perform(get("/api/projects/{projectId}/me/external-links", projectId))
+        mockMvc.perform(get("/api/projects/{projectId}/integrations", projectId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.code").value("PROJECT001"))
                 .andExpect(jsonPath("$.message").value("외부 툴 연동 상태를 조회했습니다."))
                 .andExpect(jsonPath("$.result.projectId").value(projectId))
                 .andExpect(jsonPath("$.result.projectMemberId").value(100L))
-                .andExpect(jsonPath("$.result.links[0].linkType").value("GITHUB"))
-                .andExpect(jsonPath("$.result.links[0].linked").value(true))
-                .andExpect(jsonPath("$.result.links[0].connectedAccountName").value("github-user"))
-                .andExpect(jsonPath("$.result.links[1].linkType").value("FIGMA"))
-                .andExpect(jsonPath("$.result.links[1].linked").value(false))
-                .andExpect(jsonPath("$.result.links[1].connectedAccountName").value(nullValue()))
-                .andExpect(jsonPath("$.result.links[2].linkType").value("NOTION"))
-                .andExpect(jsonPath("$.result.links[2].linked").value(true))
-                .andExpect(jsonPath("$.result.links[2].connectedAccountName").value("notion-user"))
-                .andExpect(jsonPath("$.result.links[3].linkType").value("GOOGLE"))
-                .andExpect(jsonPath("$.result.links[3].linked").value(false))
-                .andExpect(jsonPath("$.result.links[3].connectedAccountName").value(nullValue()))
-                .andExpect(jsonPath("$.result.links[0].accessToken").doesNotExist())
-                .andExpect(jsonPath("$.result.links[1].accessToken").doesNotExist())
-                .andExpect(jsonPath("$.result.links[2].accessToken").doesNotExist())
-                .andExpect(jsonPath("$.result.links[3].accessToken").doesNotExist());
+                .andExpect(jsonPath("$.result.integrations[0].linkType").value("GITHUB"))
+                .andExpect(jsonPath("$.result.integrations[0].linked").value(true))
+                .andExpect(jsonPath("$.result.integrations[0].connectedAccountName").value("github-user"))
+                .andExpect(jsonPath("$.result.integrations[1].linkType").value("FIGMA"))
+                .andExpect(jsonPath("$.result.integrations[1].linked").value(false))
+                .andExpect(jsonPath("$.result.integrations[1].connectedAccountName").value(nullValue()))
+                .andExpect(jsonPath("$.result.integrations[2].linkType").value("NOTION"))
+                .andExpect(jsonPath("$.result.integrations[2].linked").value(true))
+                .andExpect(jsonPath("$.result.integrations[2].connectedAccountName").value("notion-user"))
+                .andExpect(jsonPath("$.result.integrations[3].linkType").value("GOOGLE"))
+                .andExpect(jsonPath("$.result.integrations[3].linked").value(false))
+                .andExpect(jsonPath("$.result.integrations[3].connectedAccountName").value(nullValue()))
+                .andExpect(jsonPath("$.result.integrations[0].accessToken").doesNotExist())
+                .andExpect(jsonPath("$.result.integrations[1].accessToken").doesNotExist())
+                .andExpect(jsonPath("$.result.integrations[2].accessToken").doesNotExist())
+                .andExpect(jsonPath("$.result.integrations[3].accessToken").doesNotExist());
     }
 
     @Test
     @DisplayName("프로젝트가 없으면 404와 PROJECT001을 반환한다")
-    void getMyExternalLinksReturnsNotFound() throws Exception {
+    void getProjectIntegrationsReturnsNotFound() throws Exception {
         Long projectId = 404L;
         Long userId = 10L;
         authenticate(userId);
-        given(externalLinkService.getMyExternalLinks(eq(projectId), eq(userId)))
+        given(integrationService.getProjectIntegrations(eq(projectId), eq(userId)))
                 .willThrow(new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
 
-        mockMvc.perform(get("/api/projects/{projectId}/me/external-links", projectId))
+        mockMvc.perform(get("/api/projects/{projectId}/integrations", projectId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.isSuccess").value(false))
                 .andExpect(jsonPath("$.code").value("PROJECT001"))
@@ -126,14 +126,14 @@ class ExternalLinkControllerTest {
 
     @Test
     @DisplayName("활성 프로젝트 멤버가 아니면 403과 PROJECT002를 반환한다")
-    void getMyExternalLinksReturnsForbidden() throws Exception {
+    void getProjectIntegrationsReturnsForbidden() throws Exception {
         Long projectId = 1L;
         Long userId = 10L;
         authenticate(userId);
-        given(externalLinkService.getMyExternalLinks(eq(projectId), eq(userId)))
+        given(integrationService.getProjectIntegrations(eq(projectId), eq(userId)))
                 .willThrow(new ApiException(ProjectErrorCode.PROJECT_MEMBER_REQUIRED));
 
-        mockMvc.perform(get("/api/projects/{projectId}/me/external-links", projectId))
+        mockMvc.perform(get("/api/projects/{projectId}/integrations", projectId))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.isSuccess").value(false))
                 .andExpect(jsonPath("$.code").value("PROJECT002"))
@@ -142,16 +142,16 @@ class ExternalLinkControllerTest {
 
     @Test
     @DisplayName("projectId 타입이 올바르지 않으면 400과 COMMON400을 반환한다")
-    void getMyExternalLinksRejectsMalformedProjectId() throws Exception {
+    void getProjectIntegrationsRejectsMalformedProjectId() throws Exception {
         authenticate(10L);
 
-        mockMvc.perform(get("/api/projects/{projectId}/me/external-links", "not-a-number"))
+        mockMvc.perform(get("/api/projects/{projectId}/integrations", "not-a-number"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.isSuccess").value(false))
                 .andExpect(jsonPath("$.code").value("COMMON400"))
                 .andExpect(jsonPath("$.message").value("입력값이 올바르지 않습니다."));
 
-        verifyNoInteractions(externalLinkService);
+        verifyNoInteractions(integrationService);
     }
 
     private void authenticate(Long userId) {

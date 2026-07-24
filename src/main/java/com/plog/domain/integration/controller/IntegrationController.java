@@ -1,23 +1,22 @@
 package com.plog.domain.integration.controller;
 
+import com.plog.domain.integration.controller.docs.IntegrationControllerDoc;
 import com.plog.domain.integration.config.IntegrationRedirectProperties;
-import com.plog.domain.integration.dto.response.ExternalLinkStatusResponse;
 import com.plog.domain.integration.dto.response.IntegrationAuthorizationResponse;
 import com.plog.domain.integration.dto.response.IntegrationConnectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationDisconnectionResponse;
+import com.plog.domain.integration.dto.response.IntegrationStatusResponse;
 import com.plog.domain.integration.entity.LinkType;
-import com.plog.domain.integration.service.ExternalLinkService;
 import com.plog.domain.integration.service.FigmaIntegrationService;
 import com.plog.domain.integration.service.GithubIntegrationService;
 import com.plog.domain.integration.service.GoogleIntegrationService;
+import com.plog.domain.integration.service.IntegrationService;
 import com.plog.domain.integration.service.NotionIntegrationService;
 import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.IntegrationSuccessCode;
 import com.plog.global.api.response.ProjectSuccessCode;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -31,39 +30,32 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.view.RedirectView;
 import org.springframework.web.util.UriComponentsBuilder;
 
-@Tag(name = "external-link", description = "외부 계정 연동 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api")
-public class ExternalLinkController {
+public class IntegrationController implements IntegrationControllerDoc {
 
-    private final ExternalLinkService externalLinkService;
+    private final IntegrationService integrationService;
     private final GithubIntegrationService githubIntegrationService;
     private final FigmaIntegrationService figmaIntegrationService;
     private final NotionIntegrationService notionIntegrationService;
     private final GoogleIntegrationService googleIntegrationService;
     private final IntegrationRedirectProperties redirectProperties;
 
-    @Operation(
-            summary = "내 외부 툴 연동 상태 조회",
-            description = "현재 사용자의 프로젝트 외부 툴 연동 상태를 조회합니다."
-    )
-    @GetMapping("/projects/{projectId}/me/external-links")
-    public ResponseEntity<ApiResponse<ExternalLinkStatusResponse>> getMyExternalLinks(
+    @Override
+    @GetMapping("/projects/{projectId}/integrations")
+    public ResponseEntity<ApiResponse<IntegrationStatusResponse>> getProjectIntegrations(
             @PathVariable Long projectId,
             @AuthenticationPrincipal Long userId
     ) {
-        ExternalLinkStatusResponse response = externalLinkService.getMyExternalLinks(projectId, userId);
+        IntegrationStatusResponse response = integrationService.getProjectIntegrations(projectId, userId);
 
         return ResponseEntity
                 .status(ProjectSuccessCode.EXTERNAL_LINKS_RETRIEVED.getHttpStatus())
                 .body(ApiResponse.success(ProjectSuccessCode.EXTERNAL_LINKS_RETRIEVED, response));
     }
 
-    @Operation(
-            summary = "외부 계정 연동 URL 발급",
-            description = "프로젝트 멤버가 provider 승인 화면으로 이동할 URL을 발급합니다. provider는 github, figma, notion, google을 지원합니다."
-    )
+    @Override
     @PostMapping("/projects/{projectId}/integrations/{provider}/authorization")
     public ResponseEntity<ApiResponse<IntegrationAuthorizationResponse>> issueAuthorizationUrl(
             @PathVariable Long projectId,
@@ -80,25 +72,19 @@ public class ExternalLinkController {
         return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.AUTHORIZATION_URL_ISSUED, response));
     }
 
-    @Operation(
-            summary = "외부 계정 연동 해제",
-            description = "프로젝트에 저장된 provider 연동 정보를 삭제합니다. provider는 github, figma, notion, google을 지원합니다."
-    )
+    @Override
     @DeleteMapping("/projects/{projectId}/integrations/{provider}")
     public ResponseEntity<ApiResponse<IntegrationDisconnectionResponse>> disconnect(
             @PathVariable Long projectId,
             @PathVariable String provider,
             @AuthenticationPrincipal Long userId
     ) {
-        IntegrationDisconnectionResponse response = externalLinkService.disconnect(
+        IntegrationDisconnectionResponse response = integrationService.disconnect(
                 projectId, userId, parseLinkType(provider));
         return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_DISCONNECTED, response));
     }
 
-    @Operation(
-            summary = "외부 계정 연동 callback",
-            description = "provider가 승인 완료 후 호출하는 callback입니다. GitHub는 installation_id, OAuth provider는 code를 전달합니다."
-    )
+    @Override
     @GetMapping("/integrations/{provider}/callback")
     public RedirectView integrationCallback(
             @PathVariable String provider,
