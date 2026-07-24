@@ -28,6 +28,11 @@ import lombok.NoArgsConstructor;
                 name = "idx_chat_message_room_sequence",
                 columnList = "chat_room_id, message_sequence",
                 unique = true
+        ),
+        @Index(
+                name = "idx_chat_message_room_member_client_id",
+                columnList = "chat_room_id, project_member_id, client_message_id",
+                unique = true
         )
 })
 public class ChatMessage extends BaseEntity {
@@ -53,11 +58,15 @@ public class ChatMessage extends BaseEntity {
     @Column(name = "message", nullable = false, columnDefinition = "TEXT")
     private String message;
 
+    @Column(name = "client_message_id", length = 64)
+    private String clientMessageId;
+
     public static ChatMessage create(
             ChatRoom chatRoom,
             ProjectMember projectMember,
             String message,
-            long messageSequence
+            long messageSequence,
+            String clientMessageId
     ) {
         Long roomProjectId = chatRoom.getProject().getId();
         Long memberProjectId = projectMember.getProject().getId();
@@ -75,6 +84,7 @@ public class ChatMessage extends BaseEntity {
                 .projectMember(projectMember)
                 .message(message)
                 .messageSequence(messageSequence)
+                .clientMessageId(clientMessageId)
                 .build();
     }
 }

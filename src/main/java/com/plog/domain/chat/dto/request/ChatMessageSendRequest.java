@@ -1,4 +1,4 @@
 package com.plog.domain.chat.dto.request;
 
-public record ChatMessageSendRequest(String message) {
+public record ChatMessageSendRequest(String clientMessageId, String message) {
 }

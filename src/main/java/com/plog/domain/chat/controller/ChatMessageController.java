@@ -27,7 +27,7 @@ public class ChatMessageController {
             Principal principal
     ) {
         Long userId = ((StompPrincipal) principal).userId();
-        chatMessageSendService.send(roomId, userId, request.message());
+        chatMessageSendService.send(roomId, userId, request.clientMessageId(), request.message());
     }
 
     // 발신자 본인에게만 전송 — /user/queue/errors 구독 필요 (클라이언트가 세션별 개인 큐 구독)
