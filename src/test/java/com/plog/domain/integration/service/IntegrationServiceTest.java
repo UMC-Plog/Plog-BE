@@ -7,10 +7,11 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.plog.domain.integration.dto.response.ExternalLinkStatusResponse;
+import com.plog.domain.integration.dto.response.IntegrationStatusResponse;
 import com.plog.domain.integration.entity.LinkType;
-import com.plog.domain.integration.repository.ExternalConnectionRepository;
-import com.plog.domain.integration.repository.ExternalConnectionSummary;
+import com.plog.domain.integration.entity.IntegrationCredentialType;
+import com.plog.domain.integration.entity.ProjectIntegration;
+import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectRole;
@@ -27,7 +28,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class ExternalLinkServiceTest {
+class IntegrationServiceTest {
 
     @Mock
     private ProjectRepository projectRepository;
@@ -36,91 +37,91 @@ class ExternalLinkServiceTest {
     private ProjectAccessService projectAccessService;
 
     @Mock
-    private ExternalConnectionRepository externalConnectionRepository;
+    private ProjectIntegrationRepository projectIntegrationRepository;
 
     @InjectMocks
-    private ExternalLinkService externalLinkService;
+    private IntegrationService integrationService;
 
     @Test
     @DisplayName("활성 프로젝트 멤버의 외부 툴 연동 상태를 LinkType 순서로 조회한다")
-    void getMyExternalLinksReturnsStatusesInLinkTypeOrder() {
+    void getProjectIntegrationsReturnsStatusesInLinkTypeOrder() {
         Long projectId = 1L;
         Long userId = 10L;
         ProjectMember projectMember = projectMember();
-        ExternalConnectionSummary github = externalConnection(LinkType.GITHUB, "github-user");
-        ExternalConnectionSummary notion = externalConnection(LinkType.NOTION, "notion-user");
+        ProjectIntegration github = projectIntegration(LinkType.GITHUB, "github-user");
+        ProjectIntegration notion = projectIntegration(LinkType.NOTION, "notion-user");
 
         given(projectRepository.existsById(projectId)).willReturn(true);
         given(projectAccessService.requireActiveMember(projectId, userId)).willReturn(projectMember);
-        given(externalConnectionRepository.findAllByProjectMemberId(100L))
+        given(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId))
                 .willReturn(List.of(notion, github));
 
-        ExternalLinkStatusResponse response = externalLinkService.getMyExternalLinks(projectId, userId);
+        IntegrationStatusResponse response = integrationService.getProjectIntegrations(projectId, userId);
 
         assertThat(response.projectId()).isEqualTo(projectId);
         assertThat(response.projectMemberId()).isEqualTo(100L);
-        assertThat(response.links()).extracting("linkType")
-                .containsExactly(LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION);
-        assertThat(response.links()).extracting("linked")
-                .containsExactly(true, false, true);
-        assertThat(response.links()).extracting("connectedAccountName")
-                .containsExactly("github-user", null, "notion-user");
-        verify(externalConnectionRepository).findAllByProjectMemberId(100L);
+        assertThat(response.integrations()).extracting("linkType")
+                .containsExactly(LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION, LinkType.GOOGLE);
+        assertThat(response.integrations()).extracting("linked")
+                .containsExactly(true, false, true, false);
+        assertThat(response.integrations()).extracting("connectedAccountName")
+                .containsExactly("github-user", null, "notion-user", null);
+        verify(projectIntegrationRepository).findAllByProjectIdOrderByLinkTypeAsc(projectId);
     }
 
     @Test
     @DisplayName("프로젝트가 없으면 PROJECT_NOT_FOUND를 던지고 권한과 연결을 조회하지 않는다")
-    void getMyExternalLinksThrowsProjectNotFound() {
+    void getProjectIntegrationsThrowsProjectNotFound() {
         Long projectId = 404L;
         Long userId = 10L;
         given(projectRepository.existsById(projectId)).willReturn(false);
 
-        assertThatThrownBy(() -> externalLinkService.getMyExternalLinks(projectId, userId))
+        assertThatThrownBy(() -> integrationService.getProjectIntegrations(projectId, userId))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(ProjectErrorCode.PROJECT_NOT_FOUND)
                 );
 
         verify(projectAccessService, never()).requireActiveMember(projectId, userId);
-        verify(externalConnectionRepository, never()).findAllByProjectMemberId(anyLong());
+        verify(projectIntegrationRepository, never()).findAllByProjectIdOrderByLinkTypeAsc(anyLong());
     }
 
     @Test
     @DisplayName("활성 프로젝트 멤버가 아니면 PROJECT_MEMBER_REQUIRED를 전파한다")
-    void getMyExternalLinksRequiresActiveProjectMember() {
+    void getProjectIntegrationsRequiresActiveProjectMember() {
         Long projectId = 1L;
         Long userId = 10L;
         given(projectRepository.existsById(projectId)).willReturn(true);
         given(projectAccessService.requireActiveMember(projectId, userId))
                 .willThrow(new ApiException(ProjectErrorCode.PROJECT_MEMBER_REQUIRED));
 
-        assertThatThrownBy(() -> externalLinkService.getMyExternalLinks(projectId, userId))
+        assertThatThrownBy(() -> integrationService.getProjectIntegrations(projectId, userId))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(ProjectErrorCode.PROJECT_MEMBER_REQUIRED)
                 );
 
-        verify(externalConnectionRepository, never()).findAllByProjectMemberId(anyLong());
+        verify(projectIntegrationRepository, never()).findAllByProjectIdOrderByLinkTypeAsc(anyLong());
     }
 
     @Test
     @DisplayName("연결 row가 있어도 externalAccountId가 null이면 미연결로 응답한다")
-    void getMyExternalLinksTreatsNullExternalAccountIdAsUnlinked() {
+    void getProjectIntegrationsTreatsNullExternalAccountIdAsUnlinked() {
         Long projectId = 1L;
         Long userId = 10L;
         ProjectMember projectMember = projectMember();
-        ExternalConnectionSummary figma = externalConnection(LinkType.FIGMA, null);
+        ProjectIntegration figma = projectIntegration(LinkType.FIGMA, null);
         given(projectRepository.existsById(projectId)).willReturn(true);
         given(projectAccessService.requireActiveMember(projectId, userId)).willReturn(projectMember);
-        given(externalConnectionRepository.findAllByProjectMemberId(100L)).willReturn(List.of(figma));
+        given(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId)).willReturn(List.of(figma));
 
-        ExternalLinkStatusResponse response = externalLinkService.getMyExternalLinks(projectId, userId);
+        IntegrationStatusResponse response = integrationService.getProjectIntegrations(projectId, userId);
 
-        assertThat(response.links()).extracting("linkType")
-                .containsExactly(LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION);
-        assertThat(response.links()).extracting("linked")
-                .containsExactly(false, false, false);
-        assertThat(response.links()).extracting("connectedAccountName")
-                .containsExactly(null, null, null);
-        verify(externalConnectionRepository).findAllByProjectMemberId(100L);
+        assertThat(response.integrations()).extracting("linkType")
+                .containsExactly(LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION, LinkType.GOOGLE);
+        assertThat(response.integrations()).extracting("linked")
+                .containsExactly(false, false, false, false);
+        assertThat(response.integrations()).extracting("connectedAccountName")
+                .containsExactly(null, null, null, null);
+        verify(projectIntegrationRepository).findAllByProjectIdOrderByLinkTypeAsc(projectId);
     }
 
     private ProjectMember projectMember() {
@@ -131,20 +132,16 @@ class ExternalLinkServiceTest {
                 .build();
     }
 
-    private ExternalConnectionSummary externalConnection(
+    private ProjectIntegration projectIntegration(
             LinkType linkType,
             String externalAccountId
     ) {
-        return new ExternalConnectionSummary() {
-            @Override
-            public LinkType getLinkType() {
-                return linkType;
-            }
-
-            @Override
-            public String getExternalAccountId() {
-                return externalAccountId;
-            }
-        };
+        return ProjectIntegration.builder()
+                .linkType(linkType)
+                .credentialType(IntegrationCredentialType.OAUTH)
+                .externalAccountId(externalAccountId)
+                .externalAccountName(externalAccountId)
+                .providerConnectionId(externalAccountId)
+                .build();
     }
 }

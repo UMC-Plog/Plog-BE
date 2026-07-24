@@ -54,6 +54,7 @@ public class SignupController {
                     - 사전 조건: 해당 이메일이 인증 완료 상태여야 합니다(다른 이메일로 가입 시 AUTH009).
                     - 필수 약관(서비스 이용약관/개인정보/외부데이터) 미동의 시 AUTH004. 마케팅은 선택.
                     - 비밀번호는 8자 이상 + 영문/숫자 포함(위반 시 COMMON400).
+                    - 프로필 프리셋(profilePreset)은 선택 — 미선택(null) 시 기본 아바타. 커스텀 업로드는 없습니다.
                     - 이메일 중복 AUTH001(일반)/AUTH002(소셜), 닉네임 중복 AUTH003.
                     """
     )
@@ -70,6 +71,7 @@ public class SignupController {
                                       "email": "user@example.com",
                                       "password": "plog1234",
                                       "nickname": "gildong",
+                                      "profilePreset": "OTTER",
                                       "agreements": [
                                         { "agreementType": "SERVICE_TERMS", "agreed": true },
                                         { "agreementType": "PRIVACY", "agreed": true },

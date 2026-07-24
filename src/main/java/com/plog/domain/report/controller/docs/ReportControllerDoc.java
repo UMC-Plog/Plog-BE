@@ -20,7 +20,11 @@ public interface ReportControllerDoc {
 
     @Operation(
             summary = "리포트 검색",
-            description = "ACTIVE 멤버십의 프로젝트 리포트를 프로젝트명과 완료 기간으로 검색합니다."
+            description = """
+                    ACTIVE 멤버십의 프로젝트 리포트를 프로젝트명과 완료 기간으로 Slice 검색합니다.
+                    keyword는 프로젝트명 검색에 사용하고, startDate/endDate는 리포트 완료일 범위 필터입니다.
+                    프론트는 hasNext=true일 때 다음 page를 요청하면 됩니다.
+                    """
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -51,7 +55,11 @@ public interface ReportControllerDoc {
 
     @Operation(
             summary = "리포트 PDF 다운로드 URL 발급",
-            description = "ACTIVE 프로젝트 멤버에게 완료된 리포트 PDF의 300초 다운로드 URL을 발급합니다."
+            description = """
+                    ACTIVE 프로젝트 멤버에게 완료된 리포트 PDF의 임시 다운로드 URL을 발급합니다.
+                    응답의 downloadUrl을 브라우저 이동/새 창 열기로 사용하면 파일 다운로드가 시작됩니다.
+                    URL 만료 시간은 expiresInSeconds로 내려갑니다.
+                    """
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(

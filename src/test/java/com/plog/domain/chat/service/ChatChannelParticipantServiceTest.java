@@ -10,6 +10,7 @@ import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
+import com.plog.domain.user.entity.ProfilePreset;
 import com.plog.domain.user.entity.User;
 import java.util.List;
 import java.util.Map;
@@ -37,9 +38,9 @@ class ChatChannelParticipantServiceTest {
         Project firstProject = project(10L);
         Project secondProject = project(20L);
         List<ProjectMember> activeMembers = List.of(
-                member(firstProject, user(1L, "바나", "https://image.test/1.png")),
+                member(firstProject, user(1L, "바나", ProfilePreset.OTTER)),
                 member(firstProject, user(2L, "팀원", null)),
-                member(secondProject, user(3L, "개발자", "https://image.test/3.png"))
+                member(secondProject, user(3L, "개발자", ProfilePreset.PANDA))
         );
         given(projectMemberRepository.findActiveMembers(
                 List.of(10L, 20L), MemberStatus.ACTIVE
@@ -49,11 +50,11 @@ class ChatChannelParticipantServiceTest {
                 service.getParticipantsByProjectIds(List.of(10L, 20L));
 
         assertThat(participants.get(10L)).containsExactly(
-                new ChatChannelParticipantResponse(1L, "바나", "https://image.test/1.png"),
+                new ChatChannelParticipantResponse(1L, "바나", ProfilePreset.OTTER),
                 new ChatChannelParticipantResponse(2L, "팀원", null)
         );
         assertThat(participants.get(20L)).containsExactly(
-                new ChatChannelParticipantResponse(3L, "개발자", "https://image.test/3.png")
+                new ChatChannelParticipantResponse(3L, "개발자", ProfilePreset.PANDA)
         );
     }
 
@@ -77,11 +78,11 @@ class ChatChannelParticipantServiceTest {
         return member;
     }
 
-    private User user(Long userId, String nickname, String profileImageUrl) {
+    private User user(Long userId, String nickname, ProfilePreset profilePreset) {
         User user = mock(User.class);
         given(user.getId()).willReturn(userId);
         given(user.getNickname()).willReturn(nickname);
-        given(user.getProfileImageUrl()).willReturn(profileImageUrl);
+        given(user.getProfilePreset()).willReturn(profilePreset);
         return user;
     }
 }

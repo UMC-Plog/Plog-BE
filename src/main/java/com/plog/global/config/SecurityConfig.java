@@ -40,6 +40,11 @@ public class SecurityConfig {
             "/ws-stomp/**"
     };
 
+    // provider OAuth/GitHub App callback은 사용자 JWT가 없으므로, 서버가 발급한 일회용 state로 검증한다.
+    private static final String[] PUBLIC_INTEGRATION_CALLBACK_PATHS = {
+            "/api/integrations/*/callback"
+    };
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
@@ -81,6 +86,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(SWAGGER_PATHS).permitAll()
                         .requestMatchers(PUBLIC_AUTH_PATHS).permitAll()
+                        .requestMatchers(PUBLIC_INTEGRATION_CALLBACK_PATHS).permitAll()
                         .anyRequest().authenticated())
                 .cors(withDefaults())
                 .formLogin(form -> form.disable())

@@ -11,6 +11,7 @@ import com.plog.domain.chat.dto.response.ChatChannelResponse;
 import com.plog.domain.chat.dto.response.ChatChannelParticipantResponse;
 import com.plog.domain.chat.service.ChatChannelListService;
 import com.plog.domain.chat.service.ChatChannelSearchService;
+import com.plog.domain.user.entity.ProfilePreset;
 import com.plog.global.api.error.ChatErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.SliceResponse;
@@ -69,7 +70,7 @@ class ChatChannelControllerTest {
                         List.of(new ChatChannelParticipantResponse(
                                 1L,
                                 "바나",
-                                "https://image.test/1.png"
+                                ProfilePreset.OTTER
                         ))
                 )),
                 0,
@@ -87,8 +88,8 @@ class ChatChannelControllerTest {
                 .andExpect(jsonPath("$.result.content[0].unreadMessageCount").value(2L))
                 .andExpect(jsonPath("$.result.content[0].participants[0].userId").value(1L))
                 .andExpect(jsonPath("$.result.content[0].participants[0].nickname").value("바나"))
-                .andExpect(jsonPath("$.result.content[0].participants[0].profileImageUrl")
-                        .value("https://image.test/1.png"))
+                .andExpect(jsonPath("$.result.content[0].participants[0].profilePreset")
+                        .value("OTTER"))
                 .andExpect(jsonPath("$.result.page").value(0))
                 .andExpect(jsonPath("$.result.size").value(20))
                 .andExpect(jsonPath("$.result.hasNext").value(false))
@@ -171,7 +172,7 @@ class ChatChannelControllerTest {
                 .andExpect(jsonPath("$.result.content[0].hasUnreadMessage").value(true))
                 .andExpect(jsonPath("$.result.content[0].unreadMessageCount").value(2L))
                 .andExpect(jsonPath("$.result.content[0].participants[0].userId").value(1L))
-                .andExpect(jsonPath("$.result.content[0].participants[0].profileImageUrl")
+                .andExpect(jsonPath("$.result.content[0].participants[0].profilePreset")
                         .value(nullValue()))
                 .andExpect(jsonPath("$.result.page").value(0))
                 .andExpect(jsonPath("$.result.hasNext").value(false))
