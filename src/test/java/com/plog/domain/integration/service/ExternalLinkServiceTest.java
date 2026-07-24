@@ -9,8 +9,9 @@ import static org.mockito.Mockito.verify;
 
 import com.plog.domain.integration.dto.response.ExternalLinkStatusResponse;
 import com.plog.domain.integration.entity.LinkType;
-import com.plog.domain.integration.repository.ExternalConnectionRepository;
-import com.plog.domain.integration.repository.ExternalConnectionSummary;
+import com.plog.domain.integration.entity.IntegrationCredentialType;
+import com.plog.domain.integration.entity.ProjectIntegration;
+import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectRole;
@@ -36,7 +37,7 @@ class ExternalLinkServiceTest {
     private ProjectAccessService projectAccessService;
 
     @Mock
-    private ExternalConnectionRepository externalConnectionRepository;
+    private ProjectIntegrationRepository projectIntegrationRepository;
 
     @InjectMocks
     private ExternalLinkService externalLinkService;
@@ -47,12 +48,12 @@ class ExternalLinkServiceTest {
         Long projectId = 1L;
         Long userId = 10L;
         ProjectMember projectMember = projectMember();
-        ExternalConnectionSummary github = externalConnection(LinkType.GITHUB, "github-user");
-        ExternalConnectionSummary notion = externalConnection(LinkType.NOTION, "notion-user");
+        ProjectIntegration github = projectIntegration(LinkType.GITHUB, "github-user");
+        ProjectIntegration notion = projectIntegration(LinkType.NOTION, "notion-user");
 
         given(projectRepository.existsById(projectId)).willReturn(true);
         given(projectAccessService.requireActiveMember(projectId, userId)).willReturn(projectMember);
-        given(externalConnectionRepository.findAllByProjectMemberId(100L))
+        given(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId))
                 .willReturn(List.of(notion, github));
 
         ExternalLinkStatusResponse response = externalLinkService.getMyExternalLinks(projectId, userId);
@@ -60,12 +61,12 @@ class ExternalLinkServiceTest {
         assertThat(response.projectId()).isEqualTo(projectId);
         assertThat(response.projectMemberId()).isEqualTo(100L);
         assertThat(response.links()).extracting("linkType")
-                .containsExactly(LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION);
+                .containsExactly(LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION, LinkType.GOOGLE);
         assertThat(response.links()).extracting("linked")
-                .containsExactly(true, false, true);
+                .containsExactly(true, false, true, false);
         assertThat(response.links()).extracting("connectedAccountName")
-                .containsExactly("github-user", null, "notion-user");
-        verify(externalConnectionRepository).findAllByProjectMemberId(100L);
+                .containsExactly("github-user", null, "notion-user", null);
+        verify(projectIntegrationRepository).findAllByProjectIdOrderByLinkTypeAsc(projectId);
     }
 
     @Test
@@ -81,7 +82,7 @@ class ExternalLinkServiceTest {
                 );
 
         verify(projectAccessService, never()).requireActiveMember(projectId, userId);
-        verify(externalConnectionRepository, never()).findAllByProjectMemberId(anyLong());
+        verify(projectIntegrationRepository, never()).findAllByProjectIdOrderByLinkTypeAsc(anyLong());
     }
 
     @Test
@@ -98,7 +99,7 @@ class ExternalLinkServiceTest {
                         assertThat(exception.getErrorCode()).isEqualTo(ProjectErrorCode.PROJECT_MEMBER_REQUIRED)
                 );
 
-        verify(externalConnectionRepository, never()).findAllByProjectMemberId(anyLong());
+        verify(projectIntegrationRepository, never()).findAllByProjectIdOrderByLinkTypeAsc(anyLong());
     }
 
     @Test
@@ -107,20 +108,20 @@ class ExternalLinkServiceTest {
         Long projectId = 1L;
         Long userId = 10L;
         ProjectMember projectMember = projectMember();
-        ExternalConnectionSummary figma = externalConnection(LinkType.FIGMA, null);
+        ProjectIntegration figma = projectIntegration(LinkType.FIGMA, null);
         given(projectRepository.existsById(projectId)).willReturn(true);
         given(projectAccessService.requireActiveMember(projectId, userId)).willReturn(projectMember);
-        given(externalConnectionRepository.findAllByProjectMemberId(100L)).willReturn(List.of(figma));
+        given(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId)).willReturn(List.of(figma));
 
         ExternalLinkStatusResponse response = externalLinkService.getMyExternalLinks(projectId, userId);
 
         assertThat(response.links()).extracting("linkType")
-                .containsExactly(LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION);
+                .containsExactly(LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION, LinkType.GOOGLE);
         assertThat(response.links()).extracting("linked")
-                .containsExactly(false, false, false);
+                .containsExactly(false, false, false, false);
         assertThat(response.links()).extracting("connectedAccountName")
-                .containsExactly(null, null, null);
-        verify(externalConnectionRepository).findAllByProjectMemberId(100L);
+                .containsExactly(null, null, null, null);
+        verify(projectIntegrationRepository).findAllByProjectIdOrderByLinkTypeAsc(projectId);
     }
 
     private ProjectMember projectMember() {
@@ -131,20 +132,16 @@ class ExternalLinkServiceTest {
                 .build();
     }
 
-    private ExternalConnectionSummary externalConnection(
+    private ProjectIntegration projectIntegration(
             LinkType linkType,
             String externalAccountId
     ) {
-        return new ExternalConnectionSummary() {
-            @Override
-            public LinkType getLinkType() {
-                return linkType;
-            }
-
-            @Override
-            public String getExternalAccountId() {
-                return externalAccountId;
-            }
-        };
+        return ProjectIntegration.builder()
+                .linkType(linkType)
+                .credentialType(IntegrationCredentialType.OAUTH)
+                .externalAccountId(externalAccountId)
+                .externalAccountName(externalAccountId)
+                .providerConnectionId(externalAccountId)
+                .build();
     }
 }
