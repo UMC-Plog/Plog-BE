@@ -55,9 +55,10 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private String nickname;
 
-    @Getter
-    @Column(name = "profile_image_url")
-    private String profileImageUrl;
+    // 프리셋 아바타. null = 기본(회색) 아바타. 커스텀 업로드는 없음(프론트가 프리셋 이미지 소유).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "profile_preset")
+    private ProfilePreset profilePreset;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "provider_type")

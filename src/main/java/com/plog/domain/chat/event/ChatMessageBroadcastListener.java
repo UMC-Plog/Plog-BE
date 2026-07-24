@@ -71,7 +71,7 @@ public class ChatMessageBroadcastListener {
                 chatMessage.getMessageSequence(),
                 sender.getId(),
                 sender.getAnNickname(),
-                sender.getUser().getProfileImageUrl(),
+                sender.getUser().getProfilePreset(),
                 chatMessage.getMessage(),
                 TimeUtil.toInstant(chatMessage.getCreatedAt())
         );

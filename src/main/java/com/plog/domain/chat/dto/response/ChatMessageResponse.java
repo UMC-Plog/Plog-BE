@@ -1,5 +1,7 @@
 package com.plog.domain.chat.dto.response;
 
+import com.plog.domain.user.entity.ProfilePreset;
+
 import java.time.Instant;
 
 public record ChatMessageResponse(
@@ -8,7 +10,7 @@ public record ChatMessageResponse(
         Long messageSequence,
         Long senderMemberId,
         String senderNickname,
-        String senderProfileImageUrl,
+        ProfilePreset profilePreset,
         String message,
         Instant createdAt
 ) {
