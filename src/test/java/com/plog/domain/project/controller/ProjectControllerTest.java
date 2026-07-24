@@ -82,7 +82,7 @@ class ProjectControllerTest {
                         )
                 ));
 
-        mockMvc.perform(post("/api/v1/projects")
+        mockMvc.perform(post("/api/projects")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -119,7 +119,7 @@ class ProjectControllerTest {
         given(projectCreateService.create(eq(1L), any(ProjectCreateRequest.class)))
                 .willThrow(new ApiException(ProjectErrorCode.INVALID_PROJECT_NAME));
 
-        mockMvc.perform(post("/api/v1/projects")
+        mockMvc.perform(post("/api/projects")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson("P")))
                 .andExpect(status().isBadRequest())
@@ -134,7 +134,7 @@ class ProjectControllerTest {
         given(projectCreateService.create(eq(1L), any(ProjectCreateRequest.class)))
                 .willThrow(new ApiException(ProjectErrorCode.INVALID_PROJECT_END_DAY));
 
-        mockMvc.perform(post("/api/v1/projects")
+        mockMvc.perform(post("/api/projects")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson("Plog API")))
                 .andExpect(status().isBadRequest())
@@ -149,7 +149,7 @@ class ProjectControllerTest {
         given(projectCreateService.create(eq(404L), any(ProjectCreateRequest.class)))
                 .willThrow(new ApiException(AuthErrorCode.INVALID_TOKEN));
 
-        mockMvc.perform(post("/api/v1/projects")
+        mockMvc.perform(post("/api/projects")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson("Plog API")))
                 .andExpect(status().isUnauthorized())
@@ -162,7 +162,7 @@ class ProjectControllerTest {
     void rejectsAMissingProjectTypeBeforeCallingTheService() throws Exception {
         authenticate(1L);
 
-        mockMvc.perform(post("/api/v1/projects")
+        mockMvc.perform(post("/api/projects")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -182,7 +182,7 @@ class ProjectControllerTest {
     void rejectsAnUnknownProjectTypeBeforeCallingTheService() throws Exception {
         authenticate(1L);
 
-        mockMvc.perform(post("/api/v1/projects")
+        mockMvc.perform(post("/api/projects")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -203,7 +203,7 @@ class ProjectControllerTest {
     void rejectsANumericProjectTypeBeforeCallingTheService() throws Exception {
         authenticate(1L);
 
-        mockMvc.perform(post("/api/v1/projects")
+        mockMvc.perform(post("/api/projects")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -224,7 +224,7 @@ class ProjectControllerTest {
     void rejectsANumericStringProjectTypeBeforeCallingTheService() throws Exception {
         authenticate(1L);
 
-        mockMvc.perform(post("/api/v1/projects")
+        mockMvc.perform(post("/api/projects")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -246,7 +246,7 @@ class ProjectControllerTest {
         given(projectCreateService.create(isNull(), any(ProjectCreateRequest.class)))
                 .willThrow(new ApiException(AuthErrorCode.INVALID_TOKEN));
 
-        mockMvc.perform(post("/api/v1/projects")
+        mockMvc.perform(post("/api/projects")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson("Plog API")))
                 .andExpect(status().isUnauthorized())
@@ -264,7 +264,7 @@ class ProjectControllerTest {
                 any(ProjectStatusDto.Request.class)
         )).willReturn(new ProjectStatusDto.Response(projectId, ProjectStatus.COMPLETED, true, true));
 
-        mockMvc.perform(patch("/api/v1/projects/{projectId}/status", projectId)
+        mockMvc.perform(patch("/api/projects/{projectId}/status", projectId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

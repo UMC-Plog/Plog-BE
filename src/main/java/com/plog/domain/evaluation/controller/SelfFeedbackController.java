@@ -2,6 +2,7 @@ package com.plog.domain.evaluation.controller;
 
 import com.plog.domain.evaluation.dto.request.SelfFeedbackCreateRequest;
 import com.plog.domain.evaluation.dto.response.SelfFeedbackResponse;
+import com.plog.domain.evaluation.dto.response.SelfFeedbackUpdateResponse;
 import com.plog.domain.evaluation.service.SelfFeedbackService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.EvaluationSuccessCode;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Self Feedback", description = "셀프 피드백 API")
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/projects/{projectId}/self-feedbacks")
+@RequestMapping("/api/projects/{projectId}/self-feedbacks")
 public class SelfFeedbackController {
 
     private final SelfFeedbackService selfFeedbackService;
@@ -52,5 +53,22 @@ public class SelfFeedbackController {
         return ResponseEntity
                 .status(EvaluationSuccessCode.SELF_FEEDBACK_SUBMITTED.getHttpStatus())
                 .body(ApiResponse.success(EvaluationSuccessCode.SELF_FEEDBACK_SUBMITTED, response));
+    }
+
+    @Operation(
+            summary = "셀프 피드백 수정",
+            description = "현재 사용자가 해당 프로젝트에 등록한 셀프 피드백을 수정합니다."
+    )
+    @PutMapping
+    public ResponseEntity<ApiResponse<SelfFeedbackUpdateResponse>> updateSelfFeedback(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody SelfFeedbackCreateRequest request
+    ) {
+        SelfFeedbackUpdateResponse response = selfFeedbackService.updateSelfFeedback(projectId, userId, request);
+
+        return ResponseEntity
+                .status(EvaluationSuccessCode.SELF_FEEDBACK_UPDATED.getHttpStatus())
+                .body(ApiResponse.success(EvaluationSuccessCode.SELF_FEEDBACK_UPDATED, response));
     }
 }

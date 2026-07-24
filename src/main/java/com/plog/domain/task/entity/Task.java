@@ -78,4 +78,32 @@ public class Task extends BaseEntity {
                 )
                 .build();
     }
+
+    // 부분 수정(PATCH)에서 값이 들어온 필드만 개별 호출한다.
+    public void changeTitle(String title) {
+        this.title = title;
+    }
+
+    public void changeAssignee(ProjectMember projectMember) {
+        this.projectMember = projectMember;
+    }
+
+    public void changeCategory(TaskCategory category) {
+        this.category = category;
+    }
+
+    public void changeEndDate(LocalDate endDate) {
+        this.endDate = endDate;
+    }
+
+    // 상태 변경 전용. DONE으로 바뀌면 완료일을 기록하고, DONE에서 벗어나면 완료일을 지운다.
+    public void changeStatus(TaskStatus cardStatus) {
+        TaskStatus previousStatus = this.cardStatus;
+        this.cardStatus = cardStatus;
+        if (cardStatus == TaskStatus.DONE && previousStatus != TaskStatus.DONE) {
+            this.completedAt = TimeUtil.nowUtc();
+        } else if (cardStatus != TaskStatus.DONE) {
+            this.completedAt = null;
+        }
+    }
 }

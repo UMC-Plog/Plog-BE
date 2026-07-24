@@ -78,7 +78,7 @@ class ChatChannelControllerTest {
         );
         given(service.getChannels(1L, 0, 20)).willReturn(response);
 
-        mockMvc.perform(get("/api/v1/dashboard/channels"))
+        mockMvc.perform(get("/api/dashboard/channels"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("CHAT001"))
                 .andExpect(jsonPath("$.result.content[0].projectId").value(10L))
@@ -108,7 +108,7 @@ class ChatChannelControllerTest {
         );
         given(service.getChannels(1L, 0, 20)).willReturn(response);
 
-        mockMvc.perform(get("/api/v1/dashboard/channels"))
+        mockMvc.perform(get("/api/dashboard/channels"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.content[0].latestMessage").value(nullValue()))
                 .andExpect(jsonPath("$.result.content[0].latestMessageAt").value(nullValue()))
@@ -120,7 +120,7 @@ class ChatChannelControllerTest {
     void rejectsAnInvalidPageBeforeCallingTheService() throws Exception {
         authenticate(1L);
 
-        mockMvc.perform(get("/api/v1/dashboard/channels").param("page", "-1"))
+        mockMvc.perform(get("/api/dashboard/channels").param("page", "-1"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON400"));
 
@@ -132,7 +132,7 @@ class ChatChannelControllerTest {
     void rejectsAnInvalidSizeBeforeCallingTheService(String size) throws Exception {
         authenticate(1L);
 
-        mockMvc.perform(get("/api/v1/dashboard/channels").param("size", size))
+        mockMvc.perform(get("/api/dashboard/channels").param("size", size))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("COMMON400"));
 
@@ -159,7 +159,7 @@ class ChatChannelControllerTest {
         );
         given(searchService.search(1L, "plog", 0, 20)).willReturn(response);
 
-        mockMvc.perform(get("/api/v1/dashboard/channels/search").param("keyword", "plog"))
+        mockMvc.perform(get("/api/dashboard/channels/search").param("keyword", "plog"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("CHAT002"))
                 .andExpect(jsonPath("$.result.content[0].projectId").value(10L))
@@ -184,7 +184,7 @@ class ChatChannelControllerTest {
         given(searchService.search(1L, "", 0, 20))
                 .willThrow(new ApiException(ChatErrorCode.INVALID_SEARCH_KEYWORD));
 
-        mockMvc.perform(get("/api/v1/dashboard/channels/search"))
+        mockMvc.perform(get("/api/dashboard/channels/search"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("CHAT001"));
     }

@@ -20,10 +20,7 @@ public class FcmTokenService {
     @Transactional
     public FcmTokenDto.Response put(Long userId, FcmTokenDto.Request request) {
         requireAuthenticatedUser(userId);
-        String value = request.token() == null ? "" : request.token().trim();
-        if (value.isEmpty() || value.length() > 512) {
-            throw new ApiException(NotificationErrorCode.INVALID_FCM_TOKEN);
-        }
+        String value = normalizeToken(request);
         fcmTokenRepository.upsert(userId, value);
         FcmToken token = fcmTokenRepository.findByToken(value).orElseThrow();
         return new FcmTokenDto.Response(
@@ -34,10 +31,7 @@ public class FcmTokenService {
     @Transactional
     public FcmTokenDto.DeletedResponse delete(Long userId, FcmTokenDto.Request request) {
         requireAuthenticatedUser(userId);
-        String value = request.token() == null ? "" : request.token().trim();
-        if (value.isEmpty()) {
-            throw new ApiException(NotificationErrorCode.INVALID_FCM_TOKEN);
-        }
+        String value = normalizeToken(request);
         fcmTokenRepository.deleteByTokenAndUserId(value, userId);
         return new FcmTokenDto.DeletedResponse(true);
     }
@@ -46,5 +40,13 @@ public class FcmTokenService {
         if (userId == null || !userRepository.existsById(userId)) {
             throw new ApiException(NotificationErrorCode.USER_NOT_FOUND);
         }
+    }
+
+    private String normalizeToken(FcmTokenDto.Request request) {
+        String value = request == null || request.token() == null ? "" : request.token().trim();
+        if (value.isEmpty() || value.length() > 512) {
+            throw new ApiException(NotificationErrorCode.INVALID_FCM_TOKEN);
+        }
+        return value;
     }
 }

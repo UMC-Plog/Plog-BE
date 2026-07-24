@@ -54,7 +54,7 @@ class ProjectRoleControllerTest {
         authenticate(7L);
         givenResponse();
 
-        mockMvc.perform(patch("/api/v1/projects/1/members/20/role")
+        mockMvc.perform(patch("/api/projects/1/members/20/role")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"role\":\"OWNER\"}"))
                 .andExpect(status().isOk())
@@ -81,7 +81,7 @@ class ProjectRoleControllerTest {
                         any(ProjectRoleDelegationRequest.class)))
                 .willThrow(new ApiException(ProjectErrorCode.PROJECT_SETTING_PERMISSION_DENIED));
 
-        mockMvc.perform(patch("/api/v1/projects/1/members/20/role")
+        mockMvc.perform(patch("/api/projects/1/members/20/role")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"role\":\"OWNER\"}"))
                 .andExpect(status().isForbidden())
@@ -92,7 +92,7 @@ class ProjectRoleControllerTest {
     void rejectsAMissingRoleBeforeCallingTheService() throws Exception {
         authenticate(7L);
 
-        mockMvc.perform(patch("/api/v1/projects/1/members/20/role")
+        mockMvc.perform(patch("/api/projects/1/members/20/role")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
@@ -111,7 +111,7 @@ class ProjectRoleControllerTest {
                         any(ProjectRoleDelegationRequest.class)))
                 .willThrow(new ApiException(AuthErrorCode.INVALID_TOKEN));
 
-        mockMvc.perform(patch("/api/v1/projects/1/members/20/role")
+        mockMvc.perform(patch("/api/projects/1/members/20/role")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"role\":\"OWNER\"}"))
                 .andExpect(status().isUnauthorized())

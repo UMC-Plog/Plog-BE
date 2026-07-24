@@ -65,4 +65,22 @@ public class PeerEvaluation extends BaseEntity {
 
     @Column(name = "feedback", length = 200)
     private String feedback;
+
+    public void update(
+            int collaborationScore,
+            int initiativeScore,
+            int responsibilityScore,
+            int communicationScore,
+            int outputScore,
+            List<String> keywords,
+            String feedback
+    ) {
+        this.collaborationScore = collaborationScore;
+        this.initiativeScore = initiativeScore;
+        this.responsibilityScore = responsibilityScore;
+        this.communicationScore = communicationScore;
+        this.outputScore = outputScore;
+        this.keywords = keywords;
+        this.feedback = feedback;
+    }
 }

@@ -159,6 +159,6 @@ class TaskServiceAttachmentTest {
 
         service.createTask(PROJECT_ID, USER_ID, requestWith(eleven));
 
-        verify(attachmentPolicy).validateCount(11, TaskErrorCode.INVALID_ATTACHMENT);
+        verify(attachmentPolicy).validateCount(11, TaskErrorCode.TASK_ATTACHMENT_LIMIT_EXCEEDED);
     }
 }

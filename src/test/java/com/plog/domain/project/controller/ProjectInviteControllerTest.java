@@ -52,7 +52,7 @@ class ProjectInviteControllerTest {
                 true
         ));
 
-        mockMvc.perform(post("/api/v1/projects/{projectId}/invite", 10L))
+        mockMvc.perform(post("/api/projects/{projectId}/invite", 10L))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.code").value("PROJECT006"))
@@ -70,7 +70,7 @@ class ProjectInviteControllerTest {
         given(projectInviteService.reissue(10L, 2L))
                 .willThrow(new ApiException(ProjectErrorCode.PROJECT_SETTING_PERMISSION_DENIED));
 
-        mockMvc.perform(post("/api/v1/projects/{projectId}/invite", 10L))
+        mockMvc.perform(post("/api/projects/{projectId}/invite", 10L))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PROJECT003"));
     }
@@ -81,7 +81,7 @@ class ProjectInviteControllerTest {
         given(projectInviteService.reissue(404L, 1L))
                 .willThrow(new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
 
-        mockMvc.perform(post("/api/v1/projects/{projectId}/invite", 404L))
+        mockMvc.perform(post("/api/projects/{projectId}/invite", 404L))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PROJECT001"));
     }

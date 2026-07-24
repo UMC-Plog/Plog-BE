@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/projects")
+@RequestMapping("/api/projects")
 public class ProjectListController implements ProjectListControllerDoc {
 
     private final ProjectListService projectListService;

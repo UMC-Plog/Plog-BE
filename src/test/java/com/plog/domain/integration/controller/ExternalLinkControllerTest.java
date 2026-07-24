@@ -62,7 +62,7 @@ class ExternalLinkControllerTest {
                         new ExternalLinkItemResponse(LinkType.NOTION, true, "notion-user")
                 )));
 
-        mockMvc.perform(get("/api/v1/projects/{projectId}/me/external-links", projectId))
+        mockMvc.perform(get("/api/projects/{projectId}/me/external-links", projectId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.code").value("PROJECT001"))
@@ -92,7 +92,7 @@ class ExternalLinkControllerTest {
         given(externalLinkService.getMyExternalLinks(eq(projectId), eq(userId)))
                 .willThrow(new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
 
-        mockMvc.perform(get("/api/v1/projects/{projectId}/me/external-links", projectId))
+        mockMvc.perform(get("/api/projects/{projectId}/me/external-links", projectId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.isSuccess").value(false))
                 .andExpect(jsonPath("$.code").value("PROJECT001"))
@@ -108,7 +108,7 @@ class ExternalLinkControllerTest {
         given(externalLinkService.getMyExternalLinks(eq(projectId), eq(userId)))
                 .willThrow(new ApiException(ProjectErrorCode.PROJECT_MEMBER_REQUIRED));
 
-        mockMvc.perform(get("/api/v1/projects/{projectId}/me/external-links", projectId))
+        mockMvc.perform(get("/api/projects/{projectId}/me/external-links", projectId))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.isSuccess").value(false))
                 .andExpect(jsonPath("$.code").value("PROJECT002"))
@@ -120,7 +120,7 @@ class ExternalLinkControllerTest {
     void getMyExternalLinksRejectsMalformedProjectId() throws Exception {
         authenticate(10L);
 
-        mockMvc.perform(get("/api/v1/projects/{projectId}/me/external-links", "not-a-number"))
+        mockMvc.perform(get("/api/projects/{projectId}/me/external-links", "not-a-number"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.isSuccess").value(false))
                 .andExpect(jsonPath("$.code").value("COMMON400"))
