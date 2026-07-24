@@ -19,7 +19,7 @@ class ChatMessageTest {
         ProjectMember member = mock(ProjectMember.class);
         given(member.getProject()).willReturn(project);
 
-        assertThatThrownBy(() -> ChatMessage.create(room, member, "   ", 1L))
+        assertThatThrownBy(() -> ChatMessage.create(room, member, "   ", 1L, null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }
