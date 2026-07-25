@@ -145,7 +145,7 @@ class ReportControllerTest {
 
         mockMvc.perform(get("/api/dashboard/reports/20/pdf"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("REPORT003"))
+                .andExpect(jsonPath("$.code").value("REPORT006"))
                 .andExpect(jsonPath("$.result.reportId").value(20L))
                 .andExpect(jsonPath("$.result.fileName").value("Plog-report.pdf"))
                 .andExpect(jsonPath("$.result.downloadUrl")
