@@ -14,12 +14,16 @@ spring:
         format_sql: false
 
 # CORS 허용 오리진(프론트가 뜨는 주소). 비밀값이 아니라 여기 직접 나열한다.
-# 프론트 배포 시 https 도메인을 이 목록에 추가하고 재배포하면 된다.
+# SecurityConfig 의 setAllowedOrigins 는 정확 일치라 와일드카드가 통하지 않는다 → 주소를 그대로 적는다.
+# 커스텀 도메인 연결 전후 주소를 모두 넣어둬서, 프론트가 도메인을 붙일 때 백엔드 재배포가 필요 없게 한다.
 app:
   cors:
     allowed-origins:
-      - http://localhost:5173   # Vite 로컬 프론트 (배포된 API로 개발)
+      - http://localhost:5173         # Vite 로컬 프론트 (배포된 API로 개발)
       - http://localhost:3000
+      - https://plog-fe.vercel.app    # Vercel 기본 도메인. 커스텀 도메인을 붙여도 alias 로 남는다
+      - https://umc-plog.site         # 프론트 커스텀 도메인(연결 예정). 백엔드는 api 서브도메인을 쓴다
+      - https://www.umc-plog.site     # Vercel 에서 www 를 primary 로 잡는 경우 Origin 이 이 값으로 온다
 
 server:
   # 호스트 nginx가 넘긴 X-Forwarded-Proto를 신뢰 → 앱이 요청을 https로 인식(스웨거/리다이렉트 URL 깨짐 방지)
