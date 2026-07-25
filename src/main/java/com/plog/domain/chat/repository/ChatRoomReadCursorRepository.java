@@ -23,6 +23,21 @@ public interface ChatRoomReadCursorRepository extends JpaRepository<ChatRoomRead
             @Param("memberStatus") MemberStatus memberStatus
     );
 
+    // 최초 읽음 처리 시 커서가 없으므로 미리 만들어 둔다.
+    // ON CONFLICT DO NOTHING이라 동시 요청으로 두 번 INSERT되어도 유니크 제약 위반 예외 없이 안전하다
+    // (Postgres는 문장 실패 시 트랜잭션 전체가 abort되므로 try-catch로 잡는 방식은 쓰지 않는다).
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = "insert into chat_room_read_cursors "
+            + "(chat_room_id, project_member_id, last_read_message_sequence, created_at, updated_at) "
+            + "values (:roomId, :projectMemberId, null, current_timestamp, current_timestamp) "
+            + "on conflict (chat_room_id, project_member_id) do nothing",
+            nativeQuery = true)
+    int createIfAbsent(
+            @Param("roomId") Long roomId,
+            @Param("projectMemberId") Long projectMemberId
+    );
+
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = "update chat_room_read_cursors cursor "

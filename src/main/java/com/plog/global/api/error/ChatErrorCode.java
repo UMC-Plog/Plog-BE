@@ -14,7 +14,9 @@ public enum ChatErrorCode implements BaseErrorCode {
     EMPTY_MESSAGE_CONTENT(HttpStatus.BAD_REQUEST, "CHAT003", "메시지 내용은 비어 있을 수 없습니다."),
     CHAT_ROOM_LOCK_TIMEOUT(HttpStatus.CONFLICT, "CHAT004", "메시지 처리 중 충돌이 발생했습니다. 잠시 후 다시 시도해주세요."),
     MISSING_CLIENT_MESSAGE_ID(HttpStatus.BAD_REQUEST, "CHAT005", "clientMessageId는 필수입니다."),
-    INVALID_CLIENT_MESSAGE_ID(HttpStatus.BAD_REQUEST, "CHAT006", "clientMessageId는 64자를 초과할 수 없습니다.");
+    INVALID_CLIENT_MESSAGE_ID(HttpStatus.BAD_REQUEST, "CHAT006", "clientMessageId는 64자를 초과할 수 없습니다."),
+    CHAT_MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "CHAT007", "존재하지 않는 메시지입니다.");
+
     private final HttpStatus httpStatus;
     private final String code;
     private final String message;
