@@ -9,10 +9,11 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum ReportSuccessCode implements BaseCode {
 
-    REPORT_SEARCHED(HttpStatus.OK, "REPORT001", "리포트 검색 결과를 조회했습니다."),
+    REPORTS_RETRIEVED(HttpStatus.OK, "REPORT001", "리포트 목록을 조회했습니다."),
+    REPORT_SEARCHED(HttpStatus.OK, "REPORT002", "리포트 검색 결과를 조회했습니다."),
     REPORT_PDF_DOWNLOAD_URL_ISSUED(
             HttpStatus.OK,
-            "REPORT002",
+            "REPORT006",
             "리포트 PDF 다운로드 URL을 발급했습니다."
     );
 

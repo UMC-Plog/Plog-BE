@@ -32,9 +32,29 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
             + "report.status as reportStatus, "
             + "report.completedAt as completedAt "
             + "from Report report "
-            + "join ProjectMember member on member.project = report.project "
-            + "and member.user.id = :userId and member.status = :memberStatus "
-            + "where lower(report.project.projectName) like :projectNamePattern escape '!' "
+            + "where exists (select 1 from ProjectMember member "
+            + "where member.project = report.project "
+            + "and member.user.id = :userId "
+            + "and member.status = :memberStatus) "
+            + "order by case when report.completedAt is null then 1 else 0 end, "
+            + "report.completedAt desc, report.id desc")
+    Slice<ReportSummary> findAccessibleReportSlice(
+            @Param("userId") Long userId,
+            @Param("memberStatus") MemberStatus memberStatus,
+            Pageable pageable
+    );
+
+    @Query("select report.id as reportId, "
+            + "report.project.id as projectId, "
+            + "report.project.projectName as projectName, "
+            + "report.status as reportStatus, "
+            + "report.completedAt as completedAt "
+            + "from Report report "
+            + "where exists (select 1 from ProjectMember member "
+            + "where member.project = report.project "
+            + "and member.user.id = :userId "
+            + "and member.status = :memberStatus) "
+            + "and lower(report.project.projectName) like :projectNamePattern escape '!' "
             + "and (:hasStartDate = false or report.completedAt >= :startAt) "
             + "and (:hasEndDate = false or report.completedAt < :endExclusive) "
             + "order by case when report.completedAt is null then 1 else 0 end, "
