@@ -2,3 +2,8 @@ plog:
   invite:
     base-url: ${INVITE_BASE_URL:http://localhost:3000/invite}
 
+  aws:
+    s3:
+      bucket: ${S3_BUCKET}
+      enabled: ${S3_ENABLED:false}
+

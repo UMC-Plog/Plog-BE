@@ -55,7 +55,8 @@ public class ChatMessage extends BaseEntity {
     @JoinColumn(name = "project_member_id", nullable = false)
     private ProjectMember projectMember;
 
-    @Column(name = "message", nullable = false, columnDefinition = "TEXT")
+    // 첨부만 보내고 텍스트가 없는 메시지를 허용하기 위해 nullable로 둔다.
+    @Column(name = "message", columnDefinition = "TEXT")
     private String message;
 
     @Column(name = "client_message_id", length = 64)
@@ -75,9 +76,6 @@ public class ChatMessage extends BaseEntity {
         }
         if (messageSequence <= 0L) {
             throw new IllegalArgumentException("메시지 순번은 1 이상이어야 합니다.");
-        }
-        if (message == null || message.isBlank()) {
-            throw new IllegalArgumentException("메시지 내용은 비어 있을 수 없습니다.");
         }
         return ChatMessage.builder()
                 .chatRoom(chatRoom)

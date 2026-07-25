@@ -1,9 +1,13 @@
 package com.plog.domain.chat.event;
 
 import com.plog.domain.chat.dto.response.ChatMessageResponse;
+import com.plog.domain.chat.entity.ChatAttachment;
 import com.plog.domain.chat.entity.ChatMessage;
+import com.plog.domain.chat.repository.ChatAttachmentRepository;
 import com.plog.domain.chat.repository.ChatMessageRepository;
 import com.plog.global.util.TimeUtil;
+import com.plog.infrastructure.s3.AttachmentUsage;
+import com.plog.infrastructure.s3.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.MessagingException;
@@ -12,6 +16,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+
+import java.util.List;
 
 @Slf4j
 @Component
@@ -23,6 +29,8 @@ public class ChatMessageBroadcastListener {
     private static final long BACKOFF_MILLIS = 200L;
 
     private final ChatMessageRepository chatMessageRepository;
+    private final ChatAttachmentRepository chatAttachmentRepository;
+    private final FileStorageService fileStorageService;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Async
@@ -65,6 +73,11 @@ public class ChatMessageBroadcastListener {
 
     private ChatMessageResponse toResponse(ChatMessage chatMessage) {
         var sender = chatMessage.getProjectMember();
+        List<ChatMessageResponse.ChatMessageAttachmentResponse> attachmentResponses =
+                chatAttachmentRepository.findAllByChatMessageIdOrderByIdAsc(chatMessage.getId())
+                        .stream()
+                        .map(this::toAttachmentResponse)
+                        .toList();
         return new ChatMessageResponse(
                 chatMessage.getId(),
                 chatMessage.getChatRoom().getId(),
@@ -73,7 +86,16 @@ public class ChatMessageBroadcastListener {
                 sender.getAnNickname(),
                 sender.getUser().getProfilePreset(),
                 chatMessage.getMessage(),
+                attachmentResponses,
                 TimeUtil.toInstant(chatMessage.getCreatedAt())
         );
+    }
+
+    private ChatMessageResponse.ChatMessageAttachmentResponse toAttachmentResponse(ChatAttachment attachment) {
+        // AttachmentUsage.CHAT.forcesDownload() == false → 인라인 표시용 URL
+        String fileUrl = fileStorageService.createDownloadUrl(
+                AttachmentUsage.CHAT, attachment.getFileKey(), attachment.getFileName());
+        return new ChatMessageResponse.ChatMessageAttachmentResponse(
+                attachment.getId(), attachment.getFileName(), attachment.getFileSize(), fileUrl);
     }
 }
