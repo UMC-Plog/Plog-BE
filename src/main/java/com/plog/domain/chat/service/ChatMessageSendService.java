@@ -8,7 +8,6 @@ import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.AttachmentUsage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.w3c.dom.stylesheets.LinkStyle;
 
 import java.util.List;
 
@@ -36,6 +35,9 @@ public class ChatMessageSendService {
         }
         if (clientMessageId == null || clientMessageId.isBlank()) {
             throw new ApiException(ChatErrorCode.MISSING_CLIENT_MESSAGE_ID);
+        }
+        if (clientMessageId.length() > MAX_CLIENT_MESSAGE_ID_LENGTH) {
+            throw new ApiException(ChatErrorCode.INVALID_CLIENT_MESSAGE_ID);
         }
 
         validateAttachments(userId, safeAttachments);

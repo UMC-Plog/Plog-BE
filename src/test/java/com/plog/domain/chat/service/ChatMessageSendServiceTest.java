@@ -73,6 +73,15 @@ class ChatMessageSendServiceTest {
     }
 
     @Test
+    void clientMessageId가_64자를_초과하면_예외() {
+        String tooLong = "a".repeat(65);
+
+        assertThatThrownBy(() -> chatMessageSendService.send(ROOM_ID, USER_ID, tooLong, "안녕", null))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ChatErrorCode.INVALID_CLIENT_MESSAGE_ID);
+    }
+
+    @Test
     void 첨부_필드가_누락되면_예외() {
         ChatMessageAttachmentRequest invalid = new ChatMessageAttachmentRequest(null, "a.png", 100L);
 

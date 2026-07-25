@@ -34,9 +34,6 @@ public class ChatAttachment extends BaseEntity {
     @Column(name = "file_key", nullable = false, length = 512)
     private String fileKey;
 
-    @Column(name = "file_url", nullable = false)
-    private String fileUrl;
-
     @Column(name = "file_name", nullable = false, length = 512)
     private String fileName;
 
