@@ -32,7 +32,7 @@ public class ChatReadService {
 
         // advance()는 조건 불충족 시 조용히 0건 갱신되어 "역행 요청"과 "존재하지 않는 메시지"를
         // 구분하지 못한다. 그래서 대상 메시지가 이 방 소속인지 먼저 검증한다.
-        chatMessageRepository.findByIdAndChatRoomId(lastReadMessageId, roomId)
+        chatMessageRepository.findByIdAndChatRoomIdAndMessageSequenceIsNotNull(lastReadMessageId, roomId)
                 .orElseThrow(() -> new ApiException(ChatErrorCode.CHAT_MESSAGE_NOT_FOUND));
 
         ProjectMember member = projectMemberRepository
