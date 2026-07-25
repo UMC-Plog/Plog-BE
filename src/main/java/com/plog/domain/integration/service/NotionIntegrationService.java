@@ -21,11 +21,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
 @RequiredArgsConstructor
 public class NotionIntegrationService {
+    private static final String NOTION_VERSION = "2026-03-11";
     private final NotionIntegrationProperties properties;
     private final ProjectRepository projectRepository;
     private final ProjectAccessService projectAccessService;
@@ -50,14 +52,14 @@ public class NotionIntegrationService {
         return new IntegrationAuthorizationResponse(LinkType.NOTION, url, state.expiresAt());
     }
 
-    @Transactional
     public IntegrationConnectionResponse completeCallback(String state, String code) {
         IntegrationAuthorizationState authorizationState = authorizationStateService.consume(state, LinkType.NOTION);
+        projectIntegrationService.requireNotConnected(
+                authorizationState.getProjectMember().getProject().getId(), LinkType.NOTION);
         JsonNode token = exchangeCode(code);
         String workspaceId = requiredField(token, "workspace_id");
         String workspaceName = token.path("workspace_name").asText(workspaceId);
         String botId = token.path("bot_id").asText(workspaceId);
-        projectIntegrationService.requireNotConnected(authorizationState.getProject().getId(), LinkType.NOTION);
         ProjectIntegration integration = projectIntegrationService.connect(
                 authorizationState.getProjectMember(),
                 LinkType.NOTION,
@@ -74,6 +76,23 @@ public class NotionIntegrationService {
                 LinkType.NOTION,
                 integration.getExternalAccountName()
         );
+    }
+
+    public IntegrationVerificationStatus verifyConnection(ProjectIntegration integration) {
+        String accessToken;
+        try {
+            accessToken = projectIntegrationService.decryptAccessToken(integration);
+        } catch (ApiException exception) {
+            return IntegrationVerificationStatus.UNAVAILABLE;
+        }
+        TokenCheck tokenCheck = checkAccessToken(accessToken);
+        if (tokenCheck == TokenCheck.VERIFIED) {
+            return IntegrationVerificationStatus.VERIFIED;
+        }
+        if (tokenCheck == TokenCheck.UNAVAILABLE) {
+            return IntegrationVerificationStatus.UNAVAILABLE;
+        }
+        return refreshAndVerify(integration);
     }
 
     private JsonNode exchangeCode(String code) {
@@ -94,6 +113,72 @@ public class NotionIntegrationService {
         }
     }
 
+    private IntegrationVerificationStatus refreshAndVerify(ProjectIntegration integration) {
+        String refreshToken;
+        try {
+            refreshToken = projectIntegrationService.decryptRefreshToken(integration);
+        } catch (ApiException exception) {
+            return IntegrationVerificationStatus.UNAVAILABLE;
+        }
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return IntegrationVerificationStatus.DISCONNECTED;
+        }
+        try {
+            JsonNode token = restClient.post()
+                    .uri("https://api.notion.com/v1/oauth/token")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .headers(headers -> headers.setBasicAuth(require(properties.clientId()), require(properties.clientSecret())))
+                    .body(Map.of("grant_type", "refresh_token", "refresh_token", refreshToken))
+                    .retrieve()
+                    .body(JsonNode.class);
+            String accessToken = token == null ? null : token.path("access_token").asText(null);
+            if (accessToken == null || accessToken.isBlank()) {
+                return IntegrationVerificationStatus.UNAVAILABLE;
+            }
+            TokenCheck tokenCheck = checkAccessToken(accessToken);
+            if (tokenCheck != TokenCheck.VERIFIED) {
+                return tokenCheck == TokenCheck.AUTHENTICATION_FAILED
+                        ? IntegrationVerificationStatus.DISCONNECTED
+                        : IntegrationVerificationStatus.UNAVAILABLE;
+            }
+            String nextRefreshToken = token.path("refresh_token").asText(refreshToken);
+            projectIntegrationService.rotateOAuthTokens(integration.getId(), accessToken, nextRefreshToken, null);
+            return IntegrationVerificationStatus.VERIFIED;
+        } catch (RestClientResponseException exception) {
+            return isInvalidGrant(exception)
+                    ? IntegrationVerificationStatus.DISCONNECTED
+                    : IntegrationVerificationStatus.UNAVAILABLE;
+        } catch (RestClientException | ApiException exception) {
+            return IntegrationVerificationStatus.UNAVAILABLE;
+        }
+    }
+
+    private TokenCheck checkAccessToken(String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            return TokenCheck.AUTHENTICATION_FAILED;
+        }
+        try {
+            restClient.get()
+                    .uri("https://api.notion.com/v1/users/me")
+                    .header("Notion-Version", NOTION_VERSION)
+                    .headers(headers -> headers.setBearerAuth(accessToken))
+                    .retrieve()
+                    .toBodilessEntity();
+            return TokenCheck.VERIFIED;
+        } catch (RestClientResponseException exception) {
+            return exception.getStatusCode().value() == 401
+                    ? TokenCheck.AUTHENTICATION_FAILED
+                    : TokenCheck.UNAVAILABLE;
+        } catch (RestClientException exception) {
+            return TokenCheck.UNAVAILABLE;
+        }
+    }
+
+    private boolean isInvalidGrant(RestClientResponseException exception) {
+        return exception.getStatusCode().value() == 400
+                && exception.getResponseBodyAsString().contains("invalid_grant");
+    }
+
     private ProjectMember requireMember(Long projectId, Long userId) {
         if (!projectRepository.existsById(projectId)) {
             throw new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND);
@@ -111,5 +196,11 @@ public class NotionIntegrationService {
             throw new ApiException(IntegrationErrorCode.PROVIDER_CONFIGURATION_ERROR);
         }
         return value;
+    }
+
+    private enum TokenCheck {
+        VERIFIED,
+        AUTHENTICATION_FAILED,
+        UNAVAILABLE
     }
 }

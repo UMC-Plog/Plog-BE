@@ -5,6 +5,7 @@ import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.exception.ApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -18,7 +19,7 @@ public class GithubAppClient {
     private final RestClient restClient = ProviderRestClientFactory.create(API_BASE_URL);
 
     public Installation installation(String installationId) {
-        JsonNode body = getWithAppJwt("/app/installations/" + installationId);
+        JsonNode body = getWithAppJwt("/app/installations/{installationId}", installationId);
         if (body == null) {
             throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED);
         }
@@ -47,10 +48,33 @@ public class GithubAppClient {
         }
     }
 
-    private JsonNode getWithAppJwt(String path) {
+    public IntegrationVerificationStatus verifyInstallation(String installationId) {
+        if (installationId == null || installationId.isBlank()) {
+            return IntegrationVerificationStatus.DISCONNECTED;
+        }
+        try {
+            restClient.get()
+                    .uri("/app/installations/{installationId}", installationId)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + appJwtFactory.create())
+                    .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
+                    .retrieve()
+                    .toBodilessEntity();
+            return IntegrationVerificationStatus.VERIFIED;
+        } catch (RestClientResponseException exception) {
+            return exception.getStatusCode().value() == 404
+                    ? IntegrationVerificationStatus.DISCONNECTED
+                    : IntegrationVerificationStatus.UNAVAILABLE;
+        } catch (RestClientException exception) {
+            return IntegrationVerificationStatus.UNAVAILABLE;
+        } catch (Exception exception) {
+            return IntegrationVerificationStatus.UNAVAILABLE;
+        }
+    }
+
+    private JsonNode getWithAppJwt(String uriTemplate, Object... uriVariables) {
         try {
             return restClient.get()
-                    .uri(path)
+                    .uri(uriTemplate, uriVariables)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + appJwtFactory.create())
                     .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
                     .retrieve()

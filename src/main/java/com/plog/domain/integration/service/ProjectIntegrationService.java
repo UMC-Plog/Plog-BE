@@ -68,6 +68,24 @@ public class ProjectIntegrationService {
         return decrypt(integration.getRefreshTokenEncrypted());
     }
 
+    @Transactional
+    public void rotateOAuthTokens(
+            Long integrationId,
+            String accessToken,
+            String refreshToken,
+            Instant accessTokenExpiresAt
+    ) {
+        projectIntegrationRepository.findById(integrationId)
+                .ifPresent(integration -> integration.updateOAuthTokens(
+                        encrypt(accessToken), encrypt(refreshToken), accessTokenExpiresAt));
+    }
+
+    @Transactional
+    public void removeIfPresent(Long integrationId) {
+        projectIntegrationRepository.findById(integrationId)
+                .ifPresent(projectIntegrationRepository::delete);
+    }
+
     private String encrypt(String value) {
         try {
             return credentialCipher.encrypt(value);
