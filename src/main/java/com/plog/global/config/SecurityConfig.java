@@ -65,6 +65,7 @@ public class SecurityConfig {
     /**
      * .cors(withDefaults())가 참조하는 소스 빈. 이게 없으면 CORS 헤더가 안 붙어 크로스 오리진 요청이 전부 막힌다.
      * 토큰을 쿠키가 아니라 Authorization 헤더/JSON 바디로만 주고받으므로 allowCredentials는 불필요.
+     * SockJS의 크로스 오리진 HTTP 요청이 credentials 모드로 전송되므로 허용된 Origin에 한해 credentials를 허용한다.
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource(CorsProperties corsProperties) {
@@ -72,6 +73,7 @@ public class SecurityConfig {
         config.setAllowedOrigins(corsProperties.allowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;
