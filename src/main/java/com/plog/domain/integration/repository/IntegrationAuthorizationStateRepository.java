@@ -14,9 +14,16 @@ public interface IntegrationAuthorizationStateRepository extends JpaRepository<I
     @Query("""
             select state
             from IntegrationAuthorizationState state
-            join fetch state.projectMember projectMember
-            join fetch projectMember.project
             where state.stateHash = :stateHash
             """)
     Optional<IntegrationAuthorizationState> findByStateHashForUpdate(@Param("stateHash") String stateHash);
+
+    @Query("""
+            select state
+            from IntegrationAuthorizationState state
+            join fetch state.projectMember projectMember
+            join fetch projectMember.project
+            where state.id = :stateId
+            """)
+    Optional<IntegrationAuthorizationState> findByIdWithProjectMemberAndProject(@Param("stateId") Long stateId);
 }
