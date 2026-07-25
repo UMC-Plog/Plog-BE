@@ -9,7 +9,7 @@ public record ChatChannelParticipantResponse(
         Long userId,
         @Schema(description = "사용자 닉네임", example = "바나")
         String nickname,
-        @Schema(description = "프로필 프리셋", example = "PROFILE_1")
+        @Schema(description = "프로필 프리셋(미설정 시 null = 기본 아바타)", example = "OTTER", nullable = true)
         ProfilePreset profilePreset
 ) {
 }
