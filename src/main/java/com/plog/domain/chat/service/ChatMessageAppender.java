@@ -1,8 +1,12 @@
 package com.plog.domain.chat.service;
 
+import com.plog.domain.chat.dto.request.ChatMessageSendRequest.ChatMessageAttachmentRequest;
+import com.plog.domain.chat.dto.request.ChatMessageSendRequest;
+import com.plog.domain.chat.entity.ChatAttachment;
 import com.plog.domain.chat.entity.ChatMessage;
 import com.plog.domain.chat.entity.ChatRoom;
 import com.plog.domain.chat.event.ChatMessageSavedEvent;
+import com.plog.domain.chat.repository.ChatAttachmentRepository;
 import com.plog.domain.chat.repository.ChatMessageRepository;
 import com.plog.domain.chat.repository.ChatRoomRepository;
 import com.plog.domain.project.entity.MemberStatus;
@@ -10,6 +14,7 @@ import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.global.api.error.ChatErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.infrastructure.s3.FilePromotionEvent;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.QueryTimeoutException;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +22,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +33,7 @@ public class ChatMessageAppender {
 
     private final ChatRoomRepository chatRoomRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final ChatAttachmentRepository chatAttachmentRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final EntityManager entityManager;
     private final ApplicationEventPublisher eventPublisher;
@@ -67,9 +75,16 @@ public class ChatMessageAppender {
     }
 
     /** WebSocket 경로 전용: STOMP Principal의 userId로 프로젝트 멤버를 찾아 메시지를 남긴다.
-     *  clientMessageId로 멱등 처리하고, 커밋 후 브로드캐스트 이벤트를 발행한다. */
+     *  clientMessageId로 멱등 처리하고, 커밋 후 브로드캐스트 이벤트를 발행한다.
+     *  첨부는 새로 생성된 메시지에 대해서만 저장한다(멱등 히트 시 이미 저장된 첨부를 재사용) */
     @Transactional
-    public ChatMessage appendByUser(Long chatRoomId, Long userId, String clientMessageId, String message) {
+    public ChatMessage appendByUser(
+            Long chatRoomId,
+            Long userId,
+            String clientMessageId,
+            String message,
+            List<ChatMessageAttachmentRequest> attachments
+    ) {
         ChatRoom room = lockRoomForAppend(chatRoomId);
         ProjectMember member = projectMemberRepository
                 .findByProjectIdAndUserIdAndStatus(room.getProject().getId(), userId, MemberStatus.ACTIVE)
@@ -77,10 +92,31 @@ public class ChatMessageAppender {
 
         ChatMessage chatMessage = chatMessageRepository
                 .findByChatRoomIdAndProjectMemberIdAndClientMessageId(room.getId(), member.getId(), clientMessageId)
-                .orElseGet(() -> createAndSave(room, member, clientMessageId, message));
+                .orElseGet(() -> createAndSaveWithAttachments(room, member, clientMessageId, message, attachments));
 
         // 커밋 후에만 발행됨(AFTER_COMMIT) — 재전송(멱등 히트)이어도 재브로드캐스트를 유도하기 위해 항상 발행
         eventPublisher.publishEvent(new ChatMessageSavedEvent(chatMessage.getId()));
+        return chatMessage;
+    }
+
+    private ChatMessage createAndSaveWithAttachments(
+            ChatRoom room,
+            ProjectMember member,
+            String clientMessageId,
+            String message,
+            List<ChatMessageAttachmentRequest> attachments
+    ) {
+        ChatMessage chatMessage = createAndSave(room, member, clientMessageId, message);
+        if (!attachments.isEmpty()) {
+            List<ChatAttachment> saved = chatAttachmentRepository.saveAll(
+                    attachments.stream()
+                            .map(request -> ChatAttachment.create(
+                                    chatMessage, request.fileKey(), request.fileName(), request.fileSize()))
+                            .toList());
+            // 저장 성공 후에만 승격 — 실패하면 트랜잭션 롤백으로 첨부도 사라지고 승격 이벤트도 발행되지 않는다.
+            List<String> fileKeys = saved.stream().map(ChatAttachment::getFileKey).toList();
+            eventPublisher.publishEvent(new FilePromotionEvent(fileKeys));
+        }
         return chatMessage;
     }
 

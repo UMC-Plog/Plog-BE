@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Plog STOMP Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7/bundles/stomp.umd.min.js"></script>
+</head>
+<body>
+<h3>Plog STOMP 테스트</h3>
+<div>
+  Access Token: <input id="token" size="60" placeholder="Bearer 없이 순수 JWT만"><br>
+  Room ID: <input id="roomId" size="10"><br>
+  <button onclick="connect()">Connect</button>
+</div>
+<hr>
+<div>
+  Client Message ID: <input id="clientMessageId" value="test-1"><br>
+  Message: <input id="message" value="안녕하세요"><br>
+  <button onclick="send()">Send</button>
+</div>
+<hr>
+<pre id="log" style="background:#eee;padding:10px;height:300px;overflow:auto;"></pre>
+
+<script>
+  let stompClient;
+
+  function log(msg) {
+    document.getElementById('log').textContent += msg + "\n";
+  }
+
+  function connect() {
+    const token = document.getElementById('token').value;
+    const roomId = document.getElementById('roomId').value;
+
+    const socket = new SockJS('http://localhost:8080/ws-stomp');
+    stompClient = new StompJs.Client({
+      webSocketFactory: () => socket,
+      connectHeaders: {
+        Authorization: 'Bearer ' + token   // CONNECT 프레임 네이티브 헤더로 전달됨
+      },
+      onConnect: () => {
+        log('CONNECTED');
+        stompClient.subscribe('/topic/chat-rooms/' + roomId, (frame) => {
+          log('RECEIVED: ' + frame.body);   // 여기 body의 chatId를 읽음 처리 테스트에 사용
+        });
+        stompClient.subscribe('/user/queue/errors', (frame) => {
+          log('ERROR: ' + frame.body);
+        });
+      },
+      onStompError: (frame) => {
+        log('STOMP ERROR: ' + frame.headers['message']);
+      }
+    });
+    stompClient.activate();
+  }
+
+  function send() {
+    const roomId = document.getElementById('roomId').value;
+    const clientMessageId = document.getElementById('clientMessageId').value;
+    const message = document.getElementById('message').value;
+
+    stompClient.publish({
+      destination: '/app/chat-rooms/' + roomId + '/messages',
+      body: JSON.stringify({ clientMessageId, message })
+    });
+  }
+</script>
+</body>
+</html>
