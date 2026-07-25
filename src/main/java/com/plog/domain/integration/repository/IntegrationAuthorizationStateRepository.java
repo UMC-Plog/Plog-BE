@@ -11,6 +11,12 @@ import org.springframework.data.repository.query.Param;
 public interface IntegrationAuthorizationStateRepository extends JpaRepository<IntegrationAuthorizationState, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select state from IntegrationAuthorizationState state where state.stateHash = :stateHash")
+    @Query("""
+            select state
+            from IntegrationAuthorizationState state
+            join fetch state.projectMember projectMember
+            join fetch projectMember.project
+            where state.stateHash = :stateHash
+            """)
     Optional<IntegrationAuthorizationState> findByStateHashForUpdate(@Param("stateHash") String stateHash);
 }
