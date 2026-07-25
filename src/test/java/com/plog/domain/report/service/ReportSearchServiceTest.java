@@ -47,6 +47,35 @@ class ReportSearchServiceTest {
     }
 
     @Test
+    void mapsAnAccessibleReportSlice() {
+        LocalDateTime completedAt = LocalDateTime.of(2026, 7, 20, 12, 0);
+        PageRequest pageable = PageRequest.of(0, 20);
+        given(summary.getProjectId()).willReturn(10L);
+        given(summary.getProjectName()).willReturn("PLOG API");
+        given(summary.getReportId()).willReturn(20L);
+        given(summary.getReportStatus()).willReturn(ReportStatus.COMPLETED);
+        given(summary.getCompletedAt()).willReturn(completedAt);
+        given(reportRepository.findAccessibleReportSlice(
+                1L,
+                MemberStatus.ACTIVE,
+                pageable
+        )).willReturn(new SliceImpl<>(List.of(summary), pageable, true));
+
+        SliceResponse<ReportSearchResponse> response = service.getReports(1L, 0, 20);
+
+        assertThat(response.content()).containsExactly(new ReportSearchResponse(
+                10L,
+                "PLOG API",
+                20L,
+                ReportStatus.COMPLETED,
+                completedAt.toInstant(ZoneOffset.UTC)
+        ));
+        assertThat(response.page()).isZero();
+        assertThat(response.size()).isEqualTo(20);
+        assertThat(response.hasNext()).isTrue();
+    }
+
+    @Test
     void normalizesFiltersAndMapsAnAccessibleReportSlice() {
         LocalDateTime completedAt = LocalDateTime.of(2026, 7, 20, 12, 0);
         given(summary.getProjectId()).willReturn(10L);
@@ -190,6 +219,15 @@ class ReportSearchServiceTest {
     @Test
     void rejectsANullPrincipalBeforeSearching() {
         assertThatThrownBy(() -> service.search(null, "", null, null, 0, 20))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(AuthErrorCode.INVALID_TOKEN));
+
+        verifyNoInteractions(reportRepository);
+    }
+
+    @Test
+    void rejectsANullPrincipalBeforeListing() {
+        assertThatThrownBy(() -> service.getReports(null, 0, 20))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(AuthErrorCode.INVALID_TOKEN));
 

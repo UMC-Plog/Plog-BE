@@ -19,6 +19,38 @@ import org.springframework.http.ResponseEntity;
 public interface ReportControllerDoc {
 
     @Operation(
+            summary = "리포트 목록 조회",
+            description = """
+                    ACTIVE 멤버십의 프로젝트 리포트를 Slice로 조회합니다.
+                    프로젝트와 리포트는 1:1 관계이며, 프론트는 hasNext=true일 때 다음 page를 요청하면 됩니다.
+                    정렬은 완료 시각 내림차순, 리포트 ID 내림차순입니다. 완료 시각이 없는 리포트는 뒤에 배치됩니다.
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "리포트 목록 조회 성공"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "잘못된 페이지 조건",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증이 없거나 유효하지 않은 사용자",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))
+            )
+    })
+    ResponseEntity<ApiResponse<SliceResponse<ReportSearchResponse>>> getReports(
+            Long userId,
+            @Min(0) int page,
+            @Min(1) @Max(100) int size
+    );
+
+    @Operation(
             summary = "리포트 검색",
             description = """
                     ACTIVE 멤버십의 프로젝트 리포트를 프로젝트명과 완료 기간으로 Slice 검색합니다.
