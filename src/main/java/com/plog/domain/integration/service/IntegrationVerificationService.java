@@ -27,7 +27,8 @@ public class IntegrationVerificationService {
 
         IntegrationVerificationStatus status = verify(integration);
         if (status == IntegrationVerificationStatus.VERIFIED) {
-            return integration;
+            return projectIntegrationRepository.findById(integration.getId())
+                    .orElseThrow(() -> new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND));
         }
         if (status == IntegrationVerificationStatus.DISCONNECTED) {
             projectIntegrationService.removeIfPresent(integration.getId());
