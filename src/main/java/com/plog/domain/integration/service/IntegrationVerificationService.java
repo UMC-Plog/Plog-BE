@@ -34,6 +34,9 @@ public class IntegrationVerificationService {
             projectIntegrationService.removeIfPresent(integration.getId());
             throw new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND);
         }
+        if (status == IntegrationVerificationStatus.UNAVAILABLE) {
+            throw new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE);
+        }
         throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED);
     }
 
