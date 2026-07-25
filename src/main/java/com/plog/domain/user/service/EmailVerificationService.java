@@ -1,17 +1,12 @@
 package com.plog.domain.user.service;
 
-import com.plog.domain.user.entity.EmailVerification;
+import com.plog.domain.user.entity.EmailVerificationPurpose;
 import com.plog.domain.user.entity.User;
-import com.plog.domain.user.repository.EmailVerificationRepository;
 import com.plog.domain.user.repository.UserRepository;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.config.EmailVerificationProperties;
-import com.plog.global.util.HashUtil;
-import com.plog.global.util.TimeUtil;
 import com.plog.infrastructure.mail.MailSender;
-import java.security.SecureRandom;
-import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 
 /**
@@ -25,16 +20,15 @@ import org.springframework.stereotype.Service;
 @Service
 public class EmailVerificationService {
 
-    private final EmailVerificationRepository emailVerificationRepository;
+    private final EmailVerificationCodeService emailVerificationCodeService;
     private final UserRepository userRepository;
     private final MailSender mailSender;
     private final EmailVerificationProperties properties;
-    private final SecureRandom secureRandom = new SecureRandom();
 
-    public EmailVerificationService(EmailVerificationRepository emailVerificationRepository,
+    public EmailVerificationService(EmailVerificationCodeService emailVerificationCodeService,
                                     UserRepository userRepository, MailSender mailSender,
                                     EmailVerificationProperties properties) {
-        this.emailVerificationRepository = emailVerificationRepository;
+        this.emailVerificationCodeService = emailVerificationCodeService;
         this.userRepository = userRepository;
         this.mailSender = mailSender;
         this.properties = properties;
@@ -44,21 +38,7 @@ public class EmailVerificationService {
     public void sendCode(String email) {
         assertEmailNotRegistered(email); // 유가입자에게 메일 보내는 낭비 차단
 
-        LocalDateTime now = TimeUtil.nowUtc();
-        EmailVerification verification = emailVerificationRepository.findByEmail(email).orElse(null);
-        if (verification != null && verification.isWithinCooldown(now, properties.resendCooldown())) {
-            throw new ApiException(AuthErrorCode.VERIFICATION_RESEND_COOLDOWN);
-        }
-
-        String rawCode = generateCode();
-        String codeHash = HashUtil.sha256Hex(rawCode);
-        LocalDateTime expiresAt = now.plus(properties.ttl());
-        if (verification == null) {
-            verification = EmailVerification.issue(email, codeHash, expiresAt, now);
-        } else {
-            verification.reissue(codeHash, expiresAt, now);
-        }
-        emailVerificationRepository.save(verification); // 메일 발송 전에 커밋
+        String rawCode = emailVerificationCodeService.issueCode(email, EmailVerificationPurpose.SIGNUP);
 
         // 외부 I/O — 트랜잭션 밖
         mailSender.send(email, "[Plog] 이메일 인증 코드",
@@ -68,22 +48,7 @@ public class EmailVerificationService {
 
     /** 인증 코드 검증. 성공 시 verified 상태로 마킹(가입 시 이 상태를 확인). */
     public void verify(String email, String code) {
-        EmailVerification verification = emailVerificationRepository.findByEmail(email)
-                .orElseThrow(() -> new ApiException(AuthErrorCode.VERIFICATION_CODE_MISMATCH));
-
-        if (verification.isAttemptExceeded(properties.maxAttempts())) {
-            throw new ApiException(AuthErrorCode.VERIFICATION_ATTEMPT_EXCEEDED);
-        }
-        if (verification.isExpired(TimeUtil.nowUtc())) {
-            throw new ApiException(AuthErrorCode.VERIFICATION_CODE_EXPIRED);
-        }
-        if (!verification.matches(HashUtil.sha256Hex(code))) {
-            verification.increaseAttempt();
-            emailVerificationRepository.save(verification); // 증가분 커밋 후 throw
-            throw new ApiException(AuthErrorCode.VERIFICATION_CODE_MISMATCH);
-        }
-        verification.markVerified();
-        emailVerificationRepository.save(verification);
+        emailVerificationCodeService.verifyCode(email, EmailVerificationPurpose.SIGNUP, code);
     }
 
     private void assertEmailNotRegistered(String email) {
@@ -91,17 +56,12 @@ public class EmailVerificationService {
         if (user == null) {
             return;
         }
+        if (user.isWithdrawn()) {
+            throw new ApiException(AuthErrorCode.EMAIL_WITHDRAWAL_PENDING);
+        }
         // 가입 수단까지 구분해 반환 — 소셜 가입자가 일반 로그인 화면에서 갇히지 않도록
         throw user.isSocialUser()
                 ? new ApiException(AuthErrorCode.EMAIL_DUPLICATED_SOCIAL)
                 : new ApiException(AuthErrorCode.EMAIL_DUPLICATED_LOCAL);
-    }
-
-    private String generateCode() {
-        StringBuilder sb = new StringBuilder(properties.codeLength());
-        for (int i = 0; i < properties.codeLength(); i++) {
-            sb.append(secureRandom.nextInt(10)); // 0~9, 선행 0 허용
-        }
-        return sb.toString();
     }
 }

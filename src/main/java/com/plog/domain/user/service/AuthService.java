@@ -39,6 +39,11 @@ public class AuthService {
         if (user.getPassword() == null || !passwordEncoder.matches(rawPassword, user.getPassword())) {
             throw new ApiException(AuthErrorCode.LOGIN_FAILED);
         }
+        // 비밀번호 검증 뒤에 두는 이유: 순서를 뒤집으면 비밀번호를 모르는 사람도
+        // "이 이메일은 탈퇴 중"이라는 정보를 얻는다.
+        if (user.isWithdrawn()) {
+            throw new ApiException(AuthErrorCode.WITHDRAWN_ACCOUNT);
+        }
         return issueTokens(user);
     }
 

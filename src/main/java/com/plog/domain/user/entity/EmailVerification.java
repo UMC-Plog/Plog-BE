@@ -3,6 +3,8 @@ package com.plog.domain.user.entity;
 import com.plog.global.common.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -25,7 +27,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "email_verification", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_email_verification_email", columnNames = "email")
+        // (email, purpose) 조합으로 유일. 같은 이메일이 가입용/재설정용 인증을 동시에 가질 수 있다.
+        @UniqueConstraint(name = "uk_email_verification_email_purpose",
+                columnNames = {"email", "purpose"})
 })
 public class EmailVerification extends BaseEntity {
 
@@ -36,6 +40,11 @@ public class EmailVerification extends BaseEntity {
 
     @Column(nullable = false)
     private String email;
+
+    // 생성 시점에 고정. reissue 로도 바뀌지 않는다 — 목적을 갈아타는 경로를 만들지 않기 위해.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private EmailVerificationPurpose purpose;
 
     @Column(name = "code_hash", nullable = false)
     private String codeHash;
@@ -52,10 +61,11 @@ public class EmailVerification extends BaseEntity {
     @Column(name = "last_sent_at", nullable = false)
     private LocalDateTime lastSentAt;
 
-    public static EmailVerification issue(String email, String codeHash,
+    public static EmailVerification issue(String email, EmailVerificationPurpose purpose, String codeHash,
                                           LocalDateTime expiresAt, LocalDateTime sentAt) {
         return EmailVerification.builder()
                 .email(email)
+                .purpose(purpose)
                 .codeHash(codeHash)
                 .expiresAt(expiresAt)
                 .attemptCount(0)

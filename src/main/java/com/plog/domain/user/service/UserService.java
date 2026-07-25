@@ -3,9 +3,9 @@ package com.plog.domain.user.service;
 import com.plog.domain.user.dto.request.SignupRequest;
 import com.plog.domain.user.entity.AgreementType;
 import com.plog.domain.user.entity.EmailVerification;
+import com.plog.domain.user.entity.EmailVerificationPurpose;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.entity.UserAgreement;
-import com.plog.domain.user.repository.EmailVerificationRepository;
 import com.plog.domain.user.repository.UserAgreementRepository;
 import com.plog.domain.user.repository.UserRepository;
 import com.plog.global.api.code.ErrorCode;
@@ -34,14 +34,14 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final UserAgreementRepository userAgreementRepository;
-    private final EmailVerificationRepository emailVerificationRepository;
+    private final EmailVerificationCodeService emailVerificationCodeService;
     private final PasswordEncoder passwordEncoder;
 
     public UserService(UserRepository userRepository, UserAgreementRepository userAgreementRepository,
-                       EmailVerificationRepository emailVerificationRepository, PasswordEncoder passwordEncoder) {
+                       EmailVerificationCodeService emailVerificationCodeService, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.userAgreementRepository = userAgreementRepository;
-        this.emailVerificationRepository = emailVerificationRepository;
+        this.emailVerificationCodeService = emailVerificationCodeService;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -82,7 +82,7 @@ public class UserService {
                 .toList();
         userAgreementRepository.saveAll(userAgreements);
 
-        emailVerificationRepository.delete(verification); // 인증 소비 — 재사용 방지
+        emailVerificationCodeService.consume(verification); // 인증 소비 — 재사용 방지
     }
 
     private Map<AgreementType, Boolean> toAgreementMap(List<SignupRequest.AgreementItem> items) {
@@ -105,18 +105,16 @@ public class UserService {
 
     /** 인증 완료 + 가입 이메일 바인딩 확인. 인증한 이메일로만 가입 가능. */
     private EmailVerification getVerifiedOrThrow(String email) {
-        EmailVerification verification = emailVerificationRepository.findByEmail(email)
-                .orElseThrow(() -> new ApiException(AuthErrorCode.EMAIL_NOT_VERIFIED));
-        if (!verification.isVerified()) {
-            throw new ApiException(AuthErrorCode.EMAIL_NOT_VERIFIED);
-        }
-        return verification;
+        return emailVerificationCodeService.requireVerified(email, EmailVerificationPurpose.SIGNUP);
     }
 
     private void assertEmailNotRegistered(String email) {
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) {
             return;
+        }
+        if (user.isWithdrawn()) {
+            throw new ApiException(AuthErrorCode.EMAIL_WITHDRAWAL_PENDING);
         }
         throw user.isSocialUser()
                 ? new ApiException(AuthErrorCode.EMAIL_DUPLICATED_SOCIAL)
