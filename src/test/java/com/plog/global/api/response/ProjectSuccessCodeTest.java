@@ -10,7 +10,7 @@ class ProjectSuccessCodeTest {
     @Test
     void usesSequentialProjectDomainCodes() {
         assertThat(List.of(
-                ProjectSuccessCode.EXTERNAL_LINKS_RETRIEVED,
+                ProjectSuccessCode.INTEGRATIONS_RETRIEVED,
                 ProjectSuccessCode.PROJECT_SETTINGS_RETRIEVED,
                 ProjectSuccessCode.PROJECT_SETTINGS_UPDATED,
                 ProjectSuccessCode.PROJECT_CREATED,

@@ -24,6 +24,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
@@ -64,10 +65,10 @@ public class GoogleIntegrationService {
         return new IntegrationAuthorizationResponse(LinkType.GOOGLE, url, state.expiresAt());
     }
 
-    @Transactional
     public IntegrationConnectionResponse completeCallback(String state, String code) {
         IntegrationAuthorizationState authorizationState = authorizationStateService.consume(state, LinkType.GOOGLE);
-        projectIntegrationService.requireNotConnected(authorizationState.getProject().getId(), LinkType.GOOGLE);
+        projectIntegrationService.requireNotConnected(
+                authorizationState.getProjectMember().getProject().getId(), LinkType.GOOGLE);
         JsonNode token = exchangeCode(code);
         String accessToken = requiredField(token, "access_token");
         String refreshToken = requiredRefreshToken(token);
@@ -90,6 +91,23 @@ public class GoogleIntegrationService {
                 LinkType.GOOGLE,
                 integration.getExternalAccountName()
         );
+    }
+
+    public IntegrationVerificationStatus verifyConnection(ProjectIntegration integration) {
+        String accessToken;
+        try {
+            accessToken = projectIntegrationService.decryptAccessToken(integration);
+        } catch (ApiException exception) {
+            return IntegrationVerificationStatus.UNAVAILABLE;
+        }
+        TokenCheck tokenCheck = checkAccessToken(accessToken);
+        if (tokenCheck == TokenCheck.VERIFIED) {
+            return IntegrationVerificationStatus.VERIFIED;
+        }
+        if (tokenCheck == TokenCheck.UNAVAILABLE) {
+            return IntegrationVerificationStatus.UNAVAILABLE;
+        }
+        return refreshAndVerify(integration);
     }
 
     private JsonNode exchangeCode(String code) {
@@ -123,6 +141,78 @@ public class GoogleIntegrationService {
         }
     }
 
+    private IntegrationVerificationStatus refreshAndVerify(ProjectIntegration integration) {
+        String refreshToken;
+        try {
+            refreshToken = projectIntegrationService.decryptRefreshToken(integration);
+        } catch (ApiException exception) {
+            return IntegrationVerificationStatus.UNAVAILABLE;
+        }
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return IntegrationVerificationStatus.DISCONNECTED;
+        }
+        try {
+            MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+            body.add("client_id", require(properties.clientId()));
+            body.add("client_secret", require(properties.clientSecret()));
+            body.add("refresh_token", refreshToken);
+            body.add("grant_type", "refresh_token");
+            JsonNode token = restClient.post()
+                    .uri("https://oauth2.googleapis.com/token")
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(body)
+                    .retrieve()
+                    .body(JsonNode.class);
+            String accessToken = token == null ? null : token.path("access_token").asText(null);
+            if (accessToken == null || accessToken.isBlank()) {
+                return IntegrationVerificationStatus.UNAVAILABLE;
+            }
+            TokenCheck tokenCheck = checkAccessToken(accessToken);
+            if (tokenCheck != TokenCheck.VERIFIED) {
+                return tokenCheck == TokenCheck.AUTHENTICATION_FAILED
+                        ? IntegrationVerificationStatus.DISCONNECTED
+                        : IntegrationVerificationStatus.UNAVAILABLE;
+            }
+            String nextRefreshToken = token.path("refresh_token").asText(refreshToken);
+            long expiresIn = token.path("expires_in").asLong(0);
+            projectIntegrationService.rotateOAuthTokens(
+                    integration.getId(), accessToken, nextRefreshToken,
+                    expiresIn > 0 ? Instant.now().plusSeconds(expiresIn) : null);
+            return IntegrationVerificationStatus.VERIFIED;
+        } catch (RestClientResponseException exception) {
+            return isInvalidGrant(exception)
+                    ? IntegrationVerificationStatus.DISCONNECTED
+                    : IntegrationVerificationStatus.UNAVAILABLE;
+        } catch (RestClientException | ApiException exception) {
+            return IntegrationVerificationStatus.UNAVAILABLE;
+        }
+    }
+
+    private TokenCheck checkAccessToken(String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            return TokenCheck.AUTHENTICATION_FAILED;
+        }
+        try {
+            restClient.get()
+                    .uri("https://www.googleapis.com/drive/v3/about?fields=user(permissionId,emailAddress)")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .retrieve()
+                    .toBodilessEntity();
+            return TokenCheck.VERIFIED;
+        } catch (RestClientResponseException exception) {
+            return exception.getStatusCode().value() == 401
+                    ? TokenCheck.AUTHENTICATION_FAILED
+                    : TokenCheck.UNAVAILABLE;
+        } catch (RestClientException exception) {
+            return TokenCheck.UNAVAILABLE;
+        }
+    }
+
+    private boolean isInvalidGrant(RestClientResponseException exception) {
+        return exception.getStatusCode().value() == 400
+                && exception.getResponseBodyAsString().contains("invalid_grant");
+    }
+
     private ProjectMember requireMember(Long projectId, Long userId) {
         if (!projectRepository.existsById(projectId)) {
             throw new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND);
@@ -148,5 +238,11 @@ public class GoogleIntegrationService {
             throw new ApiException(IntegrationErrorCode.PROVIDER_CONFIGURATION_ERROR);
         }
         return value;
+    }
+
+    private enum TokenCheck {
+        VERIFIED,
+        AUTHENTICATION_FAILED,
+        UNAVAILABLE
     }
 }

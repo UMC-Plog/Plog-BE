@@ -42,11 +42,11 @@ public class GithubIntegrationService {
         return new IntegrationAuthorizationResponse(LinkType.GITHUB, authorizationUrl, state.expiresAt());
     }
 
-    @Transactional
     public IntegrationConnectionResponse completeCallback(String state, String installationId) {
         IntegrationAuthorizationState authorizationState = authorizationStateService.consume(state, LinkType.GITHUB);
-        projectIntegrationService.requireNotConnected(authorizationState.getProject().getId(), LinkType.GITHUB);
-        if (installationId == null || installationId.isBlank()) {
+        Long projectId = authorizationState.getProjectMember().getProject().getId();
+        projectIntegrationService.requireNotConnected(projectId, LinkType.GITHUB);
+        if (installationId == null || !installationId.matches("\\d+")) {
             throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED);
         }
         GithubAppClient.Installation installation = githubAppClient.installation(installationId);
