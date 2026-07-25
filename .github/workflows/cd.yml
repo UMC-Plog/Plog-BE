@@ -77,8 +77,8 @@ jobs:
             S3_ENABLED=true
             S3_BUCKET=umc-plog-prod
             INTEGRATION_CREDENTIAL_ENCRYPTION_KEY_BASE64=${{ secrets.INTEGRATION_CREDENTIAL_ENCRYPTION_KEY_BASE64 }}
-            INTEGRATION_SUCCESS_REDIRECT_URL=${{ secrets.INTEGRATION_SUCCESS_REDIRECT_URL }}
-            INTEGRATION_FAILURE_REDIRECT_URL=${{ secrets.INTEGRATION_FAILURE_REDIRECT_URL }}
+            INTEGRATION_SUCCESS_REDIRECT_URL=${{ secrets.INTEGRATION_SUCCESS_REDIRECT_URL || 'http://localhost:5173/integrations/callback' }}
+            INTEGRATION_FAILURE_REDIRECT_URL=${{ secrets.INTEGRATION_FAILURE_REDIRECT_URL || 'http://localhost:5173/integrations/callback' }}
             GITHUB_APP_ID=${{ secrets.GH_APP_ID }}
             GITHUB_APP_SLUG=${{ secrets.GH_APP_SLUG }}
             GITHUB_CLIENT_ID=${{ secrets.GH_CLIENT_ID }}
