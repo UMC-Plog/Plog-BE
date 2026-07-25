@@ -121,10 +121,10 @@ class ChatRoomRepositoryIntegrationTest {
                 .build());
         ChatRoom room = chatRoomRepository.save(ChatRoom.create(project));
         ChatMessage first = chatMessageRepository.saveAndFlush(
-                ChatMessage.create(room, member, "first", 1L)
+                ChatMessage.create(room, member, "first", 1L, null)
         );
         ChatMessage second = chatMessageRepository.saveAndFlush(
-                ChatMessage.create(room, member, "second", 2L)
+                ChatMessage.create(room, member, "second", 2L, null)
         );
         Long legacyId = jdbcTemplate.queryForObject(
                 "insert into chat_messages "

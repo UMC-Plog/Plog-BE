@@ -1,13 +1,13 @@
 package com.plog.domain.project.service;
 
-import com.plog.domain.integration.entity.ExternalConnection;
+import com.plog.domain.integration.entity.ProjectIntegration;
+import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.project.dto.ProjectSettingsDto;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.exception.ProjectApiErrorCode;
-import com.plog.domain.project.repository.ProjectExternalConnectionRepository;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.exception.ApiException;
@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProjectSettingsService {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
-    private final ProjectExternalConnectionRepository externalConnectionRepository;
+    private final ProjectIntegrationRepository projectIntegrationRepository;
     private final InviteTokenCipher inviteTokenCipher;
     private final ProjectSettingsValidator settingsValidator;
 
@@ -36,8 +36,8 @@ public class ProjectSettingsService {
         ProjectMember member = requireActiveMember(projectId, userId);
         String token = inviteTokenCipher.decrypt(project.getInviteTokenEncrypted());
         String inviteUrl = inviteBaseUrl + "/" + token;
-        List<ProjectSettingsDto.ExternalConnection> connections = externalConnectionRepository
-                .findAllByProjectMemberIdOrderByLinkTypeAsc(member.getId()).stream()
+        List<ProjectSettingsDto.ExternalConnection> connections = projectIntegrationRepository
+                .findAllByProjectIdOrderByLinkTypeAsc(projectId).stream()
                 .map(this::toConnection)
                 .toList();
         return new ProjectSettingsDto.Response(
@@ -90,8 +90,8 @@ public class ProjectSettingsService {
         return member;
     }
 
-    private ProjectSettingsDto.ExternalConnection toConnection(ExternalConnection connection) {
+    private ProjectSettingsDto.ExternalConnection toConnection(ProjectIntegration integration) {
         return new ProjectSettingsDto.ExternalConnection(
-                connection.getId(), connection.getLinkType().name(), connection.isLinked());
+                integration.getId(), integration.getLinkType().name(), integration.isConnected());
     }
 }

@@ -190,7 +190,7 @@ class ChatChannelQueryRepositoryIntegrationTest {
         ProjectMember member = projectMemberRepository.findById(fixture.member().getId()).orElseThrow();
         long sequence = room.issueNextMessageSequence();
         ChatMessage saved = chatMessageRepository.saveAndFlush(ChatMessage.create(
-                room, member, message, sequence
+                room, member, message, sequence, null
         ));
         jdbcTemplate.update(
                 "update chat_messages set created_at = ?, updated_at = ? where chat_id = ?",
