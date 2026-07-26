@@ -18,21 +18,16 @@ public class IntegrationCollectionRunService {
 
     @Transactional
     public void createPendingFinalRun(Project project) {
-        if (integrationCollectionRunRepository.findByProjectId(project.getId()).isPresent()) {
-            return;
-        }
-        integrationCollectionRunRepository.save(IntegrationCollectionRun.builder()
-                .project(project)
-                .status(IntegrationCollectionRunStatus.PENDING)
-                .attemptCount(0)
-                .build());
+        integrationCollectionRunRepository.createIfAbsent(project.getId());
     }
 
     @Transactional
     public void reclaimStaleRunningRun(Long projectId, Instant now, Instant staleBefore) {
-        integrationCollectionRunRepository.findByProjectId(projectId)
+        integrationCollectionRunRepository.findByProjectIdForUpdate(projectId)
                 .filter(run -> run.getStatus() == IntegrationCollectionRunStatus.RUNNING)
                 .filter(run -> run.getHeartbeatAt() == null || run.getHeartbeatAt().isBefore(staleBefore))
-                .ifPresent(run -> run.markRetryable(now, "stale collection run reclaimed"));
+                .ifPresent(run -> run.markRetryable(
+                        run.getAttemptToken(), now, "stale collection run reclaimed"
+                ));
     }
 }
