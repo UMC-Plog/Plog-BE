@@ -102,4 +102,24 @@ class UserTest {
         // providerId도 (provider_type, provider_id) 유니크 자리를 비워야 하므로 같은 임의값을 섞는다.
         assertThat(user.getProviderId()).endsWith("0123456789ab");
     }
+
+    @Test
+    @DisplayName("소셜 가입은 프리셋을 함께 지정할 수 있다")
+    void createSocialWithPreset() {
+        User user = User.createSocial("s@plog.test", "홍길동", "바나나",
+                ProviderType.KAKAO, "kakao-123", ProfilePreset.PENGUIN);
+
+        assertThat(user.getProfilePreset()).isEqualTo(ProfilePreset.PENGUIN);
+        assertThat(user.getPassword()).isNull();
+        assertThat(user.getProviderType()).isEqualTo(ProviderType.KAKAO);
+    }
+
+    @Test
+    @DisplayName("프리셋 없이 소셜 가입하면 기본 아바타(null)로 남는다")
+    void createSocialWithoutPreset() {
+        User user = User.createSocial("s@plog.test", "홍길동", "바나나",
+                ProviderType.GOOGLE, "google-1");
+
+        assertThat(user.getProfilePreset()).isNull();
+    }
 }

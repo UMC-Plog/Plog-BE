@@ -41,7 +41,21 @@ public enum AuthErrorCode implements BaseErrorCode {
     // 비밀번호 재설정 화면의 "비밀번호 확인" 칸 불일치.
     // 형식 오류(COMMON400)와 코드를 나눠, 프론트가 어느 입력칸에 에러를 띄울지 응답만 보고 판단할 수 있게 한다.
     PASSWORD_CONFIRM_MISMATCH(HttpStatus.BAD_REQUEST, "AUTH018",
-            "비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+            "비밀번호와 비밀번호 확인이 일치하지 않습니다."),
+
+    // 소셜 로그인
+    UNSUPPORTED_SOCIAL_PROVIDER(HttpStatus.BAD_REQUEST, "AUTH019", "지원하지 않는 소셜 로그인입니다."),
+    // 인가 코드 만료·재사용·위조, provider 프로필 조회 실패를 한 코드로 묶는다(원인을 클라이언트에 나눠 알릴 이유가 없다).
+    SOCIAL_AUTHORIZATION_FAILED(HttpStatus.UNAUTHORIZED, "AUTH020", "소셜 인증에 실패했습니다."),
+    // 동의항목 설정상 정상 흐름에서는 발생하지 않지만, 콘솔 설정이 바뀌면 조용히 500이 나가는 것을 막는다.
+    SOCIAL_EMAIL_NOT_PROVIDED(HttpStatus.BAD_REQUEST, "AUTH021", "이메일 제공에 동의해야 가입할 수 있습니다."),
+    SOCIAL_TICKET_INVALID(HttpStatus.BAD_REQUEST, "AUTH022", "유효하지 않은 가입 요청입니다."),
+    SOCIAL_TICKET_EXPIRED(HttpStatus.BAD_REQUEST, "AUTH023", "가입 시간이 초과되었습니다. 처음부터 다시 시도해 주세요."),
+    SOCIAL_PROVIDER_CONFIGURATION_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "AUTH024",
+            "소셜 로그인 설정이 올바르지 않습니다."),
+    // uk_user_provider 위반 — 같은 소셜 계정으로 이미 가입돼 있다. 이메일 충돌(AUTH001/002)과 원인이 다르므로
+    // 코드를 분리한다. 프론트가 응답만 보고 어느 입력칸에 에러를 띄울지 판단할 수 있어야 한다.
+    SOCIAL_ACCOUNT_ALREADY_REGISTERED(HttpStatus.CONFLICT, "AUTH025", "이미 가입된 소셜 계정입니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

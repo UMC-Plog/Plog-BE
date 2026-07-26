@@ -48,17 +48,31 @@ app:
   # 탈퇴 후 개인정보 파기까지의 유예 기간. 화면 안내 문구("7일 후 완전히 삭제")와 같은 값이어야 한다.
   withdrawal:
     retention: 7d
+  # 소셜 가입 티켓 수명. 약관 동의 → 프로필 설정을 마치기에 충분해야 한다.
+  social-signup:
+    ticket-ttl: 30m
   # CORS 허용 오리진. 환경별로 다르므로 프로퍼티로 관리 (배포 도메인은 확정 후 추가)
   cors:
     allowed-origins:
       - http://localhost:3000
       - http://localhost:5173
+      - https://umc-plog.site
 
 plog:
   invite:
     # 32바이트 AES 키를 Base64로 인코딩한 값. 누락 시 애플리케이션 시작을 중단한다.
     encryption-key-base64: ${INVITE_TOKEN_ENCRYPTION_KEY_BASE64}
     base-url: ${INVITE_BASE_URL}
+  # 소셜 로그인 자격증명. plog.integration.google(Drive 연동용)과 별개의 OAuth 클라이언트다.
+  oauth:
+    kakao:
+      client-id: ${KAKAO_CLIENT_ID:}
+      client-secret: ${KAKAO_CLIENT_SECRET:}
+      redirect-uri: ${KAKAO_REDIRECT_URI:http://localhost:5173/oauth/kakao}
+    google:
+      client-id: ${SOCIAL_GOOGLE_CLIENT_ID:}
+      client-secret: ${SOCIAL_GOOGLE_CLIENT_SECRET:}
+      redirect-uri: ${SOCIAL_GOOGLE_REDIRECT_URI:http://localhost:5173/oauth/google}
   integration:
     # OAuth 토큰은 AES-GCM으로 암호화해 저장한다. 실제 provider 연결 전에는 비워둘 수 있다.
     encryption-key-base64: ${INTEGRATION_CREDENTIAL_ENCRYPTION_KEY_BASE64:}

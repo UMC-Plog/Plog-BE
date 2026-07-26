@@ -25,7 +25,6 @@ import com.plog.global.api.exception.ApiException;
 import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.AttachmentUsage;
 import com.plog.infrastructure.s3.FilePromotionEvent;
-import com.plog.infrastructure.s3.FileStorageService;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -39,7 +38,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
-class TaskServiceAttachmentTest {
+class TaskCommandServiceAttachmentTest {
 
     private static final Long PROJECT_ID = 10L;
     private static final Long USER_ID = 1L;
@@ -62,18 +61,18 @@ class TaskServiceAttachmentTest {
     private AttachmentPolicy attachmentPolicy;
 
     @Mock
-    private FileStorageService fileStorageService;
-
-    @Mock
     private ApplicationEventPublisher eventPublisher;
 
-    private TaskService service;
+    @Mock
+    private TaskAttachmentUrlResolver urlResolver;
+
+    private TaskCommandService service;
 
     @BeforeEach
     void setUp() {
-        service = new TaskService(taskRepository, taskAttachmentRepository,
+        service = new TaskCommandService(taskRepository, taskAttachmentRepository,
                 projectMemberRepository, projectAccessService,
-                attachmentPolicy, fileStorageService, eventPublisher);
+                attachmentPolicy, eventPublisher, urlResolver);
     }
 
     private void givenAssignee() {
@@ -130,14 +129,14 @@ class TaskServiceAttachmentTest {
     }
 
     @Test
-    void doesNotTouchStorageForLinkAttachments() {
+    void doesNotPublishAPromotionEventForLinkAttachments() {
         givenAssignee();
 
         service.createTask(PROJECT_ID, USER_ID, requestWith(
                 new TaskCreateRequest.TaskAttachmentRequest(
                         AttachmentType.LINK, "설계 노션", null, "https://example.com/doc", null)));
 
-        verifyNoInteractions(fileStorageService, eventPublisher);
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test

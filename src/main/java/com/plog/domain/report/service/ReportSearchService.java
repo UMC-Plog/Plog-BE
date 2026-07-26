@@ -111,4 +111,5 @@ public class ReportSearchService {
                 TimeUtil.toInstant(summary.getCompletedAt())
         );
     }
+    
 }
