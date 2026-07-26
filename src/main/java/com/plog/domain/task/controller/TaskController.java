@@ -5,8 +5,10 @@ import com.plog.domain.task.dto.request.TaskCreateRequest;
 import com.plog.domain.task.dto.request.TaskStatusUpdateRequest;
 import com.plog.domain.task.dto.request.TaskUpdateRequest;
 import com.plog.domain.task.dto.response.*;
+import com.plog.domain.task.service.TaskCommandService;
+import com.plog.domain.task.service.TaskQueryService;
+import com.plog.domain.task.service.TaskStatusService;
 import com.plog.global.api.response.TaskSuccessCode;
-import com.plog.domain.task.service.TaskService;
 import com.plog.global.api.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,10 +24,16 @@ import java.util.List;
 @RequestMapping("/api/projects/{projectId}/tasks")
 public class TaskController {
 
-    private final TaskService taskService;
+    private final TaskQueryService taskQueryService;
+    private final TaskCommandService taskCommandService;
+    private final TaskStatusService taskStatusService;
 
-    public TaskController(TaskService taskService) {
-        this.taskService = taskService;
+    public TaskController(TaskQueryService taskQueryService,
+                          TaskCommandService taskCommandService,
+                          TaskStatusService taskStatusService) {
+        this.taskQueryService = taskQueryService;
+        this.taskCommandService = taskCommandService;
+        this.taskStatusService = taskStatusService;
     }
 
     @Operation(
@@ -50,7 +58,7 @@ public class TaskController {
             @AuthenticationPrincipal Long userId,
             @Valid @RequestBody TaskCreateRequest request
     ) {
-        TaskCreateResponse response = taskService.createTask(projectId, userId, request);
+        TaskCreateResponse response = taskCommandService.createTask(projectId, userId, request);
         return ResponseEntity.status(TaskSuccessCode.TASK_CREATED.getHttpStatus())
                 .body(ApiResponse.success(TaskSuccessCode.TASK_CREATED, response));
     }
@@ -72,7 +80,7 @@ public class TaskController {
             @PathVariable Long projectId,
             @AuthenticationPrincipal Long userId
     ) {
-        TaskListResponse response = taskService.getTaskList(projectId, userId);
+        TaskListResponse response = taskQueryService.getTaskList(projectId, userId);
         return ApiResponse.success(TaskSuccessCode.TASK_LIST_FOUND, response);
     }
 
@@ -97,7 +105,7 @@ public class TaskController {
             @PathVariable Long taskId,
             @AuthenticationPrincipal Long userId
     ) {
-        TaskDetailResponse response = taskService.getTaskDetail(projectId, taskId, userId);
+        TaskDetailResponse response = taskQueryService.getTaskDetail(projectId, taskId, userId);
         return ApiResponse.success(TaskSuccessCode.TASK_DETAIL_FOUND, response);
     }
 
@@ -120,7 +128,7 @@ public class TaskController {
             @AuthenticationPrincipal Long userId,
             @Valid @RequestBody TaskUpdateRequest request
     ) {
-        TaskUpdateResponse response = taskService.updateTask(projectId, taskId, userId, request);
+        TaskUpdateResponse response = taskCommandService.updateTask(projectId, taskId, userId, request);
         return ApiResponse.success(TaskSuccessCode.TASK_UPDATED, response);
     }
 
@@ -141,7 +149,7 @@ public class TaskController {
             @PathVariable Long taskId,
             @AuthenticationPrincipal Long userId
     ) {
-        TaskDeleteResponse response = taskService.deleteTask(projectId, taskId, userId);
+        TaskDeleteResponse response = taskCommandService.deleteTask(projectId, taskId, userId);
         return ApiResponse.success(TaskSuccessCode.TASK_DELETED, response);
     }
 
@@ -169,7 +177,7 @@ public class TaskController {
             @AuthenticationPrincipal Long userId,
             @Valid @RequestBody TaskStatusUpdateRequest request
     ) {
-        TaskStatusUpdateResponse response = taskService.updateTaskStatus(projectId, taskId, userId, request);
+        TaskStatusUpdateResponse response = taskStatusService.updateTaskStatus(projectId, taskId, userId, request);
         return ApiResponse.success(TaskSuccessCode.TASK_STATUS_UPDATED, response);
     }
 
@@ -191,7 +199,7 @@ public class TaskController {
             @AuthenticationPrincipal Long userId,
             @Valid @RequestBody TaskAttachmentAddRequest request
     ) {
-        TaskAttachmentAddResponse response = taskService.addAttachment(projectId, taskId, userId, request);
+        TaskAttachmentAddResponse response = taskCommandService.addAttachment(projectId, taskId, userId, request);
         return ResponseEntity.status(TaskSuccessCode.TASK_ATTACHMENT_ADDED.getHttpStatus())
                 .body(ApiResponse.success(TaskSuccessCode.TASK_ATTACHMENT_ADDED, response));
     }
@@ -213,7 +221,7 @@ public class TaskController {
             @PathVariable Long taskAttachmentId,
             @AuthenticationPrincipal Long userId
     ) {
-        TaskDeleteResponse response = taskService.deleteAttachment(projectId, taskId, taskAttachmentId, userId);
+        TaskDeleteResponse response = taskCommandService.deleteAttachment(projectId, taskId, taskAttachmentId, userId);
         return ApiResponse.success(TaskSuccessCode.TASK_ATTACHMENT_DELETED, response);
     }
 
@@ -233,7 +241,7 @@ public class TaskController {
             @PathVariable Long projectId,
             @AuthenticationPrincipal Long userId
     ) {
-        TaskListResponse response = taskService.getOverdueTasks(projectId, userId);
+        TaskListResponse response = taskQueryService.getOverdueTasks(projectId, userId);
         return ApiResponse.success(TaskSuccessCode.TASK_LIST_FOUND, response);
     }
   

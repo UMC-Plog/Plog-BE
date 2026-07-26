@@ -1,7 +1,7 @@
 package com.plog.domain.task.controller;
 
 import com.plog.domain.task.dto.response.TaskListResponse;
-import com.plog.domain.task.service.TaskService;
+import com.plog.domain.task.service.TaskQueryService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.TaskSuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,10 +19,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/projects/{projectId}/members/{projectMemberId}/tasks")
 public class ProjectMemberTaskController {
 
-    private final TaskService taskService;
+    private final TaskQueryService taskQueryService;
 
-    public ProjectMemberTaskController(TaskService taskService) {
-        this.taskService = taskService;
+    public ProjectMemberTaskController(TaskQueryService taskQueryService) {
+        this.taskQueryService = taskQueryService;
     }
 
     @Operation(
@@ -42,7 +42,7 @@ public class ProjectMemberTaskController {
             @PathVariable Long projectMemberId,
             @AuthenticationPrincipal Long userId
     ) {
-        TaskListResponse response = taskService.getTasksByMember(projectId, projectMemberId, userId);
+        TaskListResponse response = taskQueryService.getTasksByMember(projectId, projectMemberId, userId);
         return ApiResponse.success(TaskSuccessCode.TASK_LIST_FOUND, response);
     }
 }
