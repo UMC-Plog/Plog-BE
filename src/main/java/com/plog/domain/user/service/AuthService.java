@@ -6,7 +6,6 @@ import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.UserRepository;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.exception.ApiException;
-import com.plog.global.security.jwt.JwtProvider;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,14 +19,14 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final RefreshTokenService refreshTokenService;
-    private final JwtProvider jwtProvider;
+    private final TokenIssuer tokenIssuer;
     private final PasswordEncoder passwordEncoder;
 
     public AuthService(UserRepository userRepository, RefreshTokenService refreshTokenService,
-                       JwtProvider jwtProvider, PasswordEncoder passwordEncoder) {
+                       TokenIssuer tokenIssuer, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.refreshTokenService = refreshTokenService;
-        this.jwtProvider = jwtProvider;
+        this.tokenIssuer = tokenIssuer;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -44,7 +43,7 @@ public class AuthService {
         if (user.isWithdrawn()) {
             throw new ApiException(AuthErrorCode.WITHDRAWN_ACCOUNT);
         }
-        return issueTokens(user);
+        return tokenIssuer.issue(user);
     }
 
     @Transactional
@@ -62,17 +61,11 @@ public class AuthService {
         if (user.isWithdrawn()) {
             throw new ApiException(AuthErrorCode.WITHDRAWN_ACCOUNT);
         }
-        return issueTokens(user);
+        return tokenIssuer.issue(user);
     }
 
     @Transactional
     public void logout(String rawRefreshToken) {
         refreshTokenService.revokeByRawToken(rawRefreshToken);
-    }
-
-    private TokenResponse issueTokens(User user) {
-        String accessToken = jwtProvider.createAccessToken(user.getId());
-        String refreshToken = refreshTokenService.issue(user);
-        return new TokenResponse(accessToken, refreshToken);
     }
 }

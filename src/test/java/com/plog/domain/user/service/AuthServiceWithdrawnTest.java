@@ -29,8 +29,7 @@ class AuthServiceWithdrawnTest {
         UserRepository userRepository = mock(UserRepository.class);
         PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
         RefreshTokenService refreshTokenService = mock(RefreshTokenService.class);
-        com.plog.global.security.jwt.JwtProvider jwtProvider =
-                mock(com.plog.global.security.jwt.JwtProvider.class);
+        TokenIssuer tokenIssuer = mock(TokenIssuer.class);
 
         User user = User.createLocal("a@plog.test", "encoded", "홍길동", "바나나", ProfilePreset.OTTER);
         user.withdraw(LocalDateTime.of(2026, 7, 25, 12, 0));
@@ -38,7 +37,7 @@ class AuthServiceWithdrawnTest {
         given(passwordEncoder.matches(anyString(), anyString())).willReturn(true);
 
         AuthService authService =
-                new AuthService(userRepository, refreshTokenService, jwtProvider, passwordEncoder);
+                new AuthService(userRepository, refreshTokenService, tokenIssuer, passwordEncoder);
 
         assertThatThrownBy(() -> authService.login("a@plog.test", "plog1234"))
                 .isInstanceOf(ApiException.class)
@@ -52,8 +51,7 @@ class AuthServiceWithdrawnTest {
         UserRepository userRepository = mock(UserRepository.class);
         PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
         RefreshTokenService refreshTokenService = mock(RefreshTokenService.class);
-        com.plog.global.security.jwt.JwtProvider jwtProvider =
-                mock(com.plog.global.security.jwt.JwtProvider.class);
+        TokenIssuer tokenIssuer = mock(TokenIssuer.class);
 
         User user = User.createLocal("a@plog.test", "encoded", "홍길동", "바나나", ProfilePreset.OTTER);
         user.withdraw(LocalDateTime.of(2026, 7, 25, 12, 0));
@@ -64,7 +62,7 @@ class AuthServiceWithdrawnTest {
         given(refreshTokenService.consume("raw-token")).willReturn(1);
 
         AuthService authService =
-                new AuthService(userRepository, refreshTokenService, jwtProvider, passwordEncoder);
+                new AuthService(userRepository, refreshTokenService, tokenIssuer, passwordEncoder);
 
         assertThatThrownBy(() -> authService.reissue("raw-token"))
                 .isInstanceOf(ApiException.class)
@@ -72,7 +70,7 @@ class AuthServiceWithdrawnTest {
                 .isEqualTo(AuthErrorCode.WITHDRAWN_ACCOUNT);
 
         // 여기서 막지 않으면 죽은 계정이 토큰을 무기한 갱신한다.
-        verify(refreshTokenService, never()).issue(any());
+        verify(tokenIssuer, never()).issue(any());
     }
 
     @Test

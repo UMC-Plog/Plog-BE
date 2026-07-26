@@ -1,13 +1,11 @@
 package com.plog.domain.user.dto.request;
 
-import com.plog.domain.user.entity.AgreementType;
 import com.plog.domain.user.entity.ProfilePreset;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import java.util.List;
 
@@ -36,12 +34,4 @@ public record SignupRequest(
         @Schema(description = "약관 동의 목록(필수 3종 + 선택 마케팅)")
         @NotEmpty @Valid List<AgreementItem> agreements
 ) {
-    @Schema(description = "약관 동의 항목")
-    public record AgreementItem(
-            @Schema(description = "약관 종류", example = "SERVICE_TERMS")
-            @NotNull AgreementType agreementType,
-            @Schema(description = "동의 여부", example = "true")
-            boolean agreed
-    ) {
-    }
 }

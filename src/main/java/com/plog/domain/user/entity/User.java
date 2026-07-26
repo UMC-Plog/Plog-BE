@@ -94,15 +94,24 @@ public class User extends BaseEntity {
                 .build();
     }
 
-    // 소셜 가입: provider만 세팅, password 접근 불가
+    // 프리셋 미선택(기본 아바타) 소셜 가입.
     public static User createSocial(String email, String name, String nickname,
                                     ProviderType providerType, String providerId) {
+        return createSocial(email, name, nickname, providerType, providerId, null);
+    }
+
+    // 소셜 가입: provider만 세팅, password 접근 불가
+    // profilePreset은 선택(null=기본 아바타) — createLocal과 동일한 계약.
+    public static User createSocial(String email, String name, String nickname,
+                                    ProviderType providerType, String providerId,
+                                    ProfilePreset profilePreset) {
         return User.builder()
                 .email(email)
                 .name(name)
                 .nickname(nickname)
                 .providerType(providerType)
                 .providerId(providerId)
+                .profilePreset(profilePreset)
                 .build();
     }
 

@@ -5,6 +5,8 @@ import com.plog.domain.integration.config.GithubIntegrationProperties;
 import com.plog.domain.integration.config.GoogleIntegrationProperties;
 import com.plog.domain.integration.config.IntegrationRedirectProperties;
 import com.plog.domain.integration.config.NotionIntegrationProperties;
+import com.plog.domain.user.config.GoogleOAuthProperties;
+import com.plog.domain.user.config.KakaoOAuthProperties;
 import com.plog.global.security.jwt.JwtProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -20,7 +22,10 @@ import org.springframework.context.annotation.Configuration;
         FigmaIntegrationProperties.class,
         NotionIntegrationProperties.class,
         GoogleIntegrationProperties.class,
-        IntegrationRedirectProperties.class
+        IntegrationRedirectProperties.class,
+        KakaoOAuthProperties.class,
+        GoogleOAuthProperties.class,
+        SocialSignupProperties.class
 })
 public class PropertiesConfig {
 }
