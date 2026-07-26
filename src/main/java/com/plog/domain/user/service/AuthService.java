@@ -56,6 +56,12 @@ public class AuthService {
         if (refreshTokenService.consume(rawRefreshToken) == 0) {
             throw new ApiException(AuthErrorCode.INVALID_REFRESH_TOKEN);
         }
+        // 탈퇴는 리프레시 토큰을 전부 지우지만(UserWithdrawalService), 그 일괄 삭제 직후에 이 재발급이
+        // 새 토큰을 넣으면 죽은 계정에 살아있는 토큰이 남아 이후로도 계속 갱신된다.
+        // 로그인과 달리 여기선 계정 존재 노출을 걱정할 필요가 없다 — 이미 유효한 리프레시 토큰 소지자다.
+        if (user.isWithdrawn()) {
+            throw new ApiException(AuthErrorCode.WITHDRAWN_ACCOUNT);
+        }
         return issueTokens(user);
     }
 

@@ -19,11 +19,11 @@ import com.plog.global.util.TimeUtil;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class EmailVerificationCodeServiceTest {
 
@@ -97,29 +97,23 @@ class EmailVerificationCodeServiceTest {
     }
 
     @Test
-    @DisplayName("코드 불일치 시 시도횟수를 증가시켜 저장한 뒤에야 예외를 던진다 (롤백돼도 증가분은 커밋됨을 보장)")
-    void verifyCodeIncrementsAndPersistsBeforeThrowingOnMismatch() {
+    @DisplayName("코드 불일치 시 DB에서 원자적으로 시도횟수를 올린 뒤에야 예외를 던진다")
+    void verifyCodeIncrementsAttemptAtomicallyBeforeThrowingOnMismatch() {
         LocalDateTime now = TimeUtil.nowUtc();
         EmailVerification existing = EmailVerification.issue(
                 EMAIL, PURPOSE, HashUtil.sha256Hex("111111"), now.plusMinutes(5), now);
+        ReflectionTestUtils.setField(existing, "id", 7L);
         given(verificationRepository.findByEmailAndPurpose(EMAIL, PURPOSE)).willReturn(Optional.of(existing));
-
-        AtomicInteger attemptCountAtSaveTime = new AtomicInteger(-1);
-        given(verificationRepository.save(any(EmailVerification.class))).willAnswer(invocation -> {
-            EmailVerification arg = invocation.getArgument(0);
-            attemptCountAtSaveTime.set(arg.getAttemptCount());
-            return arg;
-        });
 
         assertThatThrownBy(() -> service.verifyCode(EMAIL, PURPOSE, "000000"))
                 .isInstanceOf(ApiException.class)
                 .extracting(e -> ((ApiException) e).getErrorCode())
                 .isEqualTo(AuthErrorCode.VERIFICATION_CODE_MISMATCH);
 
-        // save() 가 호출되던 그 순간(now, 예외 발생 전) 이미 attemptCount 가 1로 증가해 있었어야 한다.
-        assertThat(attemptCountAtSaveTime.get()).isEqualTo(1);
-        verify(verificationRepository).save(existing);
-        assertThat(existing.getAttemptCount()).isEqualTo(1);
+        // 엔티티를 읽고-더해-save 하면 동시 오답 요청이 서로의 증가분을 덮어써 최대 시도 제한이 뚫린다.
+        // 반드시 DB의 원자적 UPDATE 한 번이어야 하고, 엔티티 경로로는 아무것도 쓰지 않아야 한다.
+        verify(verificationRepository).increaseAttemptCount(7L);
+        verify(verificationRepository, never()).save(any());
     }
 
     @Test

@@ -20,7 +20,8 @@ import org.springframework.stereotype.Service;
  * 의도적으로 클래스/메서드 레벨 @Transactional 을 걸지 않는다.
  * - 발급: 메일(외부 I/O)을 트랜잭션 안에 넣지 않기 위해. 메일 발송은 호출자 책임.
  * - 검증: 실패 시 시도횟수 증가를 "커밋한 뒤" 예외를 던져야 한다. @Transactional 안에서 던지면
- *   증가분까지 롤백돼 무차별 대입 제한이 무력화된다. → save() 단위로 커밋하고 이후에 throw.
+ *   증가분까지 롤백돼 무차별 대입 제한이 무력화된다.
+ *   → 증가는 EmailVerificationRepository.increaseAttemptCount(REQUIRES_NEW)로 독립 커밋하고 이후에 throw.
  */
 @Service
 public class EmailVerificationCodeService {
@@ -69,8 +70,11 @@ public class EmailVerificationCodeService {
             throw new ApiException(AuthErrorCode.VERIFICATION_CODE_EXPIRED);
         }
         if (!verification.matches(HashUtil.sha256Hex(rawCode))) {
-            verification.increaseAttempt();
-            emailVerificationRepository.save(verification); // 증가분 커밋 후 throw
+            // 증가는 엔티티(읽고-더해-저장)가 아니라 DB의 원자적 UPDATE로 한다. 엔티티로 하면 동시에 들어온
+            // 오답 요청들이 같은 값을 읽고 같은 값을 써서 증가분이 유실되고(lost update), 요청을 병렬로
+            // 쏘는 것만으로 최대 시도 횟수 제한이 무력화된다. 위 isAttemptExceeded 검사는 여전히 직전에
+            // 읽은 값을 보지만, 카운터가 유실 없이 쌓이므로 다음 요청부터는 정확히 차단된다.
+            emailVerificationRepository.increaseAttemptCount(verification.getId()); // 증가분 커밋 후 throw
             throw new ApiException(AuthErrorCode.VERIFICATION_CODE_MISMATCH);
         }
         verification.markVerified();
