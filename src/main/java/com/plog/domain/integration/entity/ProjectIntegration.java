@@ -100,4 +100,16 @@ public class ProjectIntegration extends BaseEntity {
         this.refreshTokenEncrypted = refreshTokenEncrypted;
         this.accessTokenExpiresAt = accessTokenExpiresAt;
     }
+
+    public void updateOAuthTokens(
+            String accessTokenEncrypted,
+            String refreshTokenEncrypted,
+            Instant accessTokenExpiresAt
+    ) {
+        this.accessTokenEncrypted = accessTokenEncrypted;
+        if (refreshTokenEncrypted != null && !refreshTokenEncrypted.isBlank()) {
+            this.refreshTokenEncrypted = refreshTokenEncrypted;
+        }
+        this.accessTokenExpiresAt = accessTokenExpiresAt;
+    }
 }

@@ -51,8 +51,8 @@ public class IntegrationController implements IntegrationControllerDoc {
         IntegrationStatusResponse response = integrationService.getProjectIntegrations(projectId, userId);
 
         return ResponseEntity
-                .status(ProjectSuccessCode.EXTERNAL_LINKS_RETRIEVED.getHttpStatus())
-                .body(ApiResponse.success(ProjectSuccessCode.EXTERNAL_LINKS_RETRIEVED, response));
+                .status(ProjectSuccessCode.INTEGRATIONS_RETRIEVED.getHttpStatus())
+                .body(ApiResponse.success(ProjectSuccessCode.INTEGRATIONS_RETRIEVED, response));
     }
 
     @Override

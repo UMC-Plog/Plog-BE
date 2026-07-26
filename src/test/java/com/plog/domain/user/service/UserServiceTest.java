@@ -8,9 +8,9 @@ import static org.mockito.Mockito.verify;
 import com.plog.domain.user.dto.request.SignupRequest;
 import com.plog.domain.user.entity.AgreementType;
 import com.plog.domain.user.entity.EmailVerification;
+import com.plog.domain.user.entity.EmailVerificationPurpose;
 import com.plog.domain.user.entity.ProfilePreset;
 import com.plog.domain.user.entity.User;
-import com.plog.domain.user.repository.EmailVerificationRepository;
 import com.plog.domain.user.repository.UserAgreementRepository;
 import com.plog.domain.user.repository.UserRepository;
 import java.time.LocalDateTime;
@@ -33,7 +33,7 @@ class UserServiceTest {
     @Mock
     private UserAgreementRepository userAgreementRepository;
     @Mock
-    private EmailVerificationRepository emailVerificationRepository;
+    private EmailVerificationCodeService emailVerificationCodeService;
     @Mock
     private PasswordEncoder passwordEncoder;
     @Captor
@@ -44,7 +44,7 @@ class UserServiceTest {
     @BeforeEach
     void setUp() {
         userService = new UserService(
-                userRepository, userAgreementRepository, emailVerificationRepository, passwordEncoder);
+                userRepository, userAgreementRepository, emailVerificationCodeService, passwordEncoder);
     }
 
     @Test
@@ -58,7 +58,8 @@ class UserServiceTest {
                         new SignupRequest.AgreementItem(AgreementType.EXTERNAL_DATA, true)
                 ));
         given(passwordEncoder.encode("plog1234")).willReturn("encoded");
-        given(emailVerificationRepository.findByEmail(email)).willReturn(Optional.of(verifiedFor(email)));
+        given(emailVerificationCodeService.requireVerified(email, EmailVerificationPurpose.SIGNUP))
+                .willReturn(verifiedFor(email));
         given(userRepository.findByEmail(email)).willReturn(Optional.empty());
         given(userRepository.existsByNickname("gildong")).willReturn(false);
 
@@ -70,7 +71,8 @@ class UserServiceTest {
 
     private EmailVerification verifiedFor(String email) {
         EmailVerification verification = EmailVerification.issue(
-                email, "hash", LocalDateTime.now().plusMinutes(5), LocalDateTime.now());
+                email, EmailVerificationPurpose.SIGNUP, "hash",
+                LocalDateTime.now().plusMinutes(5), LocalDateTime.now());
         verification.markVerified();
         return verification;
     }

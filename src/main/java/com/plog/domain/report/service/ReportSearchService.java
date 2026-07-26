@@ -28,6 +28,19 @@ public class ReportSearchService {
     private final ReportRepository reportRepository;
 
     @Transactional(readOnly = true)
+    public SliceResponse<ReportSearchResponse> getReports(Long userId, int page, int size) {
+        if (userId == null) {
+            throw new ApiException(AuthErrorCode.INVALID_TOKEN);
+        }
+        Slice<ReportSummary> reportSlice = reportRepository.findAccessibleReportSlice(
+                userId,
+                MemberStatus.ACTIVE,
+                PageRequest.of(page, size)
+        );
+        return toSliceResponse(reportSlice);
+    }
+
+    @Transactional(readOnly = true)
     public SliceResponse<ReportSearchResponse> search(
             Long userId,
             String keyword,
@@ -55,6 +68,10 @@ public class ReportSearchService {
                 endExclusive,
                 PageRequest.of(page, size)
         );
+        return toSliceResponse(reportSlice);
+    }
+
+    private SliceResponse<ReportSearchResponse> toSliceResponse(Slice<ReportSummary> reportSlice) {
         List<ReportSearchResponse> content = reportSlice.getContent().stream()
                 .map(this::toResponse)
                 .toList();

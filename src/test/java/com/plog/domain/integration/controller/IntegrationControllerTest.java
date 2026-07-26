@@ -87,7 +87,7 @@ class IntegrationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.code").value("PROJECT001"))
-                .andExpect(jsonPath("$.message").value("외부 툴 연동 상태를 조회했습니다."))
+                .andExpect(jsonPath("$.message").value("프로젝트 연동 상태를 조회했습니다."))
                 .andExpect(jsonPath("$.result.projectId").value(projectId))
                 .andExpect(jsonPath("$.result.projectMemberId").value(100L))
                 .andExpect(jsonPath("$.result.integrations[0].linkType").value("GITHUB"))

@@ -25,6 +25,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
@@ -58,10 +59,10 @@ public class FigmaIntegrationService {
         return new IntegrationAuthorizationResponse(LinkType.FIGMA, url, state.expiresAt());
     }
 
-    @Transactional
     public IntegrationConnectionResponse completeCallback(String state, String code) {
         IntegrationAuthorizationState authorizationState = authorizationStateService.consume(state, LinkType.FIGMA);
-        projectIntegrationService.requireNotConnected(authorizationState.getProject().getId(), LinkType.FIGMA);
+        projectIntegrationService.requireNotConnected(
+                authorizationState.getProjectMember().getProject().getId(), LinkType.FIGMA);
         JsonNode token = exchangeCode(code);
         String accessToken = requiredField(token, "access_token");
         JsonNode profile = profile(accessToken);
@@ -73,6 +74,23 @@ public class FigmaIntegrationService {
         );
         return new IntegrationConnectionResponse(integration.getProject().getId(), LinkType.FIGMA,
                 integration.getExternalAccountName());
+    }
+
+    public IntegrationVerificationStatus verifyConnection(ProjectIntegration integration) {
+        String accessToken;
+        try {
+            accessToken = projectIntegrationService.decryptAccessToken(integration);
+        } catch (ApiException exception) {
+            return IntegrationVerificationStatus.UNAVAILABLE;
+        }
+        TokenCheck tokenCheck = checkAccessToken(accessToken);
+        if (tokenCheck == TokenCheck.VERIFIED) {
+            return IntegrationVerificationStatus.VERIFIED;
+        }
+        if (tokenCheck == TokenCheck.UNAVAILABLE) {
+            return IntegrationVerificationStatus.UNAVAILABLE;
+        }
+        return refreshAndVerify(integration);
     }
 
     private JsonNode exchangeCode(String code) {
@@ -92,6 +110,72 @@ public class FigmaIntegrationService {
 
     private JsonNode profile(String accessToken) {
         return get("/v1/me", accessToken);
+    }
+
+    private IntegrationVerificationStatus refreshAndVerify(ProjectIntegration integration) {
+        String refreshToken;
+        try {
+            refreshToken = projectIntegrationService.decryptRefreshToken(integration);
+        } catch (ApiException exception) {
+            return IntegrationVerificationStatus.UNAVAILABLE;
+        }
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return IntegrationVerificationStatus.DISCONNECTED;
+        }
+        try {
+            MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+            body.add("refresh_token", refreshToken);
+            body.add("grant_type", "refresh_token");
+            JsonNode token = restClient.post().uri("https://api.figma.com/v1/oauth/token")
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .headers(headers -> headers.setBasicAuth(require(properties.clientId()), require(properties.clientSecret())))
+                    .body(body).retrieve().body(JsonNode.class);
+            String accessToken = token == null ? null : token.path("access_token").asText(null);
+            if (accessToken == null || accessToken.isBlank()) {
+                return IntegrationVerificationStatus.UNAVAILABLE;
+            }
+            TokenCheck tokenCheck = checkAccessToken(accessToken);
+            if (tokenCheck != TokenCheck.VERIFIED) {
+                return tokenCheck == TokenCheck.AUTHENTICATION_FAILED
+                        ? IntegrationVerificationStatus.DISCONNECTED
+                        : IntegrationVerificationStatus.UNAVAILABLE;
+            }
+            String nextRefreshToken = token.path("refresh_token").asText(refreshToken);
+            long expiresIn = token.path("expires_in").asLong(0);
+            projectIntegrationService.rotateOAuthTokens(
+                    integration.getId(), accessToken, nextRefreshToken,
+                    expiresIn > 0 ? Instant.now().plusSeconds(expiresIn) : null);
+            return IntegrationVerificationStatus.VERIFIED;
+        } catch (RestClientResponseException exception) {
+            return isInvalidGrant(exception)
+                    ? IntegrationVerificationStatus.DISCONNECTED
+                    : IntegrationVerificationStatus.UNAVAILABLE;
+        } catch (RestClientException | ApiException exception) {
+            return IntegrationVerificationStatus.UNAVAILABLE;
+        }
+    }
+
+    private TokenCheck checkAccessToken(String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            return TokenCheck.AUTHENTICATION_FAILED;
+        }
+        try {
+            restClient.get().uri(URI.create(API_BASE_URL + "/v1/me"))
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .retrieve().toBodilessEntity();
+            return TokenCheck.VERIFIED;
+        } catch (RestClientResponseException exception) {
+            return exception.getStatusCode().value() == 401
+                    ? TokenCheck.AUTHENTICATION_FAILED
+                    : TokenCheck.UNAVAILABLE;
+        } catch (RestClientException exception) {
+            return TokenCheck.UNAVAILABLE;
+        }
+    }
+
+    private boolean isInvalidGrant(RestClientResponseException exception) {
+        return exception.getStatusCode().value() == 400
+                && exception.getResponseBodyAsString().contains("invalid_grant");
     }
 
     private JsonNode get(String path, String accessToken) {
@@ -117,5 +201,11 @@ public class FigmaIntegrationService {
     private String require(String value) {
         if (value == null || value.isBlank()) throw new ApiException(IntegrationErrorCode.PROVIDER_CONFIGURATION_ERROR);
         return value;
+    }
+
+    private enum TokenCheck {
+        VERIFIED,
+        AUTHENTICATION_FAILED,
+        UNAVAILABLE
     }
 }

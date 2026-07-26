@@ -17,6 +17,9 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     Optional<ChatMessage> findByChatRoomIdAndProjectMemberIdAndClientMessageId(
             Long chatRoomId, Long projectMemberId, String clientMessageId);
 
+    // 읽음 처리 요청의 lastReadMessageId가 실제로 이 채팅방 소속 메시지인지 검증하기 위한 조회.
+    Optional<ChatMessage> findByIdAndChatRoomIdAndMessageSequenceIsNotNull(Long id, Long chatRoomId);
+
     @Query("select m from ChatMessage m "
             + "left join fetch m.chatRoom "
             + "join fetch m.projectMember pm "

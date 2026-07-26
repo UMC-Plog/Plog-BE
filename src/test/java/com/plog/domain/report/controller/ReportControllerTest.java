@@ -56,6 +56,39 @@ class ReportControllerTest {
     }
 
     @Test
+    void getsReportsForTheRawLongPrincipalWithDefaultPaging() throws Exception {
+        authenticate(1L);
+        Instant completedAt = Instant.parse("2026-07-20T12:00:00Z");
+        SliceResponse<ReportSearchResponse> response = new SliceResponse<>(
+                List.of(new ReportSearchResponse(
+                        10L,
+                        "Plog",
+                        20L,
+                        ReportStatus.COMPLETED,
+                        completedAt
+                )),
+                0,
+                20,
+                false
+        );
+        given(service.getReports(1L, 0, 20)).willReturn(response);
+
+        mockMvc.perform(get("/api/dashboard/reports"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("REPORT001"))
+                .andExpect(jsonPath("$.result.content[0].projectId").value(10L))
+                .andExpect(jsonPath("$.result.content[0].projectName").value("Plog"))
+                .andExpect(jsonPath("$.result.content[0].reportId").value(20L))
+                .andExpect(jsonPath("$.result.content[0].reportStatus").value("COMPLETED"))
+                .andExpect(jsonPath("$.result.content[0].completedAt")
+                        .value("2026-07-20T12:00:00Z"))
+                .andExpect(jsonPath("$.result.page").value(0))
+                .andExpect(jsonPath("$.result.size").value(20))
+                .andExpect(jsonPath("$.result.hasNext").value(false))
+                .andExpect(jsonPath("$.result.totalElements").doesNotExist());
+    }
+
+    @Test
     void searchesReportsForTheRawLongPrincipalWithDefaultPaging() throws Exception {
         authenticate(1L);
         Instant completedAt = Instant.parse("2026-07-20T12:00:00Z");
@@ -85,7 +118,7 @@ class ReportControllerTest {
                         .param("startDate", "2026-07-01")
                         .param("endDate", "2026-07-31"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("REPORT001"))
+                .andExpect(jsonPath("$.code").value("REPORT002"))
                 .andExpect(jsonPath("$.result.content[0].projectId").value(10L))
                 .andExpect(jsonPath("$.result.content[0].projectName").value("Plog"))
                 .andExpect(jsonPath("$.result.content[0].reportId").value(20L))
@@ -112,7 +145,7 @@ class ReportControllerTest {
 
         mockMvc.perform(get("/api/dashboard/reports/20/pdf"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("REPORT002"))
+                .andExpect(jsonPath("$.code").value("REPORT006"))
                 .andExpect(jsonPath("$.result.reportId").value(20L))
                 .andExpect(jsonPath("$.result.fileName").value("Plog-report.pdf"))
                 .andExpect(jsonPath("$.result.downloadUrl")

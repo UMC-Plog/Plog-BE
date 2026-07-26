@@ -27,7 +27,21 @@ public enum AuthErrorCode implements BaseErrorCode {
     LOGIN_FAILED(HttpStatus.UNAUTHORIZED, "AUTH010", "이메일 또는 비밀번호가 올바르지 않습니다."),
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH011", "유효하지 않은 토큰입니다."),
     EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH012", "만료된 토큰입니다."),
-    INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH013", "유효하지 않은 리프레시 토큰입니다.");
+    INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH013", "유효하지 않은 리프레시 토큰입니다."),
+
+    // 비밀번호 재설정: 가입 흐름의 EMAIL_DUPLICATED_* 와 정반대 방향의 검사다.
+    EMAIL_NOT_REGISTERED(HttpStatus.NOT_FOUND, "AUTH014", "가입되지 않은 이메일입니다."),
+    SOCIAL_PASSWORD_RESET_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "AUTH015",
+            "소셜 계정은 비밀번호를 재설정할 수 없습니다. 소셜 로그인을 이용해 주세요."),
+    // 탈퇴 유예기간 중. 로그인/재설정에서 사용.
+    WITHDRAWN_ACCOUNT(HttpStatus.FORBIDDEN, "AUTH016", "탈퇴 처리 중인 계정입니다."),
+    // 탈퇴 유예기간 중 같은 이메일 재가입 시도.
+    EMAIL_WITHDRAWAL_PENDING(HttpStatus.CONFLICT, "AUTH017",
+            "탈퇴 처리 중인 이메일입니다. 잠시 후 다시 가입할 수 있습니다."),
+    // 비밀번호 재설정 화면의 "비밀번호 확인" 칸 불일치.
+    // 형식 오류(COMMON400)와 코드를 나눠, 프론트가 어느 입력칸에 에러를 띄울지 응답만 보고 판단할 수 있게 한다.
+    PASSWORD_CONFIRM_MISMATCH(HttpStatus.BAD_REQUEST, "AUTH018",
+            "비밀번호와 비밀번호 확인이 일치하지 않습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

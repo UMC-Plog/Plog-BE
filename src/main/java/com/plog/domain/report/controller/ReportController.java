@@ -30,6 +30,17 @@ public class ReportController implements ReportControllerDoc {
     private final ReportPdfDownloadService reportPdfDownloadService;
 
     @Override
+    @GetMapping
+    public ResponseEntity<ApiResponse<SliceResponse<ReportSearchResponse>>> getReports(
+            @AuthenticationPrincipal Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        SliceResponse<ReportSearchResponse> response = reportSearchService.getReports(userId, page, size);
+        return ResponseEntity.ok(ApiResponse.success(ReportSuccessCode.REPORTS_RETRIEVED, response));
+    }
+
+    @Override
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<SliceResponse<ReportSearchResponse>>> searchReports(
             @AuthenticationPrincipal Long userId,

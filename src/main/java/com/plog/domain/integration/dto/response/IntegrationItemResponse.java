@@ -12,5 +12,4 @@ public record IntegrationItemResponse(
         boolean linked,
         @Schema(description = "화면 표시용 연결 계정/워크스페이스 이름. 미연결이면 null", example = "UMC-Plog")
         String connectedAccountName
-) {
-}
+) {}

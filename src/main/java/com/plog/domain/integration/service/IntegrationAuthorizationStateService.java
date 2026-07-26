@@ -52,6 +52,9 @@ public class IntegrationAuthorizationStateService {
             IntegrationAuthorizationState authorizationState = authorizationStateRepository
                     .findByStateHashForUpdate(sha256(state))
                     .orElseThrow(() -> new ApiException(IntegrationErrorCode.AUTHORIZATION_STATE_INVALID));
+            authorizationState = authorizationStateRepository
+                    .findByIdWithProjectMemberAndProject(authorizationState.getId())
+                    .orElseThrow(() -> new ApiException(IntegrationErrorCode.AUTHORIZATION_STATE_INVALID));
             Instant now = Instant.now();
             if (authorizationState.getLinkType() != linkType || authorizationState.getConsumedAt() != null) {
                 throw new ApiException(IntegrationErrorCode.AUTHORIZATION_STATE_INVALID);
