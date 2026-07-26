@@ -45,7 +45,7 @@ public class IntegrationActorMappingService {
             return null;
         }
         List<ProjectMember> members = aliasRepository
-                .findAllByIdentityProjectIntegrationIdAndAliasTypeAndAliasValue(integrationId, type, normalize(type, value))
+                .findAllByProjectIntegrationIdAndAliasTypeAndAliasValue(integrationId, type, normalize(type, value))
                 .stream()
                 .map(alias -> alias.getIdentity().getProjectMember())
                 .distinct()
@@ -57,10 +57,9 @@ public class IntegrationActorMappingService {
         if (actorEmail == null || actorEmail.isBlank()) {
             return null;
         }
-        List<ProjectMember> matches = projectMemberRepository.findActiveMembers(List.of(projectId), MemberStatus.ACTIVE)
-                .stream()
-                .filter(member -> member.getUser().getEmail().equalsIgnoreCase(actorEmail))
-                .toList();
+        List<ProjectMember> matches = projectMemberRepository.findAllByProjectIdAndStatusAndUserEmailIgnoreCase(
+                projectId, MemberStatus.ACTIVE, actorEmail
+        );
         return matches.size() == 1 ? matches.get(0) : null;
     }
 

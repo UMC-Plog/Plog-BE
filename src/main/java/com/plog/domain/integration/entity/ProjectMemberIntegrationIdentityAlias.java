@@ -27,7 +27,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "project_member_integration_identity_aliases", uniqueConstraints = {
         @UniqueConstraint(name = "uk_integration_identity_alias", columnNames = {
-                "project_member_integration_identity_id", "alias_type", "alias_value"
+                "project_integration_id", "alias_type", "alias_value"
         })
 })
 public class ProjectMemberIntegrationIdentityAlias extends BaseEntity {
@@ -40,6 +40,10 @@ public class ProjectMemberIntegrationIdentityAlias extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_member_integration_identity_id", nullable = false)
     private ProjectMemberIntegrationIdentity identity;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_integration_id", nullable = false)
+    private ProjectIntegration projectIntegration;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "alias_type", nullable = false)

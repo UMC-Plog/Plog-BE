@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ProjectMemberIntegrationIdentityAliasRepository
         extends JpaRepository<ProjectMemberIntegrationIdentityAlias, Long> {
 
-    List<ProjectMemberIntegrationIdentityAlias> findAllByIdentityProjectIntegrationIdAndAliasTypeAndAliasValue(
+    List<ProjectMemberIntegrationIdentityAlias> findAllByProjectIntegrationIdAndAliasTypeAndAliasValue(
             Long projectIntegrationId,
             IntegrationIdentityAliasType aliasType,
             String aliasValue
