@@ -35,6 +35,7 @@ public class SecurityConfig {
             "/api/auth/password/**",
             "/api/auth/nickname/**",
             "/api/auth/signup",
+            "/api/auth/oauth/**",
             "/api/auth/login",
             "/api/auth/reissue",
             "/api/auth/logout",

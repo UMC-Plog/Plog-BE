@@ -4,12 +4,10 @@ import com.plog.domain.user.dto.request.ProfileUpdateRequest;
 import com.plog.domain.user.dto.response.ProfileResponse;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.UserRepository;
-import com.plog.global.api.code.ErrorCode;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.error.UserErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
-import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -77,7 +75,7 @@ public class ProfileService {
             // flush로 유니크 위반을 지금 표면화 → 확인~저장 사이 선점(TOCTOU)을 에러코드로 변환
             userRepository.saveAndFlush(user);
         } catch (DataIntegrityViolationException e) {
-            throw mapUniqueViolation(e);
+            throw UniqueViolationMapper.map(e);
         }
     }
 
@@ -96,20 +94,5 @@ public class ProfileService {
             throw new ApiException(AuthErrorCode.WITHDRAWN_ACCOUNT);
         }
         return user;
-    }
-
-    /**
-     * UserService.mapUniqueViolation과 동일한 판별 로직(그 메서드는 private라 재사용 대신 이곳에 그대로 옮겨 적음).
-     * 제약명이 닉네임 유니크 제약이면 NICKNAME_DUPLICATED, 그 외(제약명을 알 수 없거나 다른 제약)는
-     * UserService와 동일하게 범용 충돌 코드로 폴백한다 — 이 서비스에서 flush로 깨질 수 있는 유니크 제약은
-     * 닉네임뿐이지만, 원인을 알 수 없는 위반까지 닉네임 중복으로 단정하지 않기 위해 판별을 유지한다.
-     */
-    private ApiException mapUniqueViolation(DataIntegrityViolationException e) {
-        String constraint = (e.getCause() instanceof ConstraintViolationException cve)
-                ? cve.getConstraintName() : null;
-        if (constraint != null && constraint.equalsIgnoreCase("uk_user_nickname")) {
-            return new ApiException(AuthErrorCode.NICKNAME_DUPLICATED);
-        }
-        return new ApiException(ErrorCode.CONFLICT);
     }
 }

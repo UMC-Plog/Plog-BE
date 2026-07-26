@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import com.plog.domain.user.dto.request.AgreementItem;
 import com.plog.domain.user.dto.request.SignupRequest;
 import com.plog.domain.user.entity.AgreementType;
 import com.plog.domain.user.entity.EmailVerification;
@@ -43,8 +44,14 @@ class UserServiceTest {
 
     @BeforeEach
     void setUp() {
+        // 약관·이메일 가용성은 얇은 공용 컴포넌트라 목이 아닌 실제 인스턴스로 조립한다
+        // (검증 규칙 자체는 각자의 테스트가 덮고, 여기서는 가입 흐름의 연결만 본다).
         userService = new UserService(
-                userRepository, userAgreementRepository, emailVerificationCodeService, passwordEncoder);
+                userRepository,
+                new UserAgreementService(userAgreementRepository),
+                new EmailAvailabilityService(userRepository),
+                emailVerificationCodeService,
+                passwordEncoder);
     }
 
     @Test
@@ -53,9 +60,9 @@ class UserServiceTest {
         SignupRequest request = new SignupRequest(
                 "홍길동", email, "plog1234", "gildong", ProfilePreset.OTTER,
                 List.of(
-                        new SignupRequest.AgreementItem(AgreementType.SERVICE_TERMS, true),
-                        new SignupRequest.AgreementItem(AgreementType.PRIVACY, true),
-                        new SignupRequest.AgreementItem(AgreementType.EXTERNAL_DATA, true)
+                        new AgreementItem(AgreementType.SERVICE_TERMS, true),
+                        new AgreementItem(AgreementType.PRIVACY, true),
+                        new AgreementItem(AgreementType.EXTERNAL_DATA, true)
                 ));
         given(passwordEncoder.encode("plog1234")).willReturn("encoded");
         given(emailVerificationCodeService.requireVerified(email, EmailVerificationPurpose.SIGNUP))

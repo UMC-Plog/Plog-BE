@@ -57,6 +57,12 @@ jobs:
             # S3 자격증명은 EC2 인스턴스 역할에서 오므로 키를 .env 에 두지 않는다.
             # S3_REGION 은 코드 기본값(ap-northeast-2), S3_ENDPOINT 는 MinIO 등 로컬 전용이라 생략.
             #
+            # 소셜 로그인(카카오/구글) 값들:
+            #  - GOOGLE_* 는 프로젝트 연동(Drive)용이고 SOCIAL_GOOGLE_* 는 로그인용이다. 서로 다른
+            #    OAuth 클라이언트라 이름을 분리했다 — 한쪽 값을 다른 쪽에 넣으면 조용히 인증만 실패한다.
+            #  - REDIRECT_URI 는 프론트 콜백 주소이며 비밀값이 아니다. 프론트가 인가 요청에 싣는 값과
+            #    문자 단위로 같아야 한다(다르면 카카오 KOE006 / 구글 redirect_uri_mismatch).
+            #
             # 외부 연동(integration) 값들:
             #  - GitHub Actions 는 GITHUB_ 로 시작하는 시크릿 이름을 금지한다(예약 접두사).
             #    그래서 시크릿은 GH_* 로 만들고 앱이 읽는 GITHUB_* 환경변수로 여기서 매핑한다.
@@ -94,6 +100,12 @@ jobs:
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
             GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
             GOOGLE_CALLBACK_URL=${{ secrets.GOOGLE_CALLBACK_URL }}
+            KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID }}
+            KAKAO_CLIENT_SECRET=${{ secrets.KAKAO_CLIENT_SECRET }}
+            KAKAO_REDIRECT_URI=${{ secrets.KAKAO_REDIRECT_URI || 'https://umc-plog.site/oauth/kakao' }}
+            SOCIAL_GOOGLE_CLIENT_ID=${{ secrets.SOCIAL_GOOGLE_CLIENT_ID }}
+            SOCIAL_GOOGLE_CLIENT_SECRET=${{ secrets.SOCIAL_GOOGLE_CLIENT_SECRET }}
+            SOCIAL_GOOGLE_REDIRECT_URI=${{ secrets.SOCIAL_GOOGLE_REDIRECT_URI || 'https://umc-plog.site/oauth/google' }}
             EOF
             chmod 600 .env
 
@@ -112,7 +124,9 @@ jobs:
                             GITHUB_APP_ID GITHUB_APP_SLUG GITHUB_APP_PRIVATE_KEY_BASE64 \
                             FIGMA_CLIENT_ID FIGMA_CLIENT_SECRET \
                             NOTION_CLIENT_ID NOTION_CLIENT_SECRET \
-                            GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; do
+                            GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
+                            KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET \
+                            SOCIAL_GOOGLE_CLIENT_ID SOCIAL_GOOGLE_CLIENT_SECRET; do
               if ! grep -q "^${optional}=." .env; then
                 echo "⚠️ 연동 설정이 비어 있습니다(해당 provider 연동 비활성): ${optional}"
               fi
