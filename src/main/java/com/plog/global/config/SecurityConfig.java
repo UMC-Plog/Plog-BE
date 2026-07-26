@@ -32,6 +32,7 @@ public class SecurityConfig {
     // 오히려 Access 만료/탈취 상황에서 세션 폐기가 확실히 동작해야 한다.
     private static final String[] PUBLIC_AUTH_PATHS = {
             "/api/auth/email/**",
+            "/api/auth/password/**",
             "/api/auth/nickname/**",
             "/api/auth/signup",
             "/api/auth/login",

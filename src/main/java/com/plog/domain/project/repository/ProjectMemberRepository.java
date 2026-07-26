@@ -21,6 +21,9 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
 
     List<ProjectMember> findAllByProjectId(Long projectId);
 
+    /** 탈퇴 처리용 — 해당 유저의 모든 프로젝트 멤버십(상태 무관). */
+    List<ProjectMember> findAllByUserId(Long userId);
+
     long countByProjectIdAndStatus(Long projectId, MemberStatus status);
 
     @EntityGraph(attributePaths = {"user"})

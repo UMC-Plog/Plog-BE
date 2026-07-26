@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties({
         JwtProperties.class,
         EmailVerificationProperties.class,
+        WithdrawalProperties.class,
         CorsProperties.class,
         GithubIntegrationProperties.class,
         FigmaIntegrationProperties.class,

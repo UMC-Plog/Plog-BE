@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 import com.plog.domain.user.entity.EmailVerification;
+import com.plog.domain.user.entity.EmailVerificationPurpose;
 import com.plog.domain.user.repository.EmailVerificationRepository;
 import com.plog.domain.user.repository.UserRepository;
 import com.plog.global.config.EmailVerificationProperties;
@@ -44,10 +45,13 @@ class EmailVerificationServiceTest {
 
     @Test
     void issuesCodesThatExpireRelativeToUtcNow() {
+        EmailVerificationCodeService emailVerificationCodeService =
+                new EmailVerificationCodeService(emailVerificationRepository, properties);
         EmailVerificationService service = new EmailVerificationService(
-                emailVerificationRepository, userRepository, mailSender, properties);
+                emailVerificationCodeService, userRepository, mailSender, properties);
         given(userRepository.findByEmail("user@plog.com")).willReturn(Optional.empty());
-        given(emailVerificationRepository.findByEmail("user@plog.com")).willReturn(Optional.empty());
+        given(emailVerificationRepository.findByEmailAndPurpose("user@plog.com", EmailVerificationPurpose.SIGNUP))
+                .willReturn(Optional.empty());
         given(emailVerificationRepository.save(any(EmailVerification.class)))
                 .willAnswer(call -> call.getArgument(0));
 

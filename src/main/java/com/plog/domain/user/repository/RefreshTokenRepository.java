@@ -18,4 +18,7 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Modifying
     @Query("delete from RefreshToken t where t.tokenHash = :tokenHash")
     int deleteByTokenHash(@Param("tokenHash") String tokenHash);
+
+    /** 비밀번호 재설정·탈퇴 시 해당 유저의 모든 세션을 끊는다. */
+    void deleteAllByUserId(Long userId);
 }

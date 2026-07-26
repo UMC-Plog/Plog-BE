@@ -45,6 +45,9 @@ app:
     ttl: 5m
     max-attempts: 5
     resend-cooldown: 60s
+  # 탈퇴 후 개인정보 파기까지의 유예 기간. 화면 안내 문구("7일 후 완전히 삭제")와 같은 값이어야 한다.
+  withdrawal:
+    retention: 7d
   # CORS 허용 오리진. 환경별로 다르므로 프로퍼티로 관리 (배포 도메인은 확정 후 추가)
   cors:
     allowed-origins:

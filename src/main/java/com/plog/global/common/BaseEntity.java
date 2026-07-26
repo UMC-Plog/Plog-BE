@@ -27,4 +27,9 @@ public abstract class BaseEntity {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    /** 소프트 삭제 시각 설정. 하위 엔티티의 도메인 메서드(예: User.withdraw)에서만 호출한다. */
+    protected void markDeleted(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
 }

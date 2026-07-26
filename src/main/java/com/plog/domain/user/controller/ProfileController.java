@@ -1,23 +1,25 @@
 package com.plog.domain.user.controller;
 
-import com.plog.domain.user.dto.request.ProfilePresetUpdateRequest;
+import com.plog.domain.user.controller.docs.ProfileControllerDoc;
+import com.plog.domain.user.dto.request.ProfileUpdateRequest;
+import com.plog.domain.user.dto.response.ProfileResponse;
 import com.plog.domain.user.service.ProfileService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.ProfileSuccessCode;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Profile", description = "프로필 이미지(프리셋) API")
+@Validated
 @RestController
 @RequestMapping("/api/profile")
-public class ProfileController {
+public class ProfileController implements ProfileControllerDoc {
 
     private final ProfileService profileService;
 
@@ -25,21 +27,35 @@ public class ProfileController {
         this.profileService = profileService;
     }
 
-    @Operation(
-            summary = "프로필 프리셋 변경",
-            description = """
-                    로그인한 사용자의 프로필 아바타 프리셋을 변경합니다(마이페이지 › 프로필 수정 › 프로필 이미지 변경).
-                    - 프리셋 8종 중 하나를 선택합니다. 커스텀 이미지 업로드는 없습니다.
-                    - preset은 필수입니다(누락/오값 시 COMMON400).
-                    """
-    )
-    @PatchMapping("/preset")
-    public ResponseEntity<ApiResponse<Void>> changePreset(
-            @AuthenticationPrincipal Long userId,
-            @Valid @RequestBody ProfilePresetUpdateRequest request
+    @Override
+    @GetMapping
+    public ResponseEntity<ApiResponse<ProfileResponse>> getProfile(
+            @AuthenticationPrincipal Long userId
     ) {
-        profileService.changePreset(userId, request.preset());
-        return ResponseEntity.status(ProfileSuccessCode.PROFILE_PRESET_UPDATED.getHttpStatus())
-                .body(ApiResponse.success(ProfileSuccessCode.PROFILE_PRESET_UPDATED, null));
+        ProfileResponse response = profileService.getProfile(userId);
+        return ResponseEntity.status(ProfileSuccessCode.PROFILE_RETRIEVED.getHttpStatus())
+                .body(ApiResponse.success(ProfileSuccessCode.PROFILE_RETRIEVED, response));
+    }
+
+    @Override
+    @GetMapping("/nickname/check")
+    public ResponseEntity<ApiResponse<Void>> checkNickname(
+            @AuthenticationPrincipal Long userId,
+            @RequestParam String nickname
+    ) {
+        profileService.checkNicknameAvailable(userId, nickname);
+        return ResponseEntity.status(ProfileSuccessCode.NICKNAME_AVAILABLE.getHttpStatus())
+                .body(ApiResponse.success(ProfileSuccessCode.NICKNAME_AVAILABLE, null));
+    }
+
+    @Override
+    @PatchMapping
+    public ResponseEntity<ApiResponse<Void>> updateProfile(
+            @AuthenticationPrincipal Long userId,
+            @RequestBody ProfileUpdateRequest request
+    ) {
+        profileService.updateProfile(userId, request);
+        return ResponseEntity.status(ProfileSuccessCode.PROFILE_UPDATED.getHttpStatus())
+                .body(ApiResponse.success(ProfileSuccessCode.PROFILE_UPDATED, null));
     }
 }
