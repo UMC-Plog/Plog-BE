@@ -1,6 +1,5 @@
 package com.plog.domain.integration.service;
 
-import com.plog.domain.integration.entity.IntegrationActivity;
 import com.plog.domain.integration.entity.IntegrationActivityType;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.repository.IntegrationActivityRepository;
@@ -42,23 +41,23 @@ public class IntegrationActivityStoreService {
             String sourceUrl,
             String providerPayload
     ) {
-        if (providerEventKey == null || providerEventKey.isBlank()
-                || integrationActivityRepository.existsByIntegrationResourceIdAndProviderEventKey(
-                resource.getId(), providerEventKey)) {
+        if (providerEventKey == null || providerEventKey.isBlank()) {
             return;
         }
-        integrationActivityRepository.save(IntegrationActivity.builder()
-                .integrationResource(resource)
-                .projectMember(resolveActor(resource, actorProviderId, actorLogin, actorEmail))
-                .activityType(activityType)
-                .providerEventKey(providerEventKey)
-                .actorProviderId(actorProviderId)
-                .actorLogin(actorLogin)
-                .actorEmail(actorEmail)
-                .occurredAt(occurredAt)
-                .sourceUrl(sourceUrl)
-                .providerPayload(providerPayload == null ? "{}" : providerPayload)
-                .build());
+        com.plog.domain.project.entity.ProjectMember projectMember =
+                resolveActor(resource, actorProviderId, actorLogin, actorEmail);
+        integrationActivityRepository.insertIfAbsent(
+                resource.getId(),
+                projectMember == null ? null : projectMember.getId(),
+                activityType.name(),
+                providerEventKey,
+                actorProviderId,
+                actorLogin,
+                actorEmail,
+                occurredAt,
+                sourceUrl,
+                providerPayload == null ? "{}" : providerPayload
+        );
     }
 
     private com.plog.domain.project.entity.ProjectMember resolveActor(
