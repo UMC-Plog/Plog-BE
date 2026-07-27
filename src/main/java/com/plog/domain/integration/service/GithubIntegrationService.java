@@ -27,6 +27,7 @@ public class GithubIntegrationService {
     private final IntegrationAuthorizationStateService authorizationStateService;
     private final ProjectIntegrationService projectIntegrationService;
     private final GithubAppClient githubAppClient;
+    private final IntegrationResourceService integrationResourceService;
 
     @Transactional
     public IntegrationAuthorizationResponse issueAuthorizationUrl(Long projectId, Long userId) {
@@ -61,6 +62,7 @@ public class GithubIntegrationService {
                 null,
                 null
         );
+        integrationResourceService.registerGithubInstallationRepositories(integration);
         return new IntegrationConnectionResponse(
                 integration.getProject().getId(),
                 integration.getLinkType(),
