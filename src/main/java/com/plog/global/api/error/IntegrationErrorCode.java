@@ -20,7 +20,8 @@ public enum IntegrationErrorCode implements BaseErrorCode {
     CREDENTIAL_ENCRYPTION_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTEGRATION009", "외부 연동 자격증명을 처리할 수 없습니다."),
     PROVIDER_RESOURCE_ACCESS_DENIED(HttpStatus.FORBIDDEN, "INTEGRATION010", "외부 리소스 접근 권한이 없습니다."),
     PROJECT_INTEGRATION_ALREADY_CONNECTED(HttpStatus.CONFLICT, "INTEGRATION011", "이미 연동된 외부 계정입니다. 기존 연동을 해제한 뒤 다시 시도해주세요."),
-    PROVIDER_TEMPORARILY_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "INTEGRATION012", "외부 provider를 일시적으로 확인할 수 없습니다. 잠시 후 다시 시도해주세요.");
+    PROVIDER_TEMPORARILY_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "INTEGRATION012", "외부 provider를 일시적으로 확인할 수 없습니다. 잠시 후 다시 시도해주세요."),
+    UNSUPPORTED_GOOGLE_RESOURCE_TYPE(HttpStatus.BAD_REQUEST, "INTEGRATION013", "Google Docs 또는 네이티브 Google Slides 파일만 등록할 수 있습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
