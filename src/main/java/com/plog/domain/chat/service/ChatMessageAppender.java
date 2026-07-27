@@ -14,7 +14,8 @@ import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.global.api.error.ChatErrorCode;
 import com.plog.global.api.exception.ApiException;
-import com.plog.infrastructure.s3.FilePromotionEvent;
+import com.plog.infrastructure.s3.AttachmentPolicy;
+import com.plog.infrastructure.s3.AttachmentUsage;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.QueryTimeoutException;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class ChatMessageAppender {
     private final ProjectMemberRepository projectMemberRepository;
     private final EntityManager entityManager;
     private final ApplicationEventPublisher eventPublisher;
+    private final AttachmentPolicy attachmentPolicy;
 
     // PostgreSQL은 FOR UPDATE에 대기시간을 직접 못 줘서(NOWAIT 아니면 무기한 대기),
     // 트랜잭션 세션에 lock_timeout을 걸어 잠금 대기 자체를 bound 시킨다.
@@ -92,7 +94,8 @@ public class ChatMessageAppender {
 
         ChatMessage chatMessage = chatMessageRepository
                 .findByChatRoomIdAndProjectMemberIdAndClientMessageId(room.getId(), member.getId(), clientMessageId)
-                .orElseGet(() -> createAndSaveWithAttachments(room, member, clientMessageId, message, attachments));
+                .orElseGet(() -> createAndSaveWithAttachments(
+                        room, member, userId, clientMessageId, message, attachments));
 
         // 커밋 후에만 발행됨(AFTER_COMMIT) — 재전송(멱등 히트)이어도 재브로드캐스트를 유도하기 위해 항상 발행
         eventPublisher.publishEvent(new ChatMessageSavedEvent(chatMessage.getId()));
@@ -102,21 +105,32 @@ public class ChatMessageAppender {
     private ChatMessage createAndSaveWithAttachments(
             ChatRoom room,
             ProjectMember member,
+            Long userId,
             String clientMessageId,
             String message,
             List<ChatMessageAttachmentRequest> attachments
     ) {
         ChatMessage chatMessage = createAndSave(room, member, clientMessageId, message);
-        if (!attachments.isEmpty()) {
-            List<ChatAttachment> saved = chatAttachmentRepository.saveAll(
-                    attachments.stream()
-                            .map(request -> ChatAttachment.create(
-                                    chatMessage, request.fileKey(), request.fileName(), request.fileSize()))
-                            .toList());
-            // 저장 성공 후에만 승격 — 실패하면 트랜잭션 롤백으로 첨부도 사라지고 승격 이벤트도 발행되지 않는다.
-            List<String> fileKeys = saved.stream().map(ChatAttachment::getFileKey).toList();
-            eventPublisher.publishEvent(new FilePromotionEvent(fileKeys));
+        if (attachments.isEmpty()) {
+            return chatMessage;
         }
+        // 검증을 여기 두는 이유: 재전송(멱등 히트)은 이 메서드에 들어오지 않는다.
+        // 바깥에서 검증하면 이미 CONFIRMED 인 첨부를 다시 확정하려다 409 로 죽는다.
+        attachmentPolicy.validateCount(attachments.size(), ChatErrorCode.TOO_MANY_CHAT_ATTACHMENTS);
+        List<ChatAttachment> toSave = attachments.stream()
+                .map(request -> {
+                    if (request == null || request.fileKey() == null || request.fileKey().isBlank()
+                            || request.fileName() == null || request.fileName().isBlank()
+                            || request.fileSize() == null) {
+                        throw new ApiException(ChatErrorCode.INVALID_CHAT_ATTACHMENT);
+                    }
+                    return ChatAttachment.create(chatMessage,
+                            attachmentPolicy.confirmFileAttachment(AttachmentUsage.CHAT, userId,
+                                    request.fileName(), request.fileSize(), request.fileKey(),
+                                    ChatErrorCode.INVALID_CHAT_ATTACHMENT));
+                })
+                .toList();
+        chatAttachmentRepository.saveAll(toSave);
         return chatMessage;
     }
 

@@ -13,6 +13,7 @@ import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
 import com.plog.infrastructure.s3.AttachmentUsage;
 import com.plog.infrastructure.s3.FileStorageService;
+import com.plog.infrastructure.s3.UploadedFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -94,9 +95,11 @@ public class ChatMessageQueryService {
     }
 
     private ChatMessageResponse.ChatMessageAttachmentResponse toAttachmentResponse(ChatAttachment attachment) {
+        UploadedFile file = attachment.getUploadedFile();
+        // AttachmentUsage.CHAT.forcesDownload() == false → 인라인 표시용 URL
         String fileUrl = fileStorageService.createDownloadUrl(
-                AttachmentUsage.CHAT, attachment.getFileKey(), attachment.getFileName());
+                AttachmentUsage.CHAT, file.getFileKey(), file.getOriginalFilename());
         return new ChatMessageResponse.ChatMessageAttachmentResponse(
-                attachment.getId(), attachment.getFileName(), attachment.getFileSize(), fileUrl);
+                attachment.getId(), file.getOriginalFilename(), file.getSize(), fileUrl);
     }
 }

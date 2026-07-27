@@ -13,7 +13,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriUtils;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
@@ -60,44 +59,47 @@ public class FileStorageService {
     @Value("${plog.s3.bucket:}")
     private String bucket;
 
+    /** 키는 생성 후 이동하지 않는다. 상태는 태그가 들고 있다. */
+    public String buildKey(AttachmentUsage usage, Long userId, String fileName) {
+        if (usage == null || userId == null || userId <= 0 || fileName == null) {
+            throw new ApiException(FileStorageErrorCode.INVALID_FILE_KEY);
+        }
+        String safeName = fileName.trim().replaceAll("[^a-zA-Z0-9._-]", "_");
+        return usage.keySegment() + "/users/" + userId + "/" + UUID.randomUUID() + "/" + safeName;
+    }
+
     public FileStorageDto.PresignedUploadResponse createUploadUrl(
             Long userId,
-            FileStorageDto.PresignedUploadRequest request
+            FileStorageDto.PresignedUploadRequest request,
+            String fileKey
     ) {
         ensureEnabled();
         validateFile(request.fileName(), request.contentType(), request.fileSize());
-        String safeName = request.fileName().trim().replaceAll("[^a-zA-Z0-9._-]", "_");
-        String fileKey = ownerPrefix(request.usage(), userId) + UUID.randomUUID() + "/" + safeName;
         Instant expiresAt = Instant.now().plus(URL_DURATION);
         PutObjectRequest putObject = PutObjectRequest.builder()
-                .bucket(bucket).key(fileKey).contentType(request.contentType()).contentLength(request.fileSize())
-                .tagging("state=temporary&ownerId=" + userId).build();
+                .bucket(bucket).key(fileKey).contentType(request.contentType())
+                .contentLength(request.fileSize())
+                .tagging("state=" + UploadedFileStatus.PENDING.tagValue() + "&ownerId=" + userId)
+                .build();
         var presigned = s3Presigner.presignPutObject(PutObjectPresignRequest.builder()
                 .signatureDuration(URL_DURATION).putObjectRequest(putObject).build());
         return new FileStorageDto.PresignedUploadResponse(
-                presigned.url().toString(), fileKey, presigned.signedHeaders(), expiresAt);
+                presigned.url().toString(), null, fileKey, presigned.signedHeaders(), expiresAt);
     }
 
-    // 용도까지 대조해 다른 도메인에 올린 키를 재사용하지 못하게 막는다.
-    public void verifyUploadedFile(AttachmentUsage usage, Long userId, String fileKey,
-                                   String fileName, long expectedSize) {
+    /** 업로드 실체 대조. 소유권·용도 검증은 레지스트리가 담당한다. */
+    public boolean headMatches(String fileKey, long expectedSize, String expectedContentType) {
         ensureEnabled();
-        validateFile(fileName, null, expectedSize);
-        if (fileKey == null || !fileKey.startsWith(ownerPrefix(usage, userId))) {
-            throw new ApiException(FileStorageErrorCode.INVALID_FILE_KEY);
-        }
         try {
-            var head = s3Client.headObject(HeadObjectRequest.builder().bucket(bucket).key(fileKey).build());
-            String extension = extensionOf(fileName);
-            if (head.contentLength() != expectedSize
-                    || !ALLOWED_CONTENT_TYPES.get(extension).contains(head.contentType())) {
-                throw new ApiException(FileStorageErrorCode.INVALID_FILE_KEY);
-            }
+            var head = s3Client.headObject(
+                    HeadObjectRequest.builder().bucket(bucket).key(fileKey).build());
+            return head.contentLength() == expectedSize
+                    && expectedContentType.equals(head.contentType());
         } catch (NoSuchKeyException exception) {
-            throw new ApiException(FileStorageErrorCode.INVALID_FILE_KEY, exception);
+            return false;
         } catch (S3Exception exception) {
             if (exception.statusCode() == 404) {
-                throw new ApiException(FileStorageErrorCode.INVALID_FILE_KEY, exception);
+                return false;
             }
             throw new ApiException(FileStorageErrorCode.FILE_STORAGE_ERROR, exception);
         }
@@ -150,30 +152,38 @@ public class FileStorageService {
         return new FileStorageDto.PresignedDownloadResponse(downloadUrl, duration.getSeconds());
     }
 
-    public void delete(String fileKey) {
+    /**
+     * 현재 상태를 오브젝트 태그에 반영한다. 객체가 없으면 false — 정리할 대상이
+     * 없다는 뜻이므로 호출자는 성공으로 처리한다.
+     * <p>
+     * putObjectTagging 은 태그 세트를 통째로 교체하므로 ownerId 를 매번 같이 쓴다.
+     * state 만 쓰면 업로드 시 붙은 ownerId 가 승격 순간 사라진다.
+     */
+    public boolean applyState(String fileKey, UploadedFileStatus status, Long ownerId) {
         ensureEnabled();
-        s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(fileKey).build());
-    }
-
-    public void markPermanent(String fileKey) {
-        ensureEnabled();
-        s3Client.putObjectTagging(PutObjectTaggingRequest.builder()
-                .bucket(bucket).key(fileKey)
-                .tagging(Tagging.builder().tagSet(Tag.builder().key("state").value("permanent").build()).build())
-                .build());
+        try {
+            s3Client.putObjectTagging(PutObjectTaggingRequest.builder()
+                    .bucket(bucket).key(fileKey)
+                    .tagging(Tagging.builder().tagSet(
+                            Tag.builder().key("state").value(status.tagValue()).build(),
+                            Tag.builder().key("ownerId").value(String.valueOf(ownerId)).build()
+                    ).build())
+                    .build());
+            return true;
+        } catch (NoSuchKeyException exception) {
+            return false;
+        } catch (S3Exception exception) {
+            if (exception.statusCode() == 404) {
+                return false;
+            }
+            throw new ApiException(FileStorageErrorCode.FILE_STORAGE_ERROR, exception);
+        }
     }
 
     private void ensureEnabled() {
         if (!enabled || bucket.isBlank()) {
             throw new ApiException(FileStorageErrorCode.FILE_STORAGE_DISABLED);
         }
-    }
-
-    private String ownerPrefix(AttachmentUsage usage, Long userId) {
-        if (usage == null || userId == null || userId <= 0) {
-            throw new ApiException(FileStorageErrorCode.INVALID_FILE_KEY);
-        }
-        return "temporary/" + usage.keySegment() + "/users/" + userId + "/";
     }
 
     // 확장자를 먼저 본다 — 확장자를 알아야 적용할 용량 한도가 정해진다.

@@ -63,6 +63,9 @@ public abstract class E2eTestBase {
         registry.add("plog.invite.encryption-key-base64", () -> INVITE_KEY);
         registry.add("plog.invite.base-url", () -> "https://plog.test/invite");
         registry.add("plog.s3.enabled", () -> "true");
+        // 30초마다 도는 태깅 잡이 @MockitoBean S3Client 를 다른 스레드에서 건드리면
+        // 검증·리셋과 경합해 CI 에서 간헐 실패한다. E2E 에서는 끈다.
+        registry.add("plog.s3.tag-scheduler.enabled", () -> "false");
         registry.add("plog.s3.bucket", () -> "plog-e2e");
         registry.add("plog.s3.region", () -> "ap-northeast-2");
         registry.add("plog.fcm.enabled", () -> "false");

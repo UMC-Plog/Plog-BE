@@ -1,10 +1,9 @@
 package com.plog.domain.task.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
@@ -21,10 +20,9 @@ import com.plog.domain.task.entity.TaskStatus;
 import com.plog.domain.task.repository.TaskAttachmentRepository;
 import com.plog.domain.task.repository.TaskRepository;
 import com.plog.global.api.error.TaskErrorCode;
-import com.plog.global.api.exception.ApiException;
 import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.AttachmentUsage;
-import com.plog.infrastructure.s3.FilePromotionEvent;
+import com.plog.infrastructure.s3.UploadedFileService;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -32,10 +30,8 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class TaskCommandServiceAttachmentTest {
@@ -43,7 +39,7 @@ class TaskCommandServiceAttachmentTest {
     private static final Long PROJECT_ID = 10L;
     private static final Long USER_ID = 1L;
     private static final Long ASSIGNEE_ID = 5L;
-    private static final String FILE_KEY = "temporary/task/users/1/abc/spec.docx";
+    private static final String FILE_KEY = "tasks/users/1/abc/spec.docx";
 
     @Mock
     private TaskRepository taskRepository;
@@ -61,7 +57,7 @@ class TaskCommandServiceAttachmentTest {
     private AttachmentPolicy attachmentPolicy;
 
     @Mock
-    private ApplicationEventPublisher eventPublisher;
+    private UploadedFileService uploadedFileService;
 
     @Mock
     private TaskAttachmentUrlResolver urlResolver;
@@ -72,7 +68,7 @@ class TaskCommandServiceAttachmentTest {
     void setUp() {
         service = new TaskCommandService(taskRepository, taskAttachmentRepository,
                 projectMemberRepository, projectAccessService,
-                attachmentPolicy, eventPublisher, urlResolver);
+                attachmentPolicy, uploadedFileService, urlResolver);
     }
 
     private void givenAssignee() {
@@ -106,47 +102,26 @@ class TaskCommandServiceAttachmentTest {
     }
 
     @Test
-    void verifiesUploadedFilesWithTheTaskUsage() {
+    void confirmsUploadedFilesWithTheTaskUsage() {
         givenAssignee();
 
         service.createTask(PROJECT_ID, USER_ID, requestWith(fileAttachment()));
 
-        verify(attachmentPolicy).validateFileAttachment(
+        verify(attachmentPolicy).confirmFileAttachment(
                 AttachmentUsage.TASK, USER_ID, "spec.docx", 2048L, FILE_KEY,
                 TaskErrorCode.INVALID_ATTACHMENT);
     }
 
     @Test
-    void publishesAPromotionEventSoUploadedFilesSurviveTheLifecycleRule() {
-        givenAssignee();
-
-        service.createTask(PROJECT_ID, USER_ID, requestWith(fileAttachment()));
-
-        ArgumentCaptor<FilePromotionEvent> captor =
-                ArgumentCaptor.forClass(FilePromotionEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        assertThat(captor.getValue().fileKeys()).containsExactly(FILE_KEY);
-    }
-
-    @Test
-    void doesNotPublishAPromotionEventForLinkAttachments() {
+    void doesNotConfirmAnythingForLinkAttachments() {
         givenAssignee();
 
         service.createTask(PROJECT_ID, USER_ID, requestWith(
                 new TaskCreateRequest.TaskAttachmentRequest(
                         AttachmentType.LINK, "설계 노션", null, "https://example.com/doc", null)));
 
-        verifyNoInteractions(eventPublisher);
-    }
-
-    @Test
-    void rejectsExternalAttachments() {
-        givenAssignee();
-
-        assertThatThrownBy(() -> service.createTask(PROJECT_ID, USER_ID, requestWith(
-                new TaskCreateRequest.TaskAttachmentRequest(
-                        AttachmentType.EXTERNAL, "외부", null, "https://example.com", null))))
-                .isInstanceOf(ApiException.class);
+        verify(attachmentPolicy, never())
+                .confirmFileAttachment(any(), any(), any(), any(), any(), any());
     }
 
     @Test

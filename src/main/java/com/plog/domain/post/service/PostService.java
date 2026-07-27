@@ -21,9 +21,9 @@ import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
 import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.AttachmentUsage;
-import com.plog.infrastructure.s3.FileDeletionEvent;
 import com.plog.infrastructure.s3.FileStorageService;
-import com.plog.infrastructure.s3.FilePromotionEvent;
+import com.plog.infrastructure.s3.UploadedFile;
+import com.plog.infrastructure.s3.UploadedFileService;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -31,9 +31,11 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,7 +52,7 @@ public class PostService {
     private final ProjectMemberRepository projectMemberRepository;
     private final FileStorageService fileStorageService;
     private final AttachmentPolicy attachmentPolicy;
-    private final ApplicationEventPublisher eventPublisher;
+    private final UploadedFileService uploadedFileService;
 
     @Transactional
     public PostDto.CreateResponse createPost(Long projectId, Long userId, PostDto.CreateRequest request) {
@@ -61,7 +63,7 @@ public class PostService {
         }
         String content = requireContent(request.content(), 5000);
         List<PostDto.AttachmentRequest> attachments = safeAttachments(request.attachments());
-        validateAttachments(userId, attachments);
+        List<UploadedFile> resolvedFiles = validateAttachments(userId, null, attachments);
         if (request.isNotice()) {
             projectRepository.findByIdForUpdate(projectId)
                     .orElseThrow(() -> new ApiException(ProjectApiErrorCode.PROJECT_NOT_FOUND));
@@ -69,8 +71,7 @@ public class PostService {
         }
         Post post = postRepository.saveAndFlush(Post.builder()
                 .projectMember(member).content(content).isNotice(request.isNotice()).build());
-        List<PostAttachment> savedAttachments = saveAttachments(post, attachments);
-        publishPromotions(savedAttachments);
+        List<PostAttachment> savedAttachments = saveAttachments(post, attachments, resolvedFiles);
         return toCreateResponse(post, member, savedAttachments);
     }
 
@@ -124,22 +125,21 @@ public class PostService {
         }
         List<PostAttachment> resultingAttachments;
         if (request.attachments() != null) {
-            validateAttachments(userId, request.attachments());
-            List<PostAttachment> previous = attachmentRepository.findAllByPostIdOrderByIdAsc(postId);
-            List<String> nextFileKeys = request.attachments().stream()
-                    .filter(item -> item.attachmentType() == AttachmentType.FILE)
-                    .map(PostDto.AttachmentRequest::fileKey).toList();
-            List<String> removedFileKeys = previous.stream()
-                    .filter(item -> item.getAttachmentType() == AttachmentType.FILE)
-                    .map(PostAttachment::getFileUrl)
-                    .filter(fileKey -> !nextFileKeys.contains(fileKey)).toList();
+            List<UploadedFile> resolvedFiles =
+                    validateAttachments(userId, postId, request.attachments());
+            List<Long> previousFileIds = attachmentRepository.findFileIdsByPostId(postId);
+            Set<Long> keptFileIds = resolvedFiles.stream()
+                    .filter(Objects::nonNull)
+                    .map(UploadedFile::getId)
+                    .collect(Collectors.toSet());
+            List<Long> removedFileIds = previousFileIds.stream()
+                    .filter(fileId -> !keptFileIds.contains(fileId)).toList();
+            // UNIQUE(file_id) 때문에 delete 가 insert 보다 먼저 flush 돼야 한다.
+            // 이 flush 를 지우면 같은 file_id 재삽입이 제약 위반으로 터진다.
             attachmentRepository.deleteAllByPostId(postId);
             attachmentRepository.flush();
-            resultingAttachments = saveAttachments(post, request.attachments());
-            publishPromotions(resultingAttachments);
-            if (!removedFileKeys.isEmpty()) {
-                eventPublisher.publishEvent(new FileDeletionEvent(removedFileKeys));
-            }
+            resultingAttachments = saveAttachments(post, request.attachments(), resolvedFiles);
+            uploadedFileService.release(removedFileIds);
         } else {
             resultingAttachments = attachmentRepository.findAllByPostIdOrderByIdAsc(postId);
         }
@@ -155,14 +155,10 @@ public class PostService {
         if (!post.getProjectMember().getId().equals(member.getId()) && member.getRole() != ProjectRole.OWNER) {
             throw new ApiException(PostErrorCode.POST_DELETE_PERMISSION_DENIED);
         }
-        List<String> fileKeys = attachmentRepository.findAllByPostIdOrderByIdAsc(postId).stream()
-                .filter(item -> item.getAttachmentType() == AttachmentType.FILE)
-                .map(PostAttachment::getFileUrl).toList();
+        List<Long> fileIds = attachmentRepository.findFileIdsByPostId(postId);
         postRepository.delete(post);
         postRepository.flush();
-        if (!fileKeys.isEmpty()) {
-            eventPublisher.publishEvent(new FileDeletionEvent(fileKeys));
-        }
+        uploadedFileService.release(fileIds);
         return new PostDto.DeletedResponse(true);
     }
 
@@ -283,12 +279,15 @@ public class PostService {
     }
 
     private PostDto.AttachmentResponse toAttachmentResponse(PostAttachment attachment) {
-        String url = attachment.getAttachmentType() == AttachmentType.FILE
+        UploadedFile file = attachment.getUploadedFile();
+        String url = file != null
                 ? fileStorageService.createDownloadUrl(
-                        AttachmentUsage.POST, attachment.getFileUrl(), attachment.getFileName())
-                : attachment.getFileUrl();
-        return new PostDto.AttachmentResponse(
-                attachment.getId(), attachment.getAttachmentType(), attachment.getFileName(), attachment.getFileSize(), url);
+                        AttachmentUsage.POST, file.getFileKey(), file.getOriginalFilename())
+                : attachment.getLinkUrl();
+        String name = file != null ? file.getOriginalFilename() : attachment.getLinkName();
+        Long fileId = file != null ? file.getId() : null;
+        return new PostDto.AttachmentResponse(attachment.getId(), attachment.getAttachmentType(),
+                fileId, name, attachment.getFileSize(), url);
     }
 
     private CommentDto.Response toCommentResponse(Comment comment) {
@@ -298,42 +297,62 @@ public class PostService {
                 comment.getProjectMember().getAnNickname(), comment.getContent(), toInstant(comment.getCreatedAt()));
     }
 
-    private List<PostAttachment> saveAttachments(Post post, List<PostDto.AttachmentRequest> requests) {
+    private List<PostAttachment> saveAttachments(Post post,
+                                                 List<PostDto.AttachmentRequest> requests,
+                                                 List<UploadedFile> resolved) {
         if (requests.isEmpty()) {
             return List.of();
         }
-        List<PostAttachment> attachments = requests.stream().map(request -> {
-            String storedUrl = request.attachmentType() == AttachmentType.FILE ? request.fileKey() : request.fileUrl();
-            return PostAttachment.builder().post(post).attachmentType(request.attachmentType())
-                    .fileName(request.fileName()).fileSize(request.fileSize()).fileUrl(storedUrl).build();
-        }).toList();
+        List<PostAttachment> attachments = IntStream.range(0, requests.size())
+                .mapToObj(index -> {
+                    PostDto.AttachmentRequest request = requests.get(index);
+                    UploadedFile file = resolved.get(index);
+                    return PostAttachment.builder()
+                            .post(post)
+                            .attachmentType(request.attachmentType())
+                            .uploadedFile(file)
+                            .linkUrl(file == null ? request.fileUrl() : null)
+                            .linkName(file == null ? request.fileName() : null)
+                            .fileSize(request.fileSize())
+                            .build();
+                })
+                .toList();
         return attachmentRepository.saveAllAndFlush(attachments);
     }
 
-    private void publishPromotions(List<PostAttachment> attachments) {
-        List<String> fileKeys = attachments.stream()
-                .filter(item -> item.getAttachmentType() == AttachmentType.FILE)
-                .map(PostAttachment::getFileUrl).toList();
-        if (!fileKeys.isEmpty()) {
-            eventPublisher.publishEvent(new FilePromotionEvent(fileKeys));
-        }
-    }
-
-    private void validateAttachments(Long userId, List<PostDto.AttachmentRequest> requests) {
+    /**
+     * fileKey 는 신규(PENDING 확정), fileId 는 기존 유지(이 리소스 소유 확인).
+     * postId 가 null 이면 생성 경로라 fileId 를 허용하지 않는다.
+     * <p>
+     * 반환 리스트는 요청과 인덱스가 대응한다. LINK 자리는 null 이다.
+     */
+    private List<UploadedFile> validateAttachments(
+            Long userId, Long postId, List<PostDto.AttachmentRequest> requests) {
         attachmentPolicy.validateCount(requests.size(), PostErrorCode.VALIDATION_ERROR);
+        Set<Long> ownedFileIds = postId == null
+                ? Set.of()
+                : Set.copyOf(attachmentRepository.findFileIdsByPostId(postId));
+        List<UploadedFile> resolved = new ArrayList<>();
         for (PostDto.AttachmentRequest request : requests) {
-            if (request == null || request.attachmentType() == null
-                    || request.attachmentType() == AttachmentType.EXTERNAL) {
+            if (request == null || request.attachmentType() == null) {
                 throw new ApiException(PostErrorCode.VALIDATION_ERROR);
             }
-            if (request.attachmentType() == AttachmentType.FILE) {
-                attachmentPolicy.validateFileAttachment(AttachmentUsage.POST, userId,
-                        request.fileName(), request.fileSize(), request.fileKey(),
-                        PostErrorCode.VALIDATION_ERROR);
-            } else {
+            if (request.attachmentType() != AttachmentType.FILE) {
                 attachmentPolicy.validateLink(request.fileUrl(), PostErrorCode.INVALID_LINK_URL);
+                resolved.add(null);
+                continue;
             }
+            if ((request.fileKey() == null) == (request.fileId() == null)) {
+                throw new ApiException(PostErrorCode.VALIDATION_ERROR);
+            }
+            resolved.add(request.fileId() != null
+                    ? uploadedFileService.requireOwnedByResource(
+                            request.fileId(), ownedFileIds, PostErrorCode.VALIDATION_ERROR)
+                    : attachmentPolicy.confirmFileAttachment(AttachmentUsage.POST, userId,
+                            request.fileName(), request.fileSize(), request.fileKey(),
+                            PostErrorCode.VALIDATION_ERROR));
         }
+        return resolved;
     }
 
 

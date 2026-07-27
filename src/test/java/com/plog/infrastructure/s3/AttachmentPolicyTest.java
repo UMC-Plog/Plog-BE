@@ -18,16 +18,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class AttachmentPolicyTest {
 
-    private static final String KEY = "temporary/task/users/3/a/spec.docx";
+    private static final String KEY = "tasks/users/3/a/spec.docx";
 
     @Mock
-    private FileStorageService fileStorageService;
+    private UploadedFileService uploadedFileService;
 
     private AttachmentPolicy policy;
 
     @BeforeEach
     void setUp() {
-        policy = new AttachmentPolicy(fileStorageService);
+        policy = new AttachmentPolicy(uploadedFileService);
     }
 
     @Test
@@ -44,32 +44,33 @@ class AttachmentPolicyTest {
     }
 
     @Test
-    void delegatesFileAttachmentsToStorageVerification() {
-        policy.validateFileAttachment(AttachmentUsage.TASK, 3L, "spec.docx", 2048L, KEY,
+    void delegatesFileAttachmentsToTheRegistry() {
+        policy.confirmFileAttachment(AttachmentUsage.TASK, 3L, "spec.docx", 2048L, KEY,
                 TaskErrorCode.INVALID_ATTACHMENT);
 
-        verify(fileStorageService).verifyUploadedFile(
-                AttachmentUsage.TASK, 3L, KEY, "spec.docx", 2048L);
+        verify(uploadedFileService).confirmNew(
+                AttachmentUsage.TASK, 3L, KEY, "spec.docx", 2048L,
+                TaskErrorCode.INVALID_ATTACHMENT);
     }
 
     @Test
     void rejectsAFileAttachmentMissingItsKey() {
-        assertThatThrownBy(() -> policy.validateFileAttachment(
+        assertThatThrownBy(() -> policy.confirmFileAttachment(
                 AttachmentUsage.TASK, 3L, "spec.docx", 2048L, null,
                 TaskErrorCode.INVALID_ATTACHMENT))
                 .isInstanceOf(ApiException.class);
 
-        verifyNoInteractions(fileStorageService);
+        verifyNoInteractions(uploadedFileService);
     }
 
     @Test
     void rejectsAFileAttachmentMissingItsSize() {
-        assertThatThrownBy(() -> policy.validateFileAttachment(
+        assertThatThrownBy(() -> policy.confirmFileAttachment(
                 AttachmentUsage.TASK, 3L, "spec.docx", null, KEY,
                 TaskErrorCode.INVALID_ATTACHMENT))
                 .isInstanceOf(ApiException.class);
 
-        verifyNoInteractions(fileStorageService);
+        verifyNoInteractions(uploadedFileService);
     }
 
     @Test

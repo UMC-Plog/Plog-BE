@@ -12,6 +12,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import com.plog.infrastructure.s3.UploadedFile;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 import lombok.AccessLevel;
@@ -25,7 +27,9 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "post_attachments")
+@Table(name = "post_attachments", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_post_attachment_file", columnNames = "file_id")
+})
 public class PostAttachment extends BaseEntity {
 
     @Id
@@ -42,12 +46,19 @@ public class PostAttachment extends BaseEntity {
     @Column(name = "attachment_type")
     private AttachmentType attachmentType;
 
-    @Column(name = "file_url", length = 512)
-    private String fileUrl;
+    /** FILE 전용. LINK 행은 null. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "file_id")
+    private UploadedFile uploadedFile;
+
+    /** LINK 전용. 사용자가 입력한 외부 URL이라 수명 관리 대상이 아니고 중복을 허용한다. */
+    @Column(name = "link_url", length = 512)
+    private String linkUrl;
+
+    /** LINK 표시명. FILE 은 uploadedFile.originalFilename 을 쓴다. */
+    @Column(name = "link_name", length = 512)
+    private String linkName;
 
     @Column(name = "file_size")
     private Long fileSize;
-
-    @Column(name = "file_name")
-    private String fileName;
 }

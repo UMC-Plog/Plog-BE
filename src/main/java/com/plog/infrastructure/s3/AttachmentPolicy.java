@@ -20,7 +20,7 @@ public class AttachmentPolicy {
 
     private static final int MAX_ATTACHMENTS = 10;
 
-    private final FileStorageService fileStorageService;
+    private final UploadedFileService uploadedFileService;
 
     public void validateCount(int size, BaseErrorCode invalidRequestCode) {
         if (size > MAX_ATTACHMENTS) {
@@ -28,14 +28,15 @@ public class AttachmentPolicy {
         }
     }
 
-    /** FILE 첨부: 필수값 확인 후 S3에 실제로 올라간 파일과 대조한다. */
-    public void validateFileAttachment(AttachmentUsage usage, Long userId, String fileName,
-                                       Long fileSize, String fileKey,
-                                       BaseErrorCode invalidRequestCode) {
+    /** FILE 첨부: 레지스트리에서 소유권·상태를 확인하고 CONFIRMED 로 전이시킨다. */
+    public UploadedFile confirmFileAttachment(AttachmentUsage usage, Long userId, String fileName,
+                                              Long fileSize, String fileKey,
+                                              BaseErrorCode invalidRequestCode) {
         if (fileName == null || fileSize == null || fileKey == null) {
             throw new ApiException(invalidRequestCode);
         }
-        fileStorageService.verifyUploadedFile(usage, userId, fileKey, fileName, fileSize);
+        return uploadedFileService.confirmNew(
+                usage, userId, fileKey, fileName, fileSize, invalidRequestCode);
     }
 
     /** LINK 첨부: https 만 허용하고 사설망·로컬호스트를 막는다(SSRF 방지). */

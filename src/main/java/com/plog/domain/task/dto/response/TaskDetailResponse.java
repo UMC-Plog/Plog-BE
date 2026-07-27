@@ -45,6 +45,7 @@ public record TaskDetailResponse(
     public record AttachmentResponse(
             Long taskAttachmentId,
             AttachmentType attachmentType,
+            Long fileId,
             String fileName,
             Long fileSize, // 바이트 단위. "5.2MB" 같은 표시 변환은 프론트 담당
             String fileUrl
@@ -53,7 +54,9 @@ public record TaskDetailResponse(
             return new AttachmentResponse(
                     attachment.getId(),
                     attachment.getAttachmentType(),
-                    attachment.getFileName(),
+                    attachment.getUploadedFile() == null
+                            ? null : attachment.getUploadedFile().getId(),
+                    attachment.displayName(),
                     attachment.getAttachmentType() == AttachmentType.FILE
                         ? attachment.getFileSize()
                             : null,
