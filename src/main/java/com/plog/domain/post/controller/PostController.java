@@ -2,6 +2,7 @@ package com.plog.domain.post.controller;
 
 import com.plog.domain.post.dto.CommentDto;
 import com.plog.domain.post.dto.PostDto;
+import com.plog.domain.post.controller.docs.PostControllerDoc;
 import com.plog.domain.post.service.PostService;
 import com.plog.global.api.code.SuccessCode;
 import com.plog.global.api.response.ApiResponse;
@@ -23,9 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/projects/{projectId}/posts")
 @RequiredArgsConstructor
-public class PostController {
+public class PostController implements PostControllerDoc {
     private final PostService postService;
 
+    @Override
     @PostMapping
     public ResponseEntity<ApiResponse<PostDto.CreateResponse>> createPost(
             @PathVariable Long projectId,
@@ -36,6 +38,7 @@ public class PostController {
                 .body(ApiResponse.success(SuccessCode.CREATED, postService.createPost(projectId, userId, request)));
     }
 
+    @Override
     @GetMapping
     public ApiResponse<PostDto.FeedResponse> getFeed(
             @PathVariable Long projectId,
@@ -46,6 +49,7 @@ public class PostController {
         return ApiResponse.success(postService.getFeed(projectId, userId, cursor, size));
     }
 
+    @Override
     @GetMapping("/{postId}")
     public ApiResponse<PostDto.Response> getPost(
             @PathVariable Long projectId,
@@ -55,6 +59,7 @@ public class PostController {
         return ApiResponse.success(postService.getPost(projectId, postId, userId));
     }
 
+    @Override
     @PatchMapping("/{postId}")
     public ApiResponse<PostDto.UpdateResponse> updatePost(
             @PathVariable Long projectId,
@@ -65,6 +70,7 @@ public class PostController {
         return ApiResponse.success(postService.updatePost(projectId, postId, userId, request));
     }
 
+    @Override
     @DeleteMapping("/{postId}")
     public ApiResponse<PostDto.DeletedResponse> deletePost(
             @PathVariable Long projectId,
@@ -74,6 +80,7 @@ public class PostController {
         return ApiResponse.success(postService.deletePost(projectId, postId, userId));
     }
 
+    @Override
     @PatchMapping("/{postId}/notice")
     public ApiResponse<PostDto.NoticeResponse> changeNotice(
             @PathVariable Long projectId,
@@ -84,6 +91,7 @@ public class PostController {
         return ApiResponse.success(postService.changeNotice(projectId, postId, userId, request));
     }
 
+    @Override
     @PostMapping("/{postId}/comments")
     public ResponseEntity<ApiResponse<CommentDto.Response>> createComment(
             @PathVariable Long projectId,
@@ -96,6 +104,7 @@ public class PostController {
                         postService.createComment(projectId, postId, userId, request)));
     }
 
+    @Override
     @GetMapping("/{postId}/comments")
     public ApiResponse<CommentDto.ListResponse> getComments(
             @PathVariable Long projectId,
@@ -105,6 +114,7 @@ public class PostController {
         return ApiResponse.success(postService.getComments(projectId, postId, userId));
     }
 
+    @Override
     @DeleteMapping("/{postId}/comments/{commentId}")
     public ApiResponse<PostDto.DeletedResponse> deleteComment(
             @PathVariable Long projectId,
@@ -115,6 +125,7 @@ public class PostController {
         return ApiResponse.success(postService.deleteComment(projectId, postId, commentId, userId));
     }
 
+    @Override
     @PutMapping("/{postId}/like")
     public ApiResponse<PostDto.LikeResponse> like(
             @PathVariable Long projectId,
@@ -124,6 +135,7 @@ public class PostController {
         return ApiResponse.success(postService.like(projectId, postId, userId));
     }
 
+    @Override
     @DeleteMapping("/{postId}/like")
     public ApiResponse<PostDto.LikeResponse> unlike(
             @PathVariable Long projectId,
