@@ -28,11 +28,18 @@ public class AttachmentPolicy {
         }
     }
 
-    /** FILE 첨부: 레지스트리에서 소유권·상태를 확인하고 CONFIRMED 로 전이시킨다. */
+    /**
+     * FILE 첨부: 레지스트리에서 소유권·상태를 확인하고 CONFIRMED 로 전이시킨다.
+     * <p>
+     * 빈 문자열 검사를 여기 두는 이유 — 호출부(post·task·chat)마다 따로 하면 한쪽만
+     * 빠뜨린다. 실제로 chat 에만 있었고 task 에는 없었다.
+     */
     public UploadedFile confirmFileAttachment(AttachmentUsage usage, Long userId, String fileName,
                                               Long fileSize, String fileKey,
                                               BaseErrorCode invalidRequestCode) {
-        if (fileName == null || fileSize == null || fileKey == null) {
+        if (fileName == null || fileName.isBlank()
+                || fileKey == null || fileKey.isBlank()
+                || fileSize == null) {
             throw new ApiException(invalidRequestCode);
         }
         return uploadedFileService.confirmNew(

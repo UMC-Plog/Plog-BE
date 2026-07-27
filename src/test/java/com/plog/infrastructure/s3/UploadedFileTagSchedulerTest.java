@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.time.LocalDateTime;
@@ -34,14 +35,14 @@ class UploadedFileTagSchedulerTest {
     }
 
     @Test
-    void 태깅에_성공하면_taggedAt을_채운다() {
+    void 태깅에_성공하면_taggedAt을_기록한다() {
         UploadedFile file = orphanedFile();
         given(repository.findByTaggedAtIsNull(any(Limit.class))).willReturn(List.of(file));
         given(fileStorageService.applyState(anyString(), any(), anyLong())).willReturn(true);
 
         scheduler.retryTagging();
 
-        assertThat(file.getTaggedAt()).isNotNull();
+        verify(repository).markTagged(eq(file.getId()), any());
     }
 
     @Test
@@ -52,8 +53,8 @@ class UploadedFileTagSchedulerTest {
 
         scheduler.retryTagging();
 
-        // NoSuchKey = 정리할 객체 없음 = 성공. null 로 두면 매 틱 재시도한다.
-        assertThat(file.getTaggedAt()).isNotNull();
+        // NoSuchKey = 정리할 객체 없음 = 성공. 기록하지 않으면 매 틱 재시도한다.
+        verify(repository).markTagged(eq(file.getId()), any());
     }
 
     @Test
@@ -81,8 +82,8 @@ class UploadedFileTagSchedulerTest {
 
         scheduler.retryTagging();
 
-        assertThat(poison.getTaggedAt()).isNull();
-        assertThat(healthy.getTaggedAt()).isNotNull();
+        // 실패한 건은 기록하지 않고(다음 틱 재시도) 뒤의 건은 그대로 진행한다.
+        verify(repository, times(1)).markTagged(any(), any());
     }
 
     @Test

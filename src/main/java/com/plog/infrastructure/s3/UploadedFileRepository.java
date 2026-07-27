@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface UploadedFileRepository extends JpaRepository<UploadedFile, Long> {
 
@@ -47,6 +48,16 @@ public interface UploadedFileRepository extends JpaRepository<UploadedFile, Long
                                 @Param("pending") UploadedFileStatus pending);
 
     List<UploadedFile> findByTaggedAtIsNull(Limit limit);
+
+    /**
+     * 태깅 성공을 한 건씩 기록한다. 스케줄러가 S3 호출을 트랜잭션 밖에서 하기 위해
+     * 필요하다 — 배치 전체를 한 트랜잭션으로 묶으면 최대 200회의 블로킹 네트워크
+     * 호출 동안 DB 커넥션을 붙들고 있게 된다.
+     */
+    @Transactional
+    @Modifying(flushAutomatically = true)
+    @Query("update UploadedFile f set f.taggedAt = :taggedAt where f.id = :id")
+    int markTagged(@Param("id") Long id, @Param("taggedAt") LocalDateTime taggedAt);
 
     List<UploadedFile> findByStatusAndIssuedAtBefore(UploadedFileStatus status,
                                                      LocalDateTime threshold, Limit limit);

@@ -119,9 +119,8 @@ public class ChatMessageAppender {
         attachmentPolicy.validateCount(attachments.size(), ChatErrorCode.TOO_MANY_CHAT_ATTACHMENTS);
         List<ChatAttachment> toSave = attachments.stream()
                 .map(request -> {
-                    if (request == null || request.fileKey() == null || request.fileKey().isBlank()
-                            || request.fileName() == null || request.fileName().isBlank()
-                            || request.fileSize() == null) {
+                    // 필드 단위 빈 값 검사는 AttachmentPolicy 가 전 도메인 공통으로 한다.
+                    if (request == null) {
                         throw new ApiException(ChatErrorCode.INVALID_CHAT_ATTACHMENT);
                     }
                     return ChatAttachment.create(chatMessage,

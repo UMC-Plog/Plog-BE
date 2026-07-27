@@ -32,12 +32,16 @@ public class UploadedFileTagScheduler {
     private final UploadedFileRepository uploadedFileRepository;
     private final FileStorageService fileStorageService;
 
+    /**
+     * 의도적으로 @Transactional 을 붙이지 않는다. S3 호출은 건당 수백 ms 가 걸릴 수 있어,
+     * 배치 전체를 한 트랜잭션으로 묶으면 최대 200회의 블로킹 네트워크 호출 동안 DB
+     * 커넥션을 점유한다. 조회와 기록만 각자 짧은 트랜잭션(리포지토리)으로 처리한다.
+     */
     @Scheduled(fixedDelay = 30_000)
-    @Transactional
     public void retryTagging() {
         List<UploadedFile> targets = uploadedFileRepository.findByTaggedAtIsNull(BATCH);
         for (UploadedFile file : targets) {
-            // 한 건의 S3 오류가 배치 전체를 롤백시키면 그 행이 큐를 영구히 막는다.
+            // 한 건의 S3 오류가 배치 전체를 막으면 그 행이 큐를 영구히 점유한다.
             // AccessDenied·5xx·네트워크 오류는 이 행만 건너뛰고 다음 틱에 다시 시도한다.
             try {
                 boolean applied = fileStorageService.applyState(
@@ -48,7 +52,7 @@ public class UploadedFileTagScheduler {
                     log.info("s3_tag_target_missing fileKey={} status={}",
                             file.getFileKey(), file.getStatus());
                 }
-                file.markTagged(TimeUtil.nowUtc());
+                uploadedFileRepository.markTagged(file.getId(), TimeUtil.nowUtc());
             } catch (RuntimeException exception) {
                 log.warn("s3_tag_failed fileKey={} status={}",
                         file.getFileKey(), file.getStatus(), exception);

@@ -64,6 +64,21 @@ class AttachmentPolicyTest {
     }
 
     @Test
+    void 빈_문자열도_거부한다() {
+        // 도메인마다 따로 검사하면 한쪽만 빠뜨린다. 실제로 chat 에만 있었고 task 에는 없었다.
+        assertThatThrownBy(() -> policy.confirmFileAttachment(
+                AttachmentUsage.TASK, 3L, "spec.docx", 2048L, "   ",
+                TaskErrorCode.INVALID_ATTACHMENT))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> policy.confirmFileAttachment(
+                AttachmentUsage.TASK, 3L, "  ", 2048L, KEY,
+                TaskErrorCode.INVALID_ATTACHMENT))
+                .isInstanceOf(ApiException.class);
+
+        verifyNoInteractions(uploadedFileService);
+    }
+
+    @Test
     void rejectsAFileAttachmentMissingItsSize() {
         assertThatThrownBy(() -> policy.confirmFileAttachment(
                 AttachmentUsage.TASK, 3L, "spec.docx", null, KEY,
