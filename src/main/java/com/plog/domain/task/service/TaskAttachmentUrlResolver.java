@@ -18,8 +18,9 @@ public class TaskAttachmentUrlResolver {
 
     public String resolve(TaskAttachment attachment) {
         return attachment.getAttachmentType() == AttachmentType.FILE
-                ? fileStorageService.createDownloadUrl(
-                AttachmentUsage.TASK, attachment.getFileUrl(), attachment.getFileName())
-                : attachment.getFileUrl();
+                ? fileStorageService.createDownloadUrl(AttachmentUsage.TASK,
+                        attachment.getUploadedFile().getFileKey(),
+                        attachment.getUploadedFile().getOriginalFilename())
+                : attachment.getLinkUrl();
     }
 }

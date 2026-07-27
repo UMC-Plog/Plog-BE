@@ -18,12 +18,11 @@ import com.plog.global.api.error.TaskErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.AttachmentUsage;
-import com.plog.infrastructure.s3.FileDeletionEvent;
-import com.plog.infrastructure.s3.FilePromotionEvent;
+import com.plog.infrastructure.s3.UploadedFile;
+import com.plog.infrastructure.s3.UploadedFileService;
 
 import java.util.List;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +35,7 @@ public class TaskCommandService {
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectAccessService projectAccessService;
     private final AttachmentPolicy attachmentPolicy;
-    private final ApplicationEventPublisher eventPublisher;
+    private final UploadedFileService uploadedFileService;
     private final TaskAttachmentUrlResolver urlResolver;
 
     public TaskCommandService(TaskRepository taskRepository,
@@ -44,14 +43,14 @@ public class TaskCommandService {
                               ProjectMemberRepository projectMemberRepository,
                               ProjectAccessService projectAccessService,
                               AttachmentPolicy attachmentPolicy,
-                              ApplicationEventPublisher eventPublisher,
+                              UploadedFileService uploadedFileService,
                               TaskAttachmentUrlResolver urlResolver) {
         this.taskRepository = taskRepository;
         this.taskAttachmentRepository = taskAttachmentRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.projectAccessService = projectAccessService;
         this.attachmentPolicy = attachmentPolicy;
-        this.eventPublisher = eventPublisher;
+        this.uploadedFileService = uploadedFileService;
         this.urlResolver = urlResolver;
     }
 
@@ -80,7 +79,6 @@ public class TaskCommandService {
         taskRepository.save(task);
 
         List<TaskAttachment> attachments = createAttachments(task, userId, request.attachments());
-        publishPromotions(attachments);
 
         List<TaskCreateResponse.AttachmentResponse> attachmentResponses = attachments.stream()
                 .map(attachment -> TaskCreateResponse.AttachmentResponse.of(
@@ -143,10 +141,7 @@ public class TaskCommandService {
                 .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
 
         List<TaskAttachment> attachments = taskAttachmentRepository.findAllByTaskId(taskId);
-        List<String> fileKeys = attachments.stream()
-                .filter(attachment -> attachment.getAttachmentType() == AttachmentType.FILE)
-                .map(TaskAttachment::getFileUrl)
-                .toList();
+        List<Long> fileIds = taskAttachmentRepository.findFileIdsByTaskId(taskId);
 
         taskAttachmentRepository.deleteAll(attachments);
         taskAttachmentRepository.flush();
@@ -154,9 +149,7 @@ public class TaskCommandService {
         taskRepository.delete(task);
         taskRepository.flush();
 
-        if (!fileKeys.isEmpty()) {
-            eventPublisher.publishEvent(new FileDeletionEvent(fileKeys));
-        }
+        uploadedFileService.release(fileIds);
 
         return new TaskDeleteResponse(true);
     }
@@ -170,32 +163,24 @@ public class TaskCommandService {
         Task task = taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
                 .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
 
-        if (request.attachmentType() == AttachmentType.EXTERNAL) {
-            throw new ApiException(TaskErrorCode.INVALID_ATTACHMENT);
-        }
-
         taskRepository.findByIdForUpdate(taskId);
 
         long existingCount = taskAttachmentRepository.countByTaskId(taskId);
         attachmentPolicy.validateCount((int) existingCount + 1, TaskErrorCode.TASK_ATTACHMENT_LIMIT_EXCEEDED);
 
-        String storedValue;
+        TaskAttachment attachment;
         if (request.attachmentType() == AttachmentType.FILE) {
-            attachmentPolicy.validateFileAttachment(AttachmentUsage.TASK, userId,
-                    request.fileName(), request.fileSize(), request.fileKey(),
+            UploadedFile file = attachmentPolicy.confirmFileAttachment(AttachmentUsage.TASK,
+                    userId, request.fileName(), request.fileSize(), request.fileKey(),
                     TaskErrorCode.INVALID_ATTACHMENT);
-            storedValue = request.fileKey();
+            attachment = TaskAttachment.create(task, AttachmentType.FILE, request.fileSize(),
+                    file, null, null);
         } else {
             attachmentPolicy.validateLink(request.fileUrl(), TaskErrorCode.INVALID_LINK_URL);
-            storedValue = request.fileUrl();
+            attachment = TaskAttachment.create(task, AttachmentType.LINK, request.fileSize(),
+                    null, request.fileUrl(), request.fileName());
         }
-
-        TaskAttachment attachment = TaskAttachment.create(
-                task, request.attachmentType(), request.fileName(), request.fileSize(), storedValue);
         taskAttachmentRepository.save(attachment);
-        if (request.attachmentType() == AttachmentType.FILE) {
-            eventPublisher.publishEvent(new FilePromotionEvent(List.of(storedValue)));
-        }
 
         return TaskAttachmentAddResponse.of(attachment, urlResolver.resolve(attachment));
     }
@@ -212,14 +197,13 @@ public class TaskCommandService {
         TaskAttachment attachment = taskAttachmentRepository.findByIdAndTaskId(taskAttachmentId, taskId)
                 .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_ATTACHMENT_NOT_FOUND));
 
-        boolean isFile = attachment.getAttachmentType() == AttachmentType.FILE;
-        String fileKey = attachment.getFileUrl();
+        UploadedFile file = attachment.getUploadedFile();
 
         taskAttachmentRepository.delete(attachment);
         taskAttachmentRepository.flush();
 
-        if (isFile) {
-            eventPublisher.publishEvent(new FileDeletionEvent(List.of(fileKey)));
+        if (file != null) {
+            uploadedFileService.release(List.of(file.getId()));
         }
 
         return new TaskDeleteResponse(true);
@@ -232,33 +216,19 @@ public class TaskCommandService {
             return List.of();
         }
         attachmentPolicy.validateCount(requests.size(), TaskErrorCode.TASK_ATTACHMENT_LIMIT_EXCEEDED);
-        for (TaskCreateRequest.TaskAttachmentRequest request : requests) {
-            if (request.attachmentType() == AttachmentType.EXTERNAL) {
-                throw new ApiException(TaskErrorCode.INVALID_ATTACHMENT);
-            }
-            if (request.attachmentType() == AttachmentType.FILE) {
-                attachmentPolicy.validateFileAttachment(AttachmentUsage.TASK, userId,
-                        request.fileName(), request.fileSize(), request.fileKey(),
-                        TaskErrorCode.INVALID_ATTACHMENT);
-            } else {
+        List<TaskAttachment> attachments = requests.stream().map(request -> {
+            if (request.attachmentType() != AttachmentType.FILE) {
                 attachmentPolicy.validateLink(request.fileUrl(), TaskErrorCode.INVALID_LINK_URL);
+                return TaskAttachment.create(task, AttachmentType.LINK, request.fileSize(),
+                        null, request.fileUrl(), request.fileName());
             }
-        }
-        List<TaskAttachment> attachments = requests.stream()
-                .map(r -> TaskAttachment.create(task, r.attachmentType(), r.fileName(), r.fileSize(),
-                        r.attachmentType() == AttachmentType.FILE ? r.fileKey() : r.fileUrl()))
-                .toList();
+            UploadedFile file = attachmentPolicy.confirmFileAttachment(AttachmentUsage.TASK,
+                    userId, request.fileName(), request.fileSize(), request.fileKey(),
+                    TaskErrorCode.INVALID_ATTACHMENT);
+            return TaskAttachment.create(task, AttachmentType.FILE, request.fileSize(),
+                    file, null, null);
+        }).toList();
         taskAttachmentRepository.saveAll(attachments);
         return attachments;
-    }
-
-    private void publishPromotions(List<TaskAttachment> attachments) {
-        List<String> fileKeys = attachments.stream()
-                .filter(attachment -> attachment.getAttachmentType() == AttachmentType.FILE)
-                .map(TaskAttachment::getFileUrl)
-                .toList();
-        if (!fileKeys.isEmpty()) {
-            eventPublisher.publishEvent(new FilePromotionEvent(fileKeys));
-        }
     }
 }

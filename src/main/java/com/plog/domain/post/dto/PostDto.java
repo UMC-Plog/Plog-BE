@@ -2,6 +2,7 @@ package com.plog.domain.post.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.plog.domain.post.entity.AttachmentType;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -16,7 +17,12 @@ public final class PostDto {
             AttachmentType attachmentType,
             String fileName,
             Long fileSize,
+            @Schema(description = "신규 첨부의 S3 키. 기존 첨부를 유지할 때는 보내지 않는다.")
             String fileKey,
+            @Schema(description = "기존 첨부를 유지할 때 보내는 uploaded_file ID. "
+                    + "fileKey 와 동시에 보낼 수 없다.")
+            Long fileId,
+            @Schema(description = "LINK 첨부의 외부 URL. FILE 첨부에는 쓰지 않는다.")
             String fileUrl
     ) {}
 
@@ -37,6 +43,8 @@ public final class PostDto {
     public record AttachmentResponse(
             Long postAttachmentId,
             AttachmentType attachmentType,
+            @Schema(description = "FILE 첨부의 uploaded_file ID. 수정 요청에 그대로 되돌려 보낸다.")
+            Long fileId,
             String fileName,
             Long fileSize,
             String fileUrl

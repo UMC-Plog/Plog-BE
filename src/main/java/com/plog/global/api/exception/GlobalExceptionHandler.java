@@ -3,10 +3,12 @@ package com.plog.global.api.exception;
 import com.plog.global.api.code.BaseErrorCode;
 import com.plog.global.api.code.ErrorCode;
 import com.plog.global.api.response.ApiResponse;
+import com.plog.infrastructure.s3.FileStorageErrorCode;
 import jakarta.validation.ConstraintViolationException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -39,6 +41,26 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleConstraintViolation() {
         return response(ErrorCode.INVALID_INPUT, null);
+    }
+
+    /**
+     * uk_{post,task,chat}_attachment_file 위반. 애플리케이션 검증을 우회한 동시 요청이
+     * 여기까지 온 것이므로 5xx 가 아니라 409 로 돌려준다.
+     * <p>
+     * 애플리케이션 검증은 에러 메시지 품질용이고, DB 제약이 정합성 최종 방어선이다.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(
+            DataIntegrityViolationException exception) {
+        String message = exception.getMostSpecificCause().getMessage();
+        if (message != null && message.contains("_attachment_file")) {
+            log.warn("attachment_file_unique_violation", exception);
+            return response(FileStorageErrorCode.FILE_ALREADY_ATTACHED, null);
+        }
+        // 되던지면 catch-all(@ExceptionHandler(Exception)) 이 아니라 컨테이너로 빠져나가
+        // ApiResponse 봉투 대신 /error 기본 바디가 나가고 에러 로그도 남지 않는다.
+        log.error("Unhandled data integrity violation", exception);
+        return response(ErrorCode.INTERNAL_SERVER_ERROR, null);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

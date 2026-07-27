@@ -1,32 +1,27 @@
 package com.plog.domain.chat.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.plog.domain.chat.dto.request.ChatMessageSendRequest.ChatMessageAttachmentRequest;
 import com.plog.global.api.error.ChatErrorCode;
 import com.plog.global.api.exception.ApiException;
-import com.plog.infrastructure.s3.AttachmentPolicy;
-import com.plog.infrastructure.s3.AttachmentUsage;
 import java.util.List;
-import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+/**
+ * 첨부 검증은 이 서비스의 책임이 아니다 — 멱등 히트 판정 이후에 해야 하므로
+ * ChatMessageAppender 안쪽으로 옮겼다. 여기서는 메시지 본문·clientMessageId 검증과
+ * 위임만 확인한다.
+ */
 @ExtendWith(MockitoExtension.class)
 class ChatMessageSendServiceTest {
 
     @Mock private ChatMessageAppender chatMessageAppender;
-    @Mock private AttachmentPolicy attachmentPolicy;
 
     @InjectMocks
     private ChatMessageSendService chatMessageSendService;
@@ -39,23 +34,17 @@ class ChatMessageSendServiceTest {
         chatMessageSendService.send(ROOM_ID, USER_ID, "client-1", "안녕하세요", null);
 
         verify(chatMessageAppender).appendByUser(ROOM_ID, USER_ID, "client-1", "안녕하세요", List.of());
-        verify(attachmentPolicy, never()).validateFileAttachment(
-                any(AttachmentUsage.class), any(Long.class), any(String.class),
-                any(Long.class), any(String.class), any());
     }
 
     @Test
-    void 첨부만_전송해도_정상_처리() {
+    void 첨부만_전송해도_그대로_위임한다() {
         ChatMessageAttachmentRequest attachment =
                 new ChatMessageAttachmentRequest("key1", "image.png", 1000L);
 
         chatMessageSendService.send(ROOM_ID, USER_ID, "client-2", null, List.of(attachment));
 
-        verify(attachmentPolicy).validateCount(1, ChatErrorCode.TOO_MANY_CHAT_ATTACHMENTS);
-        verify(attachmentPolicy).validateFileAttachment(
-                eq(AttachmentUsage.CHAT), eq(USER_ID), eq("image.png"),
-                eq(1000L), eq("key1"), eq(ChatErrorCode.INVALID_CHAT_ATTACHMENT));
-        verify(chatMessageAppender).appendByUser(ROOM_ID, USER_ID, "client-2", null, List.of(attachment));
+        verify(chatMessageAppender)
+                .appendByUser(ROOM_ID, USER_ID, "client-2", null, List.of(attachment));
     }
 
     @Test
@@ -79,27 +68,5 @@ class ChatMessageSendServiceTest {
         assertThatThrownBy(() -> chatMessageSendService.send(ROOM_ID, USER_ID, tooLong, "안녕", null))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo(ChatErrorCode.INVALID_CLIENT_MESSAGE_ID);
-    }
-
-    @Test
-    void 첨부_필드가_누락되면_예외() {
-        ChatMessageAttachmentRequest invalid = new ChatMessageAttachmentRequest(null, "a.png", 100L);
-
-        assertThatThrownBy(() -> chatMessageSendService.send(ROOM_ID, USER_ID, "client-4", null, List.of(invalid)))
-                .isInstanceOf(ApiException.class)
-                .extracting("errorCode").isEqualTo(ChatErrorCode.INVALID_CHAT_ATTACHMENT);
-    }
-
-    @Test
-    void 첨부가_11개면_예외() {
-        List<ChatMessageAttachmentRequest> tooMany = IntStream.range(0, 11)
-                .mapToObj(i -> new ChatMessageAttachmentRequest("key" + i, "f" + i + ".png", 100L))
-                .toList();
-        doThrow(new ApiException(ChatErrorCode.TOO_MANY_CHAT_ATTACHMENTS))
-                .when(attachmentPolicy).validateCount(anyInt(), eq(ChatErrorCode.TOO_MANY_CHAT_ATTACHMENTS));
-
-        assertThatThrownBy(() -> chatMessageSendService.send(ROOM_ID, USER_ID, "client-5", null, tooMany))
-                .isInstanceOf(ApiException.class)
-                .extracting("errorCode").isEqualTo(ChatErrorCode.TOO_MANY_CHAT_ATTACHMENTS);
     }
 }

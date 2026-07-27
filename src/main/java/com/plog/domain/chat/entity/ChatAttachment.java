@@ -1,6 +1,7 @@
 package com.plog.domain.chat.entity;
 
 import com.plog.global.common.BaseEntity;
+import com.plog.infrastructure.s3.UploadedFile;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -17,6 +18,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "chat_attachments", indexes = {
         @Index(name = "idx_chat_attachment_chat_id", columnList = "chat_id")
+}, uniqueConstraints = {
+        @UniqueConstraint(name = "uk_chat_attachment_file", columnNames = "file_id")
 })
 public class ChatAttachment extends BaseEntity {
 
@@ -30,22 +33,16 @@ public class ChatAttachment extends BaseEntity {
     @JoinColumn(name = "chat_id", nullable = false)
     private ChatMessage chatMessage;
 
-    // 직접 업로드한 파일만 지원하므로 attachmentType 구분 없이 filekey 단일 컬럼으로 둔다.
-    @Column(name = "file_key", nullable = false, length = 512)
-    private String fileKey;
+    // 직접 업로드한 파일만 지원하므로 attachmentType 구분이 없다.
+    // 파일명·크기는 레지스트리(uploaded_file)가 들고 있어 여기서 중복 보관하지 않는다.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "file_id", nullable = false)
+    private UploadedFile uploadedFile;
 
-    @Column(name = "file_name", nullable = false, length = 512)
-    private String fileName;
-
-    @Column(name = "file_size")
-    private Long fileSize;
-
-    public static ChatAttachment create(ChatMessage chatMessage, String fileKey, String fileName, Long fileSize) {
+    public static ChatAttachment create(ChatMessage chatMessage, UploadedFile uploadedFile) {
         return ChatAttachment.builder()
                 .chatMessage(chatMessage)
-                .fileKey(fileKey)
-                .fileName(fileName)
-                .fileSize(fileSize)
+                .uploadedFile(uploadedFile)
                 .build();
     }
 }

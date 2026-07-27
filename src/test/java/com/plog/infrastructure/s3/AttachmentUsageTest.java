@@ -7,10 +7,10 @@ import org.junit.jupiter.api.Test;
 class AttachmentUsageTest {
 
     @Test
-    void lowercasesTheKeySegmentSoS3PrefixesStayConsistent() {
-        assertThat(AttachmentUsage.CHAT.keySegment()).isEqualTo("chat");
-        assertThat(AttachmentUsage.POST.keySegment()).isEqualTo("post");
-        assertThat(AttachmentUsage.TASK.keySegment()).isEqualTo("task");
+    void keySegment는_복수형이다() {
+        assertThat(AttachmentUsage.POST.keySegment()).isEqualTo("posts");
+        assertThat(AttachmentUsage.TASK.keySegment()).isEqualTo("tasks");
+        assertThat(AttachmentUsage.CHAT.keySegment()).isEqualTo("chats");
     }
 
     @Test

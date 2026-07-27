@@ -6,6 +6,7 @@ import com.plog.domain.task.entity.TaskAttachment;
 public record TaskAttachmentAddResponse(
         Long taskAttachmentId,
         AttachmentType attachmentType,
+        Long fileId,
         String fileName,
         String fileUrl
 ) {
@@ -13,7 +14,8 @@ public record TaskAttachmentAddResponse(
         return new TaskAttachmentAddResponse(
                 attachment.getId(),
                 attachment.getAttachmentType(),
-                attachment.getFileName(),
+                attachment.getUploadedFile() == null ? null : attachment.getUploadedFile().getId(),
+                attachment.displayName(),
                 resolvedUrl
         );
     }

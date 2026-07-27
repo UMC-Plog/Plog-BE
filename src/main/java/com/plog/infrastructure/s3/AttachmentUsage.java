@@ -28,8 +28,13 @@ public enum AttachmentUsage {
         return forceDownload;
     }
 
-    /** S3 키에 들어가는 소문자 세그먼트. */
+    /**
+     * S3 키의 최상위 세그먼트. 도메인별 IAM 권한 경계와 Lifecycle 세분화의 기준이다.
+     * <p>
+     * 상태(pending/confirmed/orphaned)는 키가 아니라 오브젝트 태그가 들고 있어
+     * 키는 생성 후 절대 이동하지 않는다. thumbs/ 는 향후 썸네일용으로 예약한다.
+     */
     public String keySegment() {
-        return name().toLowerCase(Locale.ROOT);
+        return name().toLowerCase(Locale.ROOT) + "s";
     }
 }

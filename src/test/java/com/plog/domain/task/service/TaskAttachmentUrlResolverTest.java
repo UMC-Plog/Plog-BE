@@ -9,6 +9,8 @@ import com.plog.domain.task.entity.AttachmentType;
 import com.plog.domain.task.entity.TaskAttachment;
 import com.plog.infrastructure.s3.AttachmentUsage;
 import com.plog.infrastructure.s3.FileStorageService;
+import com.plog.infrastructure.s3.UploadedFile;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,7 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class TaskAttachmentUrlResolverTest {
 
-    private static final String FILE_KEY = "temporary/task/users/1/abc/spec.docx";
+    private static final String FILE_KEY = "tasks/users/1/abc/spec.docx";
     private static final String LINK_URL = "https://example.com/doc";
     private static final String PRESIGNED_URL = "https://s3.example.com/presigned";
 
@@ -33,11 +35,14 @@ class TaskAttachmentUrlResolverTest {
     }
 
     private TaskAttachment fileAttachment() {
-        return TaskAttachment.create(null, AttachmentType.FILE, "spec.docx", 2048L, FILE_KEY);
+        UploadedFile file = UploadedFile.issue(FILE_KEY, 1L, AttachmentUsage.TASK,
+                "spec.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                2048L, LocalDateTime.of(2026, 7, 27, 10, 0));
+        return TaskAttachment.create(null, AttachmentType.FILE, 2048L, file, null, null);
     }
 
     private TaskAttachment linkAttachment() {
-        return TaskAttachment.create(null, AttachmentType.LINK, "설계 노션", null, LINK_URL);
+        return TaskAttachment.create(null, AttachmentType.LINK, null, null, LINK_URL, "설계 노션");
     }
 
     @Test

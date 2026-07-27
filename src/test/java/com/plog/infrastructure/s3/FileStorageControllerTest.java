@@ -31,7 +31,7 @@ class FileStorageControllerTest {
     @Autowired
     private MockMvc mockMvc;
     @MockitoBean
-    private FileStorageService fileStorageService;
+    private UploadedFileService uploadedFileService;
     @MockitoBean
     private JwtProvider jwtProvider;
     @MockitoBean
@@ -50,11 +50,12 @@ class FileStorageControllerTest {
 
     @Test
     void createsSinglePresignedUrlWithoutApiVersionPrefix() throws Exception {
-        given(fileStorageService.createUploadUrl(eq(7L), any(FileStorageDto.PresignedUploadRequest.class)))
+        given(uploadedFileService.issue(eq(7L), any(FileStorageDto.PresignedUploadRequest.class)))
                 .willReturn(new FileStorageDto.PresignedUploadResponse(
                         "https://storage.example/upload",
-                        "temporary/post/users/7/id/document.pdf",
-                        Map.of("x-amz-tagging", List.of("state=temporary&ownerId=7")),
+                        42L,
+                        "posts/users/7/id/document.pdf",
+                        Map.of("x-amz-tagging", List.of("state=pending&ownerId=7")),
                         Instant.parse("2026-07-21T01:10:00Z")));
 
         mockMvc.perform(post("/files/presigned-upload-url")
@@ -64,10 +65,11 @@ class FileStorageControllerTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.result.uploadUrl").value("https://storage.example/upload"))
+                .andExpect(jsonPath("$.result.fileId").value(42))
                 .andExpect(jsonPath("$.result.signedHeaders.x-amz-tagging[0]")
-                        .value("state=temporary&ownerId=7"));
+                        .value("state=pending&ownerId=7"));
 
-        verify(fileStorageService).createUploadUrl(eq(7L), any(FileStorageDto.PresignedUploadRequest.class));
+        verify(uploadedFileService).issue(eq(7L), any(FileStorageDto.PresignedUploadRequest.class));
     }
 
     @Test

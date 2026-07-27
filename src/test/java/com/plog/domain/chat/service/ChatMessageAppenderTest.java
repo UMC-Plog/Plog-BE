@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.plog.domain.chat.dto.request.ChatMessageSendRequest.ChatMessageAttachmentRequest;
 import com.plog.domain.chat.entity.ChatAttachment;
@@ -19,7 +20,8 @@ import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
-import com.plog.infrastructure.s3.FilePromotionEvent;
+import com.plog.infrastructure.s3.AttachmentPolicy;
+import com.plog.infrastructure.s3.UploadedFile;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import java.util.List;
@@ -42,6 +44,7 @@ class ChatMessageAppenderTest {
     @Mock private EntityManager entityManager;
     @Mock private Query query;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private AttachmentPolicy attachmentPolicy;
 
     @InjectMocks
     private ChatMessageAppender chatMessageAppender;
@@ -76,7 +79,7 @@ class ChatMessageAppenderTest {
     }
 
     @Test
-    void 신규_메시지에_첨부가_저장되고_승격_이벤트가_발행된다() {
+    void 신규_메시지의_첨부는_확정을_거쳐_저장된다() {
         // ChatMessage.create()의 프로젝트 일치 검증을 통과하려면
         // member도 room과 "같은" project 인스턴스를 리턴해야 한다.
         when(member.getProject()).thenReturn(project);
@@ -88,9 +91,9 @@ class ChatMessageAppenderTest {
         when(savedMessage.getId()).thenReturn(500L);
         when(chatMessageRepository.save(any())).thenReturn(savedMessage);
 
-        ChatAttachment savedAttachment = mock(ChatAttachment.class);
-        when(savedAttachment.getFileKey()).thenReturn("key1");
-        when(chatAttachmentRepository.saveAll(any())).thenReturn(List.of(savedAttachment));
+        UploadedFile confirmed = mock(UploadedFile.class);
+        when(attachmentPolicy.confirmFileAttachment(any(), any(), any(), any(), any(), any()))
+                .thenReturn(confirmed);
 
         ChatMessageAttachmentRequest attachment =
                 new ChatMessageAttachmentRequest("key1", "a.png", 100L);
@@ -98,7 +101,23 @@ class ChatMessageAppenderTest {
         chatMessageAppender.appendByUser(ROOM_ID, USER_ID, "client-1", null, List.of(attachment));
 
         verify(chatAttachmentRepository).saveAll(any());
-        verify(eventPublisher).publishEvent(org.mockito.ArgumentMatchers.isA(FilePromotionEvent.class));
+        verify(attachmentPolicy).confirmFileAttachment(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void 같은_clientMessageId_재전송은_첨부를_다시_확정하지_않는다() {
+        ChatMessage existing = mock(ChatMessage.class);
+        when(existing.getId()).thenReturn(999L);
+        when(chatMessageRepository.findByChatRoomIdAndProjectMemberIdAndClientMessageId(ROOM_ID, 200L, "client-3"))
+                .thenReturn(Optional.of(existing));
+
+        ChatMessageAttachmentRequest attachment =
+                new ChatMessageAttachmentRequest("key1", "a.png", 100L);
+
+        chatMessageAppender.appendByUser(ROOM_ID, USER_ID, "client-3", "hi", List.of(attachment));
+
+        // 멱등 히트면 확정을 시도하지 않는다 — 이미 CONFIRMED 라 409 가 난다.
+        verifyNoInteractions(attachmentPolicy);
     }
 
     @Test

@@ -20,6 +20,7 @@ public record TaskUpdateResponse(
     public record AttachmentResponse(
             Long taskAttachmentId,
             AttachmentType attachmentType,
+            Long fileId,
             String fileName,
             String fileUrl
     ) {
@@ -27,7 +28,9 @@ public record TaskUpdateResponse(
             return new AttachmentResponse(
                     attachment.getId(),
                     attachment.getAttachmentType(),
-                    attachment.getFileName(),
+                    attachment.getUploadedFile() == null
+                            ? null : attachment.getUploadedFile().getId(),
+                    attachment.displayName(),
                     resolvedUrl
             );
         }

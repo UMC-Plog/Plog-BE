@@ -16,6 +16,7 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.UserRepository;
+import com.plog.infrastructure.s3.AttachmentPolicy;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -31,6 +32,7 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Propagation;
@@ -56,6 +58,12 @@ class ChatMessageAppenderIntegrationTest {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
     }
+
+    // 이 테스트는 첨부 없는 append() 경로만 쓴다. AttachmentPolicy 는 @DataJpaTest 슬라이스에
+    // 올라오지 않으므로(스캔 대상이 리포지토리·엔티티뿐) 목으로 채워 생성자 주입만 만족시킨다.
+    // 실제로 호출되지 않으므로 스텁도 필요 없다.
+    @MockitoBean
+    private AttachmentPolicy attachmentPolicy;
 
     @Autowired
     private ChatMessageAppender messageAppender;

@@ -2,7 +2,6 @@ package com.plog.e2e.s3;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -15,9 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectTaggingRequest;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 @DisplayName("FileStorageController E2E")
@@ -49,13 +46,20 @@ class FileStorageControllerE2eTest extends E2eTestBase {
             assertThat(result(response).path("uploadUrl").asText())
                     .startsWith("https://storage.test/upload/");
             assertThat(result(response).path("fileKey").asText())
-                    .startsWith("temporary/post/users/" + userId + "/")
+                    .startsWith("posts/users/" + userId + "/")
                     .endsWith("/meeting-notes.pdf");
+            assertThat(result(response).path("fileId").asLong()).isPositive();
             assertThat(result(response).path("signedHeaders").path("content-type").get(0).asText())
                     .isEqualTo("application/pdf");
             assertThat(result(response).path("signedHeaders").path("x-amz-tagging").get(0).asText())
-                    .isEqualTo("state=temporary&ownerId=" + userId);
+                    .isEqualTo("state=pending&ownerId=" + userId);
             assertThat(result(response).path("expiresAt").asText()).isNotBlank();
+
+            // 발급 시점에 PENDING 레지스트리 행이 생긴다. 이 행이 없으면 첨부 등록이 거부된다.
+            assertThat(jdbc.queryForObject(
+                    "select status from uploaded_file where file_key = ?", String.class,
+                    result(response).path("fileKey").asText()))
+                    .isEqualTo("PENDING");
         }
 
         @Test
@@ -108,12 +112,13 @@ class FileStorageControllerE2eTest extends E2eTestBase {
     class PostAttachmentLifecycle {
 
         @Test
-        @DisplayName("업로드 파일을 HEAD 검증하고 커밋 후 영구 파일로 승격한다")
-        void verifyAndPromote() {
+        @DisplayName("업로드 파일을 HEAD 검증하고 CONFIRMED 로 전이시킨다")
+        void verifyAndConfirm() {
             Long userId = saveUser("file-post");
             Long projectId = saveProject("file-post");
             saveMember(userId, projectId, "MEMBER", "ACTIVE", "파일 작성자");
-            String fileKey = "temporary/post/users/" + userId + "/file-id/meeting-notes.pdf";
+            String fileKey = "posts/users/" + userId + "/file-id/meeting-notes.pdf";
+            savePendingFile(fileKey, userId, "POST", "meeting-notes.pdf", "application/pdf", 1024L);
 
             ResponseEntity<JsonNode> response = request(
                     HttpMethod.POST,
@@ -136,22 +141,45 @@ class FileStorageControllerE2eTest extends E2eTestBase {
                     .isEqualTo("https://storage.test/download/" + fileKey);
             verify(s3Client).headObject(any(HeadObjectRequest.class));
             verify(s3Presigner).presignGetObject(any(GetObjectPresignRequest.class));
-            verify(s3Client, timeout(3_000)).putObjectTagging(any(PutObjectTaggingRequest.class));
+            assertThat(statusOf(fileKey)).isEqualTo("CONFIRMED");
         }
 
         @Test
-        @DisplayName("게시글 삭제 커밋 후 참조 파일을 삭제한다")
-        void deleteAfterCommit() {
+        @DisplayName("같은 fileKey 를 두 게시글에 첨부하면 두 번째가 409 로 거부된다")
+        void rejectsDuplicateReference() {
+            Long userId = saveUser("file-dup");
+            Long projectId = saveProject("file-dup");
+            saveMember(userId, projectId, "MEMBER", "ACTIVE", "중복 시도자");
+            String fileKey = "posts/users/" + userId + "/file-id/dup.pdf";
+            savePendingFile(fileKey, userId, "POST", "dup.pdf", "application/pdf", 1024L);
+
+            assertThat(createPostWith(projectId, userId, fileKey).getStatusCode())
+                    .isEqualTo(HttpStatus.CREATED);
+
+            ResponseEntity<JsonNode> second = createPostWith(projectId, userId, fileKey);
+
+            assertThat(second.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(code(second)).isEqualTo("FILE_ALREADY_ATTACHED");
+        }
+
+        @Test
+        @DisplayName("게시글 삭제 커밋 후 참조 파일을 ORPHANED 로 해제한다")
+        void releaseAfterCommit() {
             Long userId = saveUser("file-delete");
             Long projectId = saveProject("file-delete");
             Long memberId = saveMember(userId, projectId, "MEMBER", "ACTIVE", "삭제자");
             Long postId = savePost(memberId, "삭제 대상", false);
-            String fileKey = "temporary/post/users/" + userId + "/file-id/delete.pdf";
+            String fileKey = "posts/users/" + userId + "/file-id/delete.pdf";
+            savePendingFile(fileKey, userId, "POST", "delete.pdf", "application/pdf", 1024L);
+            jdbc.update("update uploaded_file set status = 'CONFIRMED', confirmed_at = now() "
+                    + "where file_key = ?", fileKey);
+            Long fileId = jdbc.queryForObject(
+                    "select uploaded_file_id from uploaded_file where file_key = ?", Long.class, fileKey);
             jdbc.update("""
                     insert into post_attachments (
-                        post_id, attachment_type, file_name, file_size, file_url, created_at, updated_at
-                    ) values (?, 'FILE', 'delete.pdf', 1024, ?, now(), now())
-                    """, postId, fileKey);
+                        post_id, attachment_type, file_size, file_id, created_at, updated_at
+                    ) values (?, 'FILE', 1024, ?, now(), now())
+                    """, postId, fileId);
 
             ResponseEntity<JsonNode> response = request(
                     HttpMethod.DELETE,
@@ -161,8 +189,39 @@ class FileStorageControllerE2eTest extends E2eTestBase {
             );
 
             assertThat(result(response).path("deleted").asBoolean()).isTrue();
-            verify(s3Client, timeout(3_000)).deleteObject(any(DeleteObjectRequest.class));
+            // 하드 삭제하지 않는다. 실제 제거는 S3 Lifecycle 이 orphaned 태그를 보고 처리한다.
+            assertThat(statusOf(fileKey)).isEqualTo("ORPHANED");
         }
+
+        private ResponseEntity<JsonNode> createPostWith(Long projectId, Long userId, String fileKey) {
+            return request(HttpMethod.POST, "/projects/" + projectId + "/posts", userId,
+                    Map.of(
+                            "content", "파일을 공유합니다.",
+                            "isNotice", false,
+                            "attachments", List.of(Map.of(
+                                    "attachmentType", "FILE",
+                                    "fileName", "dup.pdf",
+                                    "fileSize", 1024,
+                                    "fileKey", fileKey
+                            ))
+                    ));
+        }
+    }
+
+    /** presigned 발급이 만드는 PENDING 행을 테스트에서 직접 심는다. */
+    private void savePendingFile(String fileKey, Long ownerId, String purpose,
+                                 String fileName, String contentType, Long size) {
+        jdbc.update("""
+                insert into uploaded_file (
+                    file_key, owner_id, purpose, original_filename, content_type, size,
+                    status, issued_at, tagged_at, created_at, updated_at
+                ) values (?, ?, ?, ?, ?, ?, 'PENDING', now(), now(), now(), now())
+                """, fileKey, ownerId, purpose, fileName, contentType, size);
+    }
+
+    private String statusOf(String fileKey) {
+        return jdbc.queryForObject(
+                "select status from uploaded_file where file_key = ?", String.class, fileKey);
     }
 
     private String uploadPath() {
