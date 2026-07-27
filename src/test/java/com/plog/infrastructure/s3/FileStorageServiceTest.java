@@ -2,6 +2,7 @@ package com.plog.infrastructure.s3;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
@@ -21,6 +22,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.PutObjectTaggingRequest;
+import software.amazon.awssdk.services.s3.model.Tag;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
@@ -63,6 +67,13 @@ class FileStorageServiceTest {
                 fileName, contentType, size, AttachmentUsage.POST);
     }
 
+    /** 키 생성과 presign 은 UploadedFileService 가 이어 붙인다. 테스트도 같은 순서로 호출한다. */
+    private FileStorageDto.PresignedUploadResponse createUpload(
+            Long userId, FileStorageDto.PresignedUploadRequest request) {
+        return service.createUploadUrl(userId, request,
+                service.buildKey(request.usage(), userId, request.fileName()));
+    }
+
     @Test
     void createsADownloadUrlWithTheRequestedExpiration() throws Exception {
         given(presignedRequest.url()).willReturn(URI.create("https://storage.test/report.pdf").toURL());
@@ -99,14 +110,14 @@ class FileStorageServiceTest {
         stubPresignPut();
 
         FileStorageDto.PresignedUploadResponse response =
-                service.createUploadUrl(1L, upload(fileName, contentType, 1024L));
+                createUpload(1L, upload(fileName, contentType, 1024L));
 
         assertThat(response.fileKey()).endsWith("/" + fileName);
     }
 
     @Test
     void rejectsAnImageOverTenMegabytes() {
-        assertThatThrownBy(() -> service.createUploadUrl(
+        assertThatThrownBy(() -> createUpload(
                 1L, upload("photo.png", "image/png", FileStorageService.MAX_IMAGE_SIZE + 1)))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode())
@@ -117,7 +128,7 @@ class FileStorageServiceTest {
     void acceptsAnImageExactlyAtTheLimit() throws Exception {
         stubPresignPut();
 
-        FileStorageDto.PresignedUploadResponse response = service.createUploadUrl(
+        FileStorageDto.PresignedUploadResponse response = createUpload(
                 1L, upload("photo.png", "image/png", FileStorageService.MAX_IMAGE_SIZE));
 
         assertThat(response.fileKey()).endsWith("/photo.png");
@@ -127,7 +138,7 @@ class FileStorageServiceTest {
     void keepsTheLargerLimitForDocuments() throws Exception {
         stubPresignPut();
 
-        FileStorageDto.PresignedUploadResponse response = service.createUploadUrl(
+        FileStorageDto.PresignedUploadResponse response = createUpload(
                 1L, upload("deck.pptx",
                         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                         30L * 1024 * 1024));
@@ -137,7 +148,7 @@ class FileStorageServiceTest {
 
     @Test
     void rejectsSvgBecauseItCanCarryScripts() {
-        assertThatThrownBy(() -> service.createUploadUrl(
+        assertThatThrownBy(() -> createUpload(
                 1L, upload("logo.svg", "image/svg+xml", 1024L)))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode())
@@ -146,7 +157,7 @@ class FileStorageServiceTest {
 
     @Test
     void rejectsAContentTypeThatDoesNotMatchTheExtension() {
-        assertThatThrownBy(() -> service.createUploadUrl(
+        assertThatThrownBy(() -> createUpload(
                 1L, upload("photo.png", "image/jpeg", 1024L)))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode())
@@ -155,7 +166,7 @@ class FileStorageServiceTest {
 
     @Test
     void reportsAnUnsupportedExtensionEvenWhenTheFileIsAlsoTooLarge() {
-        assertThatThrownBy(() -> service.createUploadUrl(
+        assertThatThrownBy(() -> createUpload(
                 1L, upload("malware.exe", "application/octet-stream", 999L * 1024 * 1024)))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode())
@@ -167,12 +178,12 @@ class FileStorageServiceTest {
     void putsTheUsageIntoTheObjectKey(AttachmentUsage usage) throws Exception {
         stubPresignPut();
 
-        FileStorageDto.PresignedUploadResponse response = service.createUploadUrl(
+        FileStorageDto.PresignedUploadResponse response = createUpload(
                 7L, new FileStorageDto.PresignedUploadRequest(
                         "report.pdf", "application/pdf", 1024L, usage));
 
         assertThat(response.fileKey())
-                .startsWith("temporary/" + usage.keySegment() + "/users/7/")
+                .startsWith(usage.keySegment() + "/users/7/")
                 .endsWith("/report.pdf");
     }
 
@@ -208,13 +219,30 @@ class FileStorageServiceTest {
     }
 
     @Test
-    void rejectsAKeyThatBelongsToAnotherUsage() {
-        String chatKey = "temporary/chat/users/7/abc/report.pdf";
+    void applyState는_state와_ownerId를_함께_쓴다() {
+        boolean tagged = service.applyState("chats/users/7/uuid/a.png",
+                UploadedFileStatus.CONFIRMED, 7L);
 
-        assertThatThrownBy(() -> service.verifyUploadedFile(
-                AttachmentUsage.POST, 7L, chatKey, "report.pdf", 1024L))
-                .isInstanceOfSatisfying(ApiException.class, exception ->
-                        assertThat(exception.getErrorCode())
-                                .isEqualTo(FileStorageErrorCode.INVALID_FILE_KEY));
+        ArgumentCaptor<PutObjectTaggingRequest> captor =
+                ArgumentCaptor.forClass(PutObjectTaggingRequest.class);
+        verify(s3Client).putObjectTagging(captor.capture());
+
+        assertThat(tagged).isTrue();
+        assertThat(captor.getValue().tagging().tagSet())
+                .extracting(Tag::key, Tag::value)
+                .containsExactlyInAnyOrder(
+                        tuple("state", "confirmed"),
+                        tuple("ownerId", "7"));
+    }
+
+    @Test
+    void 객체가_없으면_applyState는_false를_반환한다() {
+        given(s3Client.putObjectTagging(any(PutObjectTaggingRequest.class)))
+                .willThrow(NoSuchKeyException.builder().message("missing").build());
+
+        boolean tagged = service.applyState("chats/users/7/uuid/gone.png",
+                UploadedFileStatus.ORPHANED, 7L);
+
+        assertThat(tagged).isFalse();
     }
 }

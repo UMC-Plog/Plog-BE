@@ -2,9 +2,13 @@ package com.plog.domain.post.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.plog.domain.post.dto.PostDto;
+import com.plog.domain.post.entity.AttachmentType;
 import com.plog.domain.post.entity.Post;
 import com.plog.domain.post.exception.PostErrorCode;
 import com.plog.domain.post.repository.CommentRepository;
@@ -19,14 +23,16 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.exception.ApiException;
 import com.plog.infrastructure.s3.AttachmentPolicy;
+import com.plog.infrastructure.s3.FileStorageErrorCode;
 import com.plog.infrastructure.s3.FileStorageService;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
+import com.plog.infrastructure.s3.UploadedFileService;
 
 @ExtendWith(MockitoExtension.class)
 class PostServicePolicyTest {
@@ -38,7 +44,7 @@ class PostServicePolicyTest {
     @Mock private ProjectMemberRepository projectMemberRepository;
     @Mock private FileStorageService fileStorageService;
     @Mock private AttachmentPolicy attachmentPolicy;
-    @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private UploadedFileService uploadedFileService;
 
     private PostService service;
 
@@ -53,7 +59,7 @@ class PostServicePolicyTest {
                 projectMemberRepository,
                 fileStorageService,
                 attachmentPolicy,
-                eventPublisher
+                uploadedFileService
         );
     }
 
@@ -70,6 +76,63 @@ class PostServicePolicyTest {
                         assertThat(exception.getErrorCode()).isEqualTo(PostErrorCode.VALIDATION_ERROR));
 
         verifyNoInteractions(postRepository);
+    }
+
+    @Test
+    void 이미_다른_게시글이_쓰는_fileKey는_거부한다() {
+        ProjectMember member = ProjectMember.builder()
+                .id(3L).role(ProjectRole.MEMBER).status(MemberStatus.ACTIVE).build();
+        when(projectRepository.existsById(1L)).thenReturn(true);
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(member));
+        when(attachmentPolicy.confirmFileAttachment(any(), any(), any(), any(), any(), any()))
+                .thenThrow(new ApiException(FileStorageErrorCode.FILE_ALREADY_ATTACHED));
+
+        assertThatThrownBy(() -> service.createPost(1L, 7L, new PostDto.CreateRequest(
+                "본문", false, List.of(new PostDto.AttachmentRequest(
+                        AttachmentType.FILE, "a.pdf", 10L, "posts/users/7/id/a.pdf", null, null)))))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isEqualTo(FileStorageErrorCode.FILE_ALREADY_ATTACHED));
+    }
+
+    @Test
+    void 다른_게시글의_fileId는_수정에서_거부한다() {
+        ProjectMember author = ProjectMember.builder()
+                .id(3L).role(ProjectRole.MEMBER).status(MemberStatus.ACTIVE).build();
+        Post post = Post.builder().projectMember(author).content("post").build();
+        when(projectRepository.existsById(1L)).thenReturn(true);
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(author));
+        when(postRepository.findByIdAndProjectMemberProjectId(2L, 1L)).thenReturn(Optional.of(post));
+        // 이 게시글이 참조 중인 파일은 1L 뿐이다.
+        when(attachmentRepository.findFileIdsByPostId(2L)).thenReturn(List.of(1L));
+        when(uploadedFileService.requireOwnedByResource(eq(999L), any(), any()))
+                .thenThrow(new ApiException(PostErrorCode.VALIDATION_ERROR));
+
+        assertThatThrownBy(() -> service.updatePost(1L, 2L, 7L, new PostDto.UpdateRequest(
+                null, List.of(new PostDto.AttachmentRequest(
+                        AttachmentType.FILE, "a.pdf", 10L, null, 999L, null)))))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(PostErrorCode.VALIDATION_ERROR));
+    }
+
+    @Test
+    void fileKey와_fileId를_동시에_보내면_거부한다() {
+        ProjectMember author = ProjectMember.builder()
+                .id(3L).role(ProjectRole.MEMBER).status(MemberStatus.ACTIVE).build();
+        Post post = Post.builder().projectMember(author).content("post").build();
+        when(projectRepository.existsById(1L)).thenReturn(true);
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(author));
+        when(postRepository.findByIdAndProjectMemberProjectId(2L, 1L)).thenReturn(Optional.of(post));
+        when(attachmentRepository.findFileIdsByPostId(2L)).thenReturn(List.of(1L));
+
+        assertThatThrownBy(() -> service.updatePost(1L, 2L, 7L, new PostDto.UpdateRequest(
+                null, List.of(new PostDto.AttachmentRequest(
+                        AttachmentType.FILE, "a.pdf", 10L, "posts/users/7/id/a.pdf", 1L, null)))))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(PostErrorCode.VALIDATION_ERROR));
     }
 
     @Test

@@ -30,6 +30,10 @@ public interface TaskAttachmentRepository extends JpaRepository<TaskAttachment, 
     // 전체 목록을 안 가져오고 개수만 센다 (COUNT(*) 쿼리 1번)
     long countByTaskId(Long taskId);
 
+    @Query("select a.uploadedFile.id from TaskAttachment a "
+            + "where a.task.id = :taskId and a.uploadedFile is not null")
+    List<Long> findFileIdsByTaskId(@Param("taskId") Long taskId);
+
     interface TaskAttachmentCount {
         Long getTaskId();
         long getCount();

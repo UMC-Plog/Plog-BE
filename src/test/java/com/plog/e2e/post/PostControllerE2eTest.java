@@ -127,7 +127,7 @@ class PostControllerE2eTest extends E2eTestBase {
                     """, postId, viewerMemberId);
             jdbc.update("""
                     insert into post_attachments (
-                        post_id, attachment_type, file_url, created_at, updated_at
+                        post_id, attachment_type, link_url, created_at, updated_at
                     ) values (?, 'LINK', 'https://docs.example.com/detail', now(), now())
                     """, postId);
 
@@ -156,7 +156,7 @@ class PostControllerE2eTest extends E2eTestBase {
             Long postId = savePost(memberId, "기존 본문", false);
             jdbc.update("""
                     insert into post_attachments (
-                        post_id, attachment_type, file_url, created_at, updated_at
+                        post_id, attachment_type, link_url, created_at, updated_at
                     ) values (?, 'LINK', 'https://docs.example.com/original', now(), now())
                     """, postId);
 
@@ -206,7 +206,7 @@ class PostControllerE2eTest extends E2eTestBase {
                     """, postId, memberId);
             jdbc.update("""
                     insert into post_attachments (
-                        post_id, attachment_type, file_url, created_at, updated_at
+                        post_id, attachment_type, link_url, created_at, updated_at
                     ) values (?, 'LINK', 'https://docs.example.com/delete', now(), now())
                     """, postId);
 

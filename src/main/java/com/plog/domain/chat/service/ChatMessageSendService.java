@@ -4,8 +4,6 @@ import com.plog.domain.chat.dto.request.ChatMessageSendRequest;
 import com.plog.domain.chat.dto.request.ChatMessageSendRequest.ChatMessageAttachmentRequest;
 import com.plog.global.api.error.ChatErrorCode;
 import com.plog.global.api.exception.ApiException;
-import com.plog.infrastructure.s3.AttachmentPolicy;
-import com.plog.infrastructure.s3.AttachmentUsage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -18,7 +16,6 @@ public class ChatMessageSendService {
     private static final int MAX_CLIENT_MESSAGE_ID_LENGTH = 64;
 
     private final ChatMessageAppender chatMessageAppender;
-    private final AttachmentPolicy attachmentPolicy;
 
     public void send(
             Long roomId,
@@ -40,26 +37,8 @@ public class ChatMessageSendService {
             throw new ApiException(ChatErrorCode.INVALID_CLIENT_MESSAGE_ID);
         }
 
-        validateAttachments(userId, safeAttachments);
-
+        // 첨부 검증은 appender 안쪽(멱등 히트 판정 이후)에서 한다. 여기서 하면
+        // 재전송 시 이미 CONFIRMED 인 첨부를 다시 확정하려다 409 로 죽는다.
         chatMessageAppender.appendByUser(roomId, userId, clientMessageId, message, safeAttachments);
-    }
-
-    private void validateAttachments(Long userId, List<ChatMessageAttachmentRequest> attachments) {
-        attachmentPolicy.validateCount(attachments.size(), ChatErrorCode.TOO_MANY_CHAT_ATTACHMENTS);
-        for (ChatMessageAttachmentRequest attachment : attachments) {
-            if (attachment == null
-                    || attachment.fileKey() == null || attachment.fileKey().isBlank()
-                    || attachment.fileName() == null || attachment.fileName().isBlank()
-                    || attachment.fileSize() == null) {
-                throw new ApiException(ChatErrorCode.INVALID_CHAT_ATTACHMENT);
-            }
-            // S3에 실제로 업로드된 파일인지, 용도(CHAT)·소유자·크기·확장자·MIME까지 대조한다.
-            // (허용되지 않은 확장자 / 크기 초과 / 임의 URL 첨부는 모두 여기서 걸러짐)
-            attachmentPolicy.validateFileAttachment(
-                    AttachmentUsage.CHAT, userId,
-                    attachment.fileName(), attachment.fileSize(), attachment.fileKey(),
-                    ChatErrorCode.INVALID_CHAT_ATTACHMENT);
-        }
     }
 }
