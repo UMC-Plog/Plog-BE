@@ -184,8 +184,10 @@ public class ChatMessageAppender {
 
     private ChatMessage createAndSave(ChatRoom room, ProjectMember member, String clientMessageId, String message) {
         long messageSequence = room.issueNextMessageSequence();
-        return chatMessageRepository.save(
-                ChatMessage.create(room, member, message, messageSequence, clientMessageId)
+        ChatMessage chatMessage = chatMessageRepository.save(
+                ChatMessage.create(room, member, message, messageSequence, null)
         );
+        publishMentionEventIfAny(room, member, chatMessage, message);
+        return chatMessage;
     }
 }

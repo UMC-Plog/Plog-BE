@@ -63,8 +63,9 @@ class MentionNotificationServiceTest {
         verify(fcmGateway).send(captor.capture());
         FcmMessage message = captor.getValue();
         assertThat(message.token()).isEqualTo("token-102");
-        assertThat(message.title()).isEqualTo("Plog 멘션");
-        assertThat(message.body()).isEqualTo("곰곰님: 확인 부탁해요");
+        // C안: title = 프로젝트명, body = "{프로젝트명}: {닉네임}님이 회원님을 멘션했습니다." (preview 미사용)
+        assertThat(message.title()).isEqualTo("Plog");
+        assertThat(message.body()).isEqualTo("Plog: 곰곰님이 회원님을 멘션했습니다.");
         assertThat(message.data()).containsEntry("projectId", "10")
                 .containsEntry("chatId", "20")
                 .containsEntry("type", "CHAT_MENTION");

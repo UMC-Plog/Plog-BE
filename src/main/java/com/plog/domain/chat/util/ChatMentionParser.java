@@ -11,9 +11,9 @@ import java.util.regex.Pattern;
  */
 public final class ChatMentionParser {
 
-    // '@' 뒤에 공백이 아닌 문자가 1개 이상 오는 경우만 후보로 인정한다.
-    // "@ " 처럼 '@' 뒤에 공백/문자열 끝이 오면 매치되지 않아 "@만 입력된 경우"는 자동으로 무시된다.
-    private static final Pattern MENTION_TOKEN_PATTERN = Pattern.compile("@(\\S+)");
+    // '@' 앞이 문자/숫자/'_'/'@'이면 매칭하지 않는다(이메일 주소 등에서 오탐 방지, 예: help@support).
+    // '@' 뒤에는 공백이 아닌 문자가 1개 이상 와야 하며, 이 조건 덕분에 "@만 입력된 경우"는 자동으로 무시된다.
+    private static final Pattern MENTION_TOKEN_PATTERN = Pattern.compile("(?<![\\p{L}\\p{N}_@])@(\\S+)");
 
     // 닉네임 뒤에 붙은 문장부호를 제거하기 위한 트레일링 문자 집합.
     private static final String TRAILING_PUNCTUATION = ".,!?)]}:;'\"“”‘’「」『』>~";

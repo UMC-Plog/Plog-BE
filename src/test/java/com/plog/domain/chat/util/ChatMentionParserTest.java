@@ -41,4 +41,23 @@ class ChatMentionParserTest {
         assertThat(ChatMentionParser.extractNicknameCandidates(null)).isEmpty();
         assertThat(ChatMentionParser.extractNicknameCandidates("")).isEmpty();
     }
+
+    @Test
+    void 이메일_주소의_골뱅이는_멘션으로_인식하지_않는다() {
+        Set<String> result = ChatMentionParser.extractNicknameCandidates("문의는 help@support 로 남겨주세요");
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void 이메일_문맥이_섞여있어도_독립된_멘션은_추출된다() {
+        Set<String> result = ChatMentionParser.extractNicknameCandidates(
+                "문의는 help@support 로 남기고, @지원 팀에도 알려주세요");
+        assertThat(result).containsExactly("지원");
+    }
+
+    @Test
+    void 문자_뒤에_바로_붙은_골뱅이는_멘션으로_인식하지_않는다() {
+        Set<String> result = ChatMentionParser.extractNicknameCandidates("user_@지현 test1@민수");
+        assertThat(result).isEmpty();
+    }
 }
