@@ -46,15 +46,11 @@ record ProviderActorKey(Type type, String value) {
         if (!hasText(storedValue)) {
             return null;
         }
-        for (Type type : Type.values()) {
-            if (storedValue.startsWith(type.storagePrefix)) {
-                String rawValue = storedValue.substring(type.storagePrefix.length());
-                return switch (type) {
-                    case PROVIDER_ID -> providerId(rawValue);
-                    case EMAIL -> email(rawValue);
-                    case LOGIN -> login(rawValue);
-                };
-            }
+        if (storedValue.startsWith(Type.EMAIL.storagePrefix)) {
+            return email(storedValue.substring(Type.EMAIL.storagePrefix.length()));
+        }
+        if (storedValue.startsWith(Type.LOGIN.storagePrefix)) {
+            return login(storedValue.substring(Type.LOGIN.storagePrefix.length()));
         }
         return providerId(storedValue);
     }

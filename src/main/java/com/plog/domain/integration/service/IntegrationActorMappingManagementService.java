@@ -27,6 +27,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.exception.ConstraintViolationException;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.PSQLState;
+import org.postgresql.util.ServerErrorMessage;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -138,7 +142,10 @@ public class IntegrationActorMappingManagementService {
             saveAliases(identity, integration, providerActor);
             aliasRepository.flush();
         } catch (DataIntegrityViolationException exception) {
-            throw new ApiException(IntegrationErrorCode.ACTOR_ALREADY_MAPPED, exception);
+            if (isActorMappingUniqueViolation(exception)) {
+                throw new ApiException(IntegrationErrorCode.ACTOR_ALREADY_MAPPED, exception);
+            }
+            throw exception;
         }
 
         if (oldActor != null) {
@@ -261,6 +268,38 @@ public class IntegrationActorMappingManagementService {
 
     private boolean matchesAlias(String aliasValue, ProviderActorKey key) {
         return key != null && aliasValue.equals(key.value());
+    }
+
+    private boolean isActorMappingUniqueViolation(DataIntegrityViolationException exception) {
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException constraintViolation
+                    && isActorMappingConstraint(constraintViolation.getConstraintName())) {
+                return true;
+            }
+            if (cause instanceof PSQLException postgresException
+                    && isActorMappingUniqueViolation(postgresException)) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
+    }
+
+    private boolean isActorMappingUniqueViolation(PSQLException exception) {
+        ServerErrorMessage serverError = exception.getServerErrorMessage();
+        return PSQLState.UNIQUE_VIOLATION.getState().equals(exception.getSQLState())
+                && serverError != null
+                && isActorMappingConstraint(serverError.getConstraint());
+    }
+
+    private boolean isActorMappingConstraint(String constraintName) {
+        return constraintName != null && (
+                ProjectMemberIntegrationIdentity.UNIQUE_ACTOR_CONSTRAINT.equalsIgnoreCase(constraintName)
+                        || ProjectMemberIntegrationIdentity.UNIQUE_OWNER_CONSTRAINT.equalsIgnoreCase(constraintName)
+                        || ProjectMemberIntegrationIdentityAlias.UNIQUE_ALIAS_CONSTRAINT.equalsIgnoreCase(
+                        constraintName)
+        );
     }
 
     private void assignActivities(

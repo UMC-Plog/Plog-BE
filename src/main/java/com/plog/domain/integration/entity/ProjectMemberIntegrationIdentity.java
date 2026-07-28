@@ -25,14 +25,17 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "project_member_integration_identities", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_member_integration_identity", columnNames = {
+        @UniqueConstraint(name = ProjectMemberIntegrationIdentity.UNIQUE_ACTOR_CONSTRAINT, columnNames = {
                 "project_integration_id", "provider_actor_id"
         }),
-        @UniqueConstraint(name = "uk_member_integration_identity_owner", columnNames = {
+        @UniqueConstraint(name = ProjectMemberIntegrationIdentity.UNIQUE_OWNER_CONSTRAINT, columnNames = {
                 "project_integration_id", "project_member_id"
         })
 })
 public class ProjectMemberIntegrationIdentity extends BaseEntity {
+
+    public static final String UNIQUE_ACTOR_CONSTRAINT = "uk_member_integration_identity";
+    public static final String UNIQUE_OWNER_CONSTRAINT = "uk_member_integration_identity_owner";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
