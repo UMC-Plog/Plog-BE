@@ -6,7 +6,9 @@ import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.IntegrationResourceType;
 import com.plog.domain.integration.entity.LinkType;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
@@ -88,6 +90,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
 
     private void collectDriveActivity(IntegrationResource resource, String fileId, String token) {
         String pageToken = null;
+        Set<String> requestedPageTokens = new HashSet<>();
         do {
             JsonNode body = post(DRIVE_ACTIVITY_API + "/activity:query", token,
                     pageToken == null
@@ -105,12 +108,13 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
                                 .asText(activity.path("timeRange").path("endTime").asText(null))),
                         resource.getResourceUrl(), activity.toString());
             }
-            pageToken = body.path("nextPageToken").asText(null);
+            pageToken = nextPageToken(body, requestedPageTokens);
         } while (pageToken != null && !pageToken.isBlank());
     }
 
     private void collectComments(IntegrationResource resource, String fileId, String token) {
         String pageToken = null;
+        Set<String> requestedPageTokens = new HashSet<>();
         do {
             String url = DRIVE_API + "/files/" + fileId
                     + "/comments?pageSize=100&fields=nextPageToken,comments(id,createdTime,modifiedTime,author,content,resolved,replies)"
@@ -134,12 +138,13 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
                             reply.toString());
                 }
             }
-            pageToken = body.path("nextPageToken").asText(null);
+            pageToken = nextPageToken(body, requestedPageTokens);
         } while (pageToken != null && !pageToken.isBlank());
     }
 
     private void collectRevisions(IntegrationResource resource, String fileId, String token) {
         String pageToken = null;
+        Set<String> requestedPageTokens = new HashSet<>();
         do {
             String url = DRIVE_API + "/files/" + fileId
                     + "/revisions?pageSize=100&fields=nextPageToken,revisions(id,modifiedTime,lastModifyingUser,originalFilename,mimeType)"
@@ -153,8 +158,19 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
                         parseInstant(revision.path("modifiedTime").asText(null)), resource.getResourceUrl(),
                         revision.toString());
             }
-            pageToken = body.path("nextPageToken").asText(null);
+            pageToken = nextPageToken(body, requestedPageTokens);
         } while (pageToken != null && !pageToken.isBlank());
+    }
+
+    private String nextPageToken(JsonNode response, Set<String> requestedPageTokens) {
+        String nextPageToken = response.path("nextPageToken").asText(null);
+        if (nextPageToken == null || nextPageToken.isBlank()) {
+            return null;
+        }
+        if (!requestedPageTokens.add(nextPageToken)) {
+            throw new ProviderResourceAccessException(503, null);
+        }
+        return nextPageToken;
     }
 
     private JsonNode get(String uri, String token) {
