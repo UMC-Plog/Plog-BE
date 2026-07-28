@@ -1,0 +1,252 @@
+package com.plog.domain.integration.repository;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.plog.domain.integration.entity.ActivityLog;
+import com.plog.domain.integration.entity.ActivityType;
+import com.plog.domain.integration.entity.ExternalConnection;
+import com.plog.domain.integration.entity.ExternalResource;
+import com.plog.domain.integration.entity.IntegrationActivity;
+import com.plog.domain.integration.entity.IntegrationActivityType;
+import com.plog.domain.integration.entity.IntegrationCredentialType;
+import com.plog.domain.integration.entity.IntegrationIdentityAliasType;
+import com.plog.domain.integration.entity.IntegrationResource;
+import com.plog.domain.integration.entity.IntegrationResourceStatus;
+import com.plog.domain.integration.entity.IntegrationResourceType;
+import com.plog.domain.integration.entity.LinkType;
+import com.plog.domain.integration.entity.ProjectIntegration;
+import com.plog.domain.integration.entity.ProjectMemberIntegrationIdentity;
+import com.plog.domain.integration.entity.ProjectMemberIntegrationIdentityAlias;
+import com.plog.domain.integration.entity.ResourceType;
+import com.plog.domain.project.entity.MemberStatus;
+import com.plog.domain.project.entity.Project;
+import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.entity.ProjectRole;
+import com.plog.domain.project.entity.ProjectStatus;
+import com.plog.domain.project.entity.ProjectType;
+import com.plog.domain.project.service.ProjectPurgeService;
+import com.plog.domain.user.entity.User;
+import com.plog.infrastructure.s3.UploadedFileService;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+@DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=create-drop")
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Testcontainers(disabledWithoutDocker = true)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@Import(ProjectPurgeService.class)
+class IntegrationActivityActorMappingRepositoryIntegrationTest {
+
+    @Container
+    private static final PostgreSQLContainer<?> POSTGRES =
+            new PostgreSQLContainer<>("postgres:16-alpine");
+
+    @DynamicPropertySource
+    static void configurePostgres(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES::getUsername);
+        registry.add("spring.datasource.password", POSTGRES::getPassword);
+    }
+
+    @Autowired
+    private TestEntityManager entityManager;
+
+    @Autowired
+    private IntegrationActivityRepository activityRepository;
+
+    @Autowired
+    private ProjectPurgeService projectPurgeService;
+
+    @MockitoBean
+    private UploadedFileService uploadedFileService;
+
+    @Test
+    void bulkMappingNeverOverwritesOrClearsAnotherMembersActivity() {
+        Project project = entityManager.persist(project());
+        ProjectMember currentMember = entityManager.persist(member(
+                project,
+                User.createLocal("current@example.com", "encoded", "현재", "current"),
+                ProjectRole.OWNER
+        ));
+        ProjectMember anotherMember = entityManager.persist(member(
+                project,
+                User.createLocal("another@example.com", "encoded", "다른", "another"),
+                ProjectRole.MEMBER
+        ));
+        ProjectIntegration integration = entityManager.persist(integration(project, currentMember));
+        IntegrationResource resource = entityManager.persist(resource(integration, currentMember));
+        IntegrationActivity unassigned = entityManager.persist(activity(
+                resource, null, "event-unassigned", null, "shared@example.com"));
+        IntegrationActivity ownedByAnother = entityManager.persist(activity(
+                resource, anotherMember, "event-another", "actor-another", "shared@example.com"));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(activityRepository.assignProjectMemberByEmail(
+                integration.getId(), currentMember, "shared@example.com"
+        )).isOne();
+        entityManager.clear();
+
+        assertThat(activityRepository.findById(unassigned.getId()).orElseThrow().getProjectMember().getId())
+                .isEqualTo(currentMember.getId());
+        assertThat(activityRepository.findById(ownedByAnother.getId()).orElseThrow().getProjectMember().getId())
+                .isEqualTo(anotherMember.getId());
+
+        assertThat(activityRepository.clearProjectMemberByEmail(
+                integration.getId(), currentMember, "shared@example.com"
+        )).isOne();
+        entityManager.clear();
+
+        assertThat(activityRepository.findById(unassigned.getId()).orElseThrow().getProjectMember()).isNull();
+        assertThat(activityRepository.findById(ownedByAnother.getId()).orElseThrow().getProjectMember().getId())
+                .isEqualTo(anotherMember.getId());
+    }
+
+    @Test
+    void projectPurgeDeletesLegacyAndCurrentIntegrationRowsBeforeMembers() {
+        Project project = entityManager.persist(project());
+        ProjectMember member = entityManager.persist(member(
+                project,
+                User.createLocal("purge@example.com", "encoded", "정리", "purge"),
+                ProjectRole.OWNER
+        ));
+        ExternalConnection legacyConnection = entityManager.persist(ExternalConnection.builder()
+                .projectMember(member)
+                .linkType(LinkType.GITHUB)
+                .externalAccountId("legacy-account")
+                .build());
+        ExternalResource legacyResource = entityManager.persist(ExternalResource.builder()
+                .connection(legacyConnection)
+                .resourceType(ResourceType.REPOSITORY)
+                .externalResourceId("legacy-repository")
+                .resourceName("legacy")
+                .build());
+        entityManager.persist(ActivityLog.builder()
+                .resource(legacyResource)
+                .projectMember(member)
+                .activityType(ActivityType.COMMIT)
+                .occurredAt(LocalDateTime.of(2026, 7, 28, 0, 0))
+                .externalId("legacy-event")
+                .externalAuthor("legacy-actor")
+                .build());
+
+        ProjectIntegration integration = entityManager.persist(integration(project, member));
+        IntegrationResource resource = entityManager.persist(resource(integration, member));
+        entityManager.persist(activity(resource, member, "current-event", "current-actor", null));
+        ProjectMemberIntegrationIdentity identity = entityManager.persist(
+                ProjectMemberIntegrationIdentity.builder()
+                        .projectIntegration(integration)
+                        .projectMember(member)
+                        .providerActorId("current-actor")
+                        .build()
+        );
+        entityManager.persist(ProjectMemberIntegrationIdentityAlias.builder()
+                .identity(identity)
+                .projectIntegration(integration)
+                .aliasType(IntegrationIdentityAliasType.LOGIN)
+                .aliasValue("current-login")
+                .build());
+        entityManager.flush();
+
+        projectPurgeService.purge(project.getId());
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(tableCount("activity_log")).isZero();
+        assertThat(tableCount("external_resource")).isZero();
+        assertThat(tableCount("external_connection")).isZero();
+        assertThat(tableCount("integration_activities")).isZero();
+        assertThat(tableCount("project_member_integration_identity_aliases")).isZero();
+        assertThat(tableCount("project_member_integration_identities")).isZero();
+        assertThat(tableCount("integration_resources")).isZero();
+        assertThat(tableCount("project_integrations")).isZero();
+        assertThat(tableCount("project_members")).isZero();
+    }
+
+    private Project project() {
+        LocalDate today = LocalDate.now();
+        return Project.builder()
+                .projectName("actor-mapping")
+                .inviteTokenHash("actor-mapping-hash")
+                .inviteTokenEncrypted("actor-mapping-encrypted")
+                .projectType(ProjectType.DEVELOP)
+                .status(ProjectStatus.IN_PROGRESS)
+                .startDay(today)
+                .endDay(today.plusDays(30))
+                .build();
+    }
+
+    private ProjectMember member(Project project, User user, ProjectRole role) {
+        entityManager.persist(user);
+        return ProjectMember.builder()
+                .project(project)
+                .user(user)
+                .role(role)
+                .status(MemberStatus.ACTIVE)
+                .build();
+    }
+
+    private ProjectIntegration integration(Project project, ProjectMember connectedBy) {
+        return ProjectIntegration.builder()
+                .project(project)
+                .connectedByProjectMember(connectedBy)
+                .linkType(LinkType.GITHUB)
+                .credentialType(IntegrationCredentialType.APP_INSTALLATION)
+                .externalAccountId("organization-id")
+                .externalAccountName("Plog")
+                .providerConnectionId("installation-id")
+                .build();
+    }
+
+    private IntegrationResource resource(ProjectIntegration integration, ProjectMember selectedBy) {
+        return IntegrationResource.builder()
+                .projectIntegration(integration)
+                .selectedByProjectMember(selectedBy)
+                .resourceType(IntegrationResourceType.GITHUB_REPOSITORY)
+                .providerResourceId("repository-id")
+                .resourceName("Plog/backend")
+                .resourceUrl("https://github.com/Plog/backend")
+                .resourceStatus(IntegrationResourceStatus.ACTIVE)
+                .build();
+    }
+
+    private IntegrationActivity activity(
+            IntegrationResource resource,
+            ProjectMember projectMember,
+            String eventKey,
+            String actorProviderId,
+            String actorEmail
+    ) {
+        return IntegrationActivity.builder()
+                .integrationResource(resource)
+                .projectMember(projectMember)
+                .activityType(IntegrationActivityType.GITHUB_COMMIT)
+                .providerEventKey(eventKey)
+                .actorProviderId(actorProviderId)
+                .actorLogin(actorEmail)
+                .actorEmail(actorEmail)
+                .occurredAt(Instant.parse("2026-07-28T00:00:00Z"))
+                .providerPayload("{}")
+                .build();
+    }
+
+    private long tableCount(String tableName) {
+        return ((Number) entityManager.getEntityManager()
+                .createNativeQuery("select count(*) from " + tableName)
+                .getSingleResult()).longValue();
+    }
+}

@@ -1,0 +1,279 @@
+package com.plog.domain.integration.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
+import com.plog.domain.integration.dto.request.IntegrationActorMappingRequest;
+import com.plog.domain.integration.dto.response.IntegrationActorMappingListResponse;
+import com.plog.domain.integration.dto.response.IntegrationActorMappingResponse;
+import com.plog.domain.integration.entity.LinkType;
+import com.plog.domain.integration.entity.ProjectIntegration;
+import com.plog.domain.integration.entity.ProjectMemberIntegrationIdentity;
+import com.plog.domain.integration.repository.IntegrationActivityRepository;
+import com.plog.domain.integration.repository.IntegrationActorObservation;
+import com.plog.domain.integration.repository.ProjectIntegrationRepository;
+import com.plog.domain.integration.repository.ProjectMemberIntegrationIdentityAliasRepository;
+import com.plog.domain.integration.repository.ProjectMemberIntegrationIdentityRepository;
+import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.user.entity.User;
+import com.plog.global.api.error.IntegrationErrorCode;
+import com.plog.global.api.exception.ApiException;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class IntegrationActorMappingManagementServiceTest {
+
+    @Mock
+    private ProjectRepository projectRepository;
+    @Mock
+    private ProjectIntegrationRepository projectIntegrationRepository;
+    @Mock
+    private ProjectMemberIntegrationIdentityRepository identityRepository;
+    @Mock
+    private ProjectMemberIntegrationIdentityAliasRepository aliasRepository;
+    @Mock
+    private IntegrationActivityRepository activityRepository;
+    @Mock
+    private ProjectAccessService projectAccessService;
+
+    private IntegrationActorMappingManagementService service;
+    private ProjectMember currentMember;
+    private ProjectIntegration integration;
+
+    @BeforeEach
+    void setUp() {
+        service = new IntegrationActorMappingManagementService(
+                projectRepository,
+                projectIntegrationRepository,
+                identityRepository,
+                aliasRepository,
+                activityRepository,
+                projectAccessService
+        );
+        User user = mock(User.class);
+        currentMember = ProjectMember.builder().id(3L).user(user).build();
+        integration = ProjectIntegration.builder()
+                .id(5L)
+                .linkType(LinkType.GITHUB)
+                .providerConnectionId("installation-1")
+                .build();
+        given(projectRepository.existsById(1L)).willReturn(true);
+        given(projectAccessService.requireActiveMember(1L, 10L)).willReturn(currentMember);
+    }
+
+    @Test
+    void returnsProviderActorsThatHaveNotBeenExplicitlyMapped() {
+        IntegrationActorObservation observation = observation("123", "wantkdd", "vana@example.com", 4L);
+        given(projectIntegrationRepository.findByProjectIdAndLinkType(1L, LinkType.GITHUB))
+                .willReturn(Optional.of(integration));
+        given(identityRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of());
+        given(aliasRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of());
+        given(activityRepository.findActorObservations(5L)).willReturn(List.of(observation));
+
+        IntegrationActorMappingListResponse response = service.getMappings(1L, 10L, LinkType.GITHUB);
+
+        assertThat(response.currentProjectMemberId()).isEqualTo(3L);
+        assertThat(response.availableProviderActors()).hasSize(1);
+        assertThat(response.availableProviderActors().get(0).actorKey())
+                .isEqualTo(ProviderActorKey.providerId("123").selectionKey());
+        assertThat(response.availableProviderActors().get(0).providerActorId()).isNull();
+        assertThat(response.availableProviderActors().get(0).providerEmail())
+                .isEqualTo("v***@example.com");
+        assertThat(response.availableProviderActors().get(0).activityCount()).isEqualTo(4L);
+    }
+
+    @Test
+    void hidesAnotherMembersRawProviderIdentifierAndEmail() {
+        User anotherUser = mock(User.class);
+        given(anotherUser.getName()).willReturn("김팀원");
+        given(anotherUser.getNickname()).willReturn("팀원");
+        ProjectMember anotherMember = ProjectMember.builder().id(4L).user(anotherUser).build();
+        ProjectMemberIntegrationIdentity identity = ProjectMemberIntegrationIdentity.builder()
+                .id(21L)
+                .projectIntegration(integration)
+                .projectMember(anotherMember)
+                .providerActorId("provider-user-4")
+                .providerLogin("teammate@example.com")
+                .providerEmail("teammate@example.com")
+                .build();
+        given(projectIntegrationRepository.findByProjectIdAndLinkType(1L, LinkType.GITHUB))
+                .willReturn(Optional.of(integration));
+        given(identityRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of(identity));
+        given(aliasRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of());
+        given(activityRepository.findActorObservations(5L)).willReturn(List.of());
+
+        IntegrationActorMappingListResponse response = service.getMappings(1L, 10L, LinkType.GITHUB);
+
+        IntegrationActorMappingResponse mapping = response.mappings().get(0);
+        assertThat(mapping.providerActorId()).isNull();
+        assertThat(mapping.providerLogin()).isEqualTo("t***@example.com");
+        assertThat(mapping.providerEmail()).isEqualTo("t***@example.com");
+        assertThat(mapping.actorKey())
+                .isEqualTo(ProviderActorKey.providerId("provider-user-4").selectionKey());
+    }
+
+    @Test
+    void savesMySelectedActorAndBackfillsExistingActivities() {
+        given(currentMember.getUser().getName()).willReturn("유상완");
+        given(currentMember.getUser().getNickname()).willReturn("바나");
+        IntegrationActorObservation observation = observation("123", "wantkdd", "vana@example.com", 4L);
+        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GITHUB))
+                .willReturn(Optional.of(integration));
+        given(activityRepository.findActorObservations(5L)).willReturn(List.of(observation));
+        given(identityRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of());
+        given(aliasRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of());
+        given(identityRepository.findByProjectIntegrationIdAndProjectMemberId(5L, 3L))
+                .willReturn(Optional.empty());
+        given(identityRepository.saveAndFlush(any(ProjectMemberIntegrationIdentity.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        IntegrationActorMappingResponse response = service.saveMyMapping(
+                1L,
+                10L,
+                LinkType.GITHUB,
+                new IntegrationActorMappingRequest(ProviderActorKey.providerId("123").selectionKey())
+        );
+
+        assertThat(response.projectMemberId()).isEqualTo(3L);
+        assertThat(response.actorKey()).isEqualTo(ProviderActorKey.providerId("123").selectionKey());
+        verify(activityRepository).assignProjectMemberByProviderId(5L, currentMember, "123");
+        verify(activityRepository).assignProjectMemberByEmail(5L, currentMember, "vana@example.com");
+        verify(activityRepository).assignProjectMemberByLogin(5L, currentMember, "wantkdd");
+    }
+
+    @Test
+    void doesNotUseNonUniqueFigmaHandleAsAnAliasOrBulkMatcher() {
+        integration = ProjectIntegration.builder()
+                .id(5L)
+                .linkType(LinkType.FIGMA)
+                .providerConnectionId("figma-account")
+                .build();
+        given(currentMember.getUser().getName()).willReturn("유상완");
+        given(currentMember.getUser().getNickname()).willReturn("바나");
+        IntegrationActorObservation observation = observation("figma-user-1", "동명이인", null, 2L);
+        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.FIGMA))
+                .willReturn(Optional.of(integration));
+        given(activityRepository.findActorObservations(5L)).willReturn(List.of(observation));
+        given(identityRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of());
+        given(aliasRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of());
+        given(identityRepository.findByProjectIntegrationIdAndProjectMemberId(5L, 3L))
+                .willReturn(Optional.empty());
+        given(identityRepository.saveAndFlush(any(ProjectMemberIntegrationIdentity.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        service.saveMyMapping(
+                1L,
+                10L,
+                LinkType.FIGMA,
+                new IntegrationActorMappingRequest(
+                        ProviderActorKey.providerId("figma-user-1").selectionKey())
+        );
+
+        verify(activityRepository).assignProjectMemberByProviderId(
+                5L, currentMember, "figma-user-1");
+        verify(activityRepository, never()).assignProjectMemberByLogin(any(), any(), any());
+        verify(aliasRepository).saveAll(List.of());
+    }
+
+    @Test
+    void rejectsProviderActorAlreadyMappedToAnotherProjectMember() {
+        IntegrationActorObservation observation = observation("123", "wantkdd", null, 4L);
+        ProjectMember anotherMember = ProjectMember.builder().id(4L).build();
+        ProjectMemberIntegrationIdentity claimedIdentity = ProjectMemberIntegrationIdentity.builder()
+                .id(21L)
+                .projectIntegration(integration)
+                .projectMember(anotherMember)
+                .providerActorId("123")
+                .build();
+        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GITHUB))
+                .willReturn(Optional.of(integration));
+        given(activityRepository.findActorObservations(5L))
+                .willReturn(List.of(observation));
+        given(identityRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of(claimedIdentity));
+        given(aliasRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of());
+
+        assertThatThrownBy(() -> service.saveMyMapping(
+                1L,
+                10L,
+                LinkType.GITHUB,
+                new IntegrationActorMappingRequest(ProviderActorKey.providerId("123").selectionKey())
+        )).isInstanceOfSatisfying(ApiException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(IntegrationErrorCode.ACTOR_ALREADY_MAPPED));
+
+        verify(identityRepository, never()).saveAndFlush(any(ProjectMemberIntegrationIdentity.class));
+        verify(activityRepository, never()).assignProjectMemberByProviderId(any(), any(), any());
+    }
+
+    @Test
+    void rejectsActorKeyThatWasNotObservedInCollectedActivities() {
+        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GITHUB))
+                .willReturn(Optional.of(integration));
+        given(activityRepository.findActorObservations(5L)).willReturn(List.of());
+
+        assertThatThrownBy(() -> service.saveMyMapping(
+                1L,
+                10L,
+                LinkType.GITHUB,
+                new IntegrationActorMappingRequest("actor:unknown")
+        )).isInstanceOfSatisfying(ApiException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(IntegrationErrorCode.PROVIDER_ACTOR_NOT_FOUND));
+    }
+
+    @Test
+    void removesOnlyMyMappingAndClearsExistingActivityOwnership() {
+        given(currentMember.getUser().getName()).willReturn("유상완");
+        given(currentMember.getUser().getNickname()).willReturn("바나");
+        ProjectMemberIntegrationIdentity identity = ProjectMemberIntegrationIdentity.builder()
+                .id(20L)
+                .projectIntegration(integration)
+                .projectMember(currentMember)
+                .providerActorId("123")
+                .providerLogin("wantkdd")
+                .providerEmail("vana@example.com")
+                .build();
+        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GITHUB))
+                .willReturn(Optional.of(integration));
+        given(identityRepository.findByProjectIntegrationIdAndProjectMemberId(5L, 3L))
+                .willReturn(Optional.of(identity));
+
+        IntegrationActorMappingResponse response = service.removeMyMapping(1L, 10L, LinkType.GITHUB);
+
+        assertThat(response.mappingId()).isEqualTo(20L);
+        verify(aliasRepository).deleteAllByIdentityId(20L);
+        verify(identityRepository).delete(identity);
+        verify(activityRepository).clearProjectMemberByProviderId(5L, currentMember, "123");
+        verify(activityRepository).clearProjectMemberByEmail(
+                5L, currentMember, "vana@example.com");
+        verify(activityRepository).clearProjectMemberByLogin(5L, currentMember, "wantkdd");
+    }
+
+    private IntegrationActorObservation observation(
+            String actorProviderId,
+            String actorLogin,
+            String actorEmail,
+            long activityCount
+    ) {
+        IntegrationActorObservation observation = mock(IntegrationActorObservation.class);
+        given(observation.getActorProviderId()).willReturn(actorProviderId);
+        given(observation.getActorLogin()).willReturn(actorLogin);
+        given(observation.getActorEmail()).willReturn(actorEmail);
+        given(observation.getActivityCount()).willReturn(activityCount);
+        given(observation.getFirstOccurredAt()).willReturn(Instant.parse("2026-07-01T00:00:00Z"));
+        given(observation.getLastOccurredAt()).willReturn(Instant.parse("2026-07-20T00:00:00Z"));
+        return observation;
+    }
+}
