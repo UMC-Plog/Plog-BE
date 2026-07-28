@@ -115,17 +115,20 @@ public class IntegrationResourceService {
             return;
         }
         ProjectMember connectedBy = integration.getConnectedByProjectMember();
-        List<GithubAppClient.Repository> repositories = githubAppClient.listInstallationRepositories(
+        GithubAppClient.RepositoryListing repositoryListing = githubAppClient.listInstallationRepositories(
                 integration.getProviderConnectionId());
+        List<GithubAppClient.Repository> repositories = repositoryListing.repositories();
         java.util.Set<String> selectedRepositoryIds = repositories.stream()
                 .map(GithubAppClient.Repository::id)
                 .collect(Collectors.toSet());
         List<IntegrationResource> existingResources = integrationResourceRepository
                 .findAllByProjectIntegrationIdOrderByIdAsc(integration.getId());
-        existingResources.stream()
-                .filter(resource -> resource.getResourceType() == IntegrationResourceType.GITHUB_REPOSITORY)
-                .filter(resource -> !selectedRepositoryIds.contains(resource.getProviderResourceId()))
-                .forEach(IntegrationResource::disable);
+        if (repositoryListing.complete()) {
+            existingResources.stream()
+                    .filter(resource -> resource.getResourceType() == IntegrationResourceType.GITHUB_REPOSITORY)
+                    .filter(resource -> !selectedRepositoryIds.contains(resource.getProviderResourceId()))
+                    .forEach(IntegrationResource::disable);
+        }
         Map<String, IntegrationResource> existingResourceByProviderId = existingResources.stream()
                 .collect(Collectors.toMap(
                         IntegrationResource::getProviderResourceId,

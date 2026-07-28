@@ -53,7 +53,7 @@ public class GithubAppClient {
         }
     }
 
-    public List<Repository> listInstallationRepositories(String installationId) {
+    public RepositoryListing listInstallationRepositories(String installationId) {
         String accessToken = createInstallationAccessToken(installationId);
         try {
             List<Repository> repositories = new ArrayList<>();
@@ -65,7 +65,7 @@ public class GithubAppClient {
                         .retrieve()
                         .body(JsonNode.class);
                 if (body == null || !body.path("repositories").isArray() || body.path("repositories").isEmpty()) {
-                    return repositories;
+                    return new RepositoryListing(repositories, true);
                 }
                 for (JsonNode repository : body.path("repositories")) {
                     String id = repository.path("id").asText();
@@ -81,10 +81,10 @@ public class GithubAppClient {
                     ));
                 }
                 if (body.path("repositories").size() < 100) {
-                    return repositories;
+                    return new RepositoryListing(repositories, true);
                 }
             }
-            return repositories;
+            return new RepositoryListing(repositories, false);
         } catch (RestClientResponseException exception) {
             int status = exception.getStatusCode().value();
             if (status == 401 || status == 403) {
@@ -144,6 +144,8 @@ public class GithubAppClient {
     }
 
     public record Installation(String id, String accountId, String accountLogin) {}
+
+    public record RepositoryListing(List<Repository> repositories, boolean complete) {}
 
     public record Repository(String id, String fullName, String htmlUrl, String payload, Instant lastModifiedAt) {}
 }
