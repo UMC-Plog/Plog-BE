@@ -25,7 +25,6 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class MentionNotificationService {
     private static final int MAX_RETRIES = 3;
-    private static final int MAX_PREVIEW_LENGTH = 100;
 
     private final ProjectMemberRepository projectMemberRepository;
     private final FcmTokenRepository fcmTokenRepository;
@@ -68,13 +67,10 @@ public class MentionNotificationService {
             return;
         }
 
-        String senderNickname = sender.getAnNickname() == null || sender.getAnNickname().isBlank()
-                ? "프로젝트 멤버" : sender.getAnNickname();
-        String title = sender.getProject().getProjectName() + " 멘션";
-        String preview = preview(event.messagePreview());
-        String body = preview.isEmpty()
-                ? senderNickname + "님이 회원님을 멘션했습니다."
-                : senderNickname + "님: " + preview;
+        String projectName = sender.getProject().getProjectName();
+        String senderNickname = resolveNickname(sender);
+        String title = projectName;
+        String body = projectName + ": " + senderNickname + "님이 회원님을 멘션했습니다.";
         Map<String, String> data = Map.of(
                 "projectId", event.projectId().toString(),
                 "chatId", event.chatId().toString(),
@@ -85,6 +81,17 @@ public class MentionNotificationService {
         for (FcmToken token : tokens) {
             sendWithRetry(token.getToken(), title, body, data);
         }
+    }
+
+    // 표시 닉네임 정책: anNickname 우선, 없으면 user.nickname으로 대체.
+    // (채팅 화면 표시 정책과 별개로, 멘션 매칭 조회(ProjectMemberRepository)와 동일한 기준을 사용해야
+    //  "매칭에 쓰인 이름"과 "알림에 보이는 이름"이 어긋나지 않는다.)
+    private String resolveNickname(ProjectMember member) {
+        if (member.getAnNickname() != null && !member.getAnNickname().isBlank()) {
+            return member.getAnNickname();
+        }
+        String userNickname = member.getUser().getNickname();
+        return userNickname == null || userNickname.isBlank() ? "프로젝트 멤버" : userNickname;
     }
 
     private void sendWithRetry(String token, String title, String body, Map<String, String> data) {
@@ -126,15 +133,6 @@ public class MentionNotificationService {
     private boolean isActiveProjectMember(ProjectMember member, Long projectId) {
         return member != null && member.getStatus() == MemberStatus.ACTIVE
                 && member.getProject() != null && projectId.equals(member.getProject().getId());
-    }
-
-    private String preview(String value) {
-        if (value == null) {
-            return "";
-        }
-        String normalized = value.trim();
-        return normalized.length() <= MAX_PREVIEW_LENGTH
-                ? normalized : normalized.substring(0, MAX_PREVIEW_LENGTH) + "…";
     }
 
     private void backoff(int attempt) {
