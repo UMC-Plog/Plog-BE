@@ -1,7 +1,6 @@
 package com.plog.domain.integration.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -53,6 +52,9 @@ class IntegrationDataCollectionServiceTest {
     @Mock
     private IntegrationVerificationService integrationVerificationService;
 
+    @Mock
+    private IntegrationResourceCollectionStateService resourceCollectionStateService;
+
     private IntegrationDataCollectionService integrationDataCollectionService;
     private IntegrationResourceCollector collector;
 
@@ -79,7 +81,8 @@ class IntegrationDataCollectionServiceTest {
                 integrationResourceService,
                 List.of(collector),
                 integrationActivityStoreService,
-                integrationVerificationService
+                integrationVerificationService,
+                resourceCollectionStateService
         );
     }
 
@@ -124,7 +127,7 @@ class IntegrationDataCollectionServiceTest {
                 .resourceUrl("https://docs.google.com/presentation/d/missing-file")
                 .resourceStatus(IntegrationResourceStatus.ACTIVE)
                 .build();
-        given(projectRepository.findByIdForUpdate(projectId)).willReturn(Optional.of(project));
+        given(projectRepository.existsById(projectId)).willReturn(true);
         given(projectIntegrationRepository.findByProjectIdAndLinkType(projectId, LinkType.GITHUB))
                 .willReturn(Optional.empty());
         given(integrationResourceRepository
@@ -136,7 +139,7 @@ class IntegrationDataCollectionServiceTest {
 
         assertEquals(projectId, response.projectId());
         assertEquals(2, response.requestedResourceCount());
-        assertEquals(1, response.collectedResourceCount(), response.toString());
+        assertEquals(1, response.collectedResourceCount());
         assertEquals(1, response.failures().size());
         assertEquals(102L, response.failures().get(0).resourceId());
         assertEquals(LinkType.GOOGLE, response.failures().get(0).linkType());
@@ -144,10 +147,138 @@ class IntegrationDataCollectionServiceTest {
         assertEquals("provider resource not found", response.failures().get(0).reason());
         verify(projectAccessService).requireActiveMember(projectId, userId);
         verify(integrationVerificationService).requireVerifiedConnection(projectId, LinkType.GOOGLE);
-        assertEquals(IntegrationResourceStatus.ACTIVE, collectedResource.getResourceStatus());
-        assertNotNull(collectedResource.getLastCollectedAt());
-        assertEquals(IntegrationResourceStatus.DISABLED, missingResource.getResourceStatus());
+        verify(resourceCollectionStateService).markCollected(
+                org.mockito.ArgumentMatchers.eq(collectedResource.getId()),
+                org.mockito.ArgumentMatchers.any()
+        );
+        verify(resourceCollectionStateService).disable(missingResource.getId());
         verify(integrationActivityStoreService, times(2)).beginResourceCollection();
         verify(integrationActivityStoreService, times(2)).endResourceCollection();
+    }
+
+    @Test
+    void requiresReauthorizationWhenProviderReturnsUnauthorized() {
+        assertReauthorizationFailure(401, "provider credential revoked");
+    }
+
+    @Test
+    void requiresReauthorizationWhenProviderReturnsForbidden() {
+        assertReauthorizationFailure(403, "provider resource access denied");
+    }
+
+    @Test
+    void retriesTemporaryFailureTwiceAndReturnsUnavailableFailure() {
+        Long projectId = 1L;
+        Long userId = 10L;
+        IntegrationResource resource = resource(project(projectId), "temporary-file");
+        CountingFailureCollector failureCollector = new CountingFailureCollector(503);
+        IntegrationDataCollectionService service = serviceWith(failureCollector);
+        given(projectRepository.existsById(projectId)).willReturn(true);
+        given(projectIntegrationRepository.findByProjectIdAndLinkType(projectId, LinkType.GITHUB))
+                .willReturn(Optional.empty());
+        given(integrationResourceRepository
+                .findAllByProjectIntegrationProjectIdAndResourceStatusOrderByIdAsc(
+                        projectId, IntegrationResourceStatus.ACTIVE))
+                .willReturn(List.of(resource));
+
+        IntegrationCollectionResponse response = service.collectNow(projectId, userId);
+
+        assertEquals(0, response.collectedResourceCount());
+        assertEquals("provider temporarily unavailable", response.failures().get(0).reason());
+        assertEquals(2, failureCollector.attempts());
+        verify(integrationActivityStoreService, times(2)).beginResourceCollection();
+        verify(integrationActivityStoreService, times(2)).endResourceCollection();
+    }
+
+    private void assertReauthorizationFailure(int statusCode, String expectedReason) {
+        Long projectId = 1L;
+        Long userId = 10L;
+        IntegrationResource resource = resource(project(projectId), "denied-file");
+        IntegrationDataCollectionService service = serviceWith(new CountingFailureCollector(statusCode));
+        given(projectRepository.existsById(projectId)).willReturn(true);
+        given(projectIntegrationRepository.findByProjectIdAndLinkType(projectId, LinkType.GITHUB))
+                .willReturn(Optional.empty());
+        given(integrationResourceRepository
+                .findAllByProjectIntegrationProjectIdAndResourceStatusOrderByIdAsc(
+                        projectId, IntegrationResourceStatus.ACTIVE))
+                .willReturn(List.of(resource));
+
+        IntegrationCollectionResponse response = service.collectNow(projectId, userId);
+
+        assertEquals(0, response.collectedResourceCount());
+        assertEquals(expectedReason, response.failures().get(0).reason());
+        verify(resourceCollectionStateService).requireReauthorization(resource.getId());
+    }
+
+    private IntegrationDataCollectionService serviceWith(IntegrationResourceCollector resourceCollector) {
+        return new IntegrationDataCollectionService(
+                integrationResourceRepository,
+                projectRepository,
+                projectAccessService,
+                projectIntegrationRepository,
+                integrationResourceService,
+                List.of(resourceCollector),
+                integrationActivityStoreService,
+                integrationVerificationService,
+                resourceCollectionStateService
+        );
+    }
+
+    private Project project(Long projectId) {
+        return Project.builder()
+                .id(projectId)
+                .projectName("Plog")
+                .inviteTokenHash("hash")
+                .inviteTokenEncrypted("encrypted")
+                .projectType(ProjectType.DEVELOP)
+                .status(ProjectStatus.IN_PROGRESS)
+                .startDay(LocalDate.of(2026, 7, 1))
+                .endDay(LocalDate.of(2026, 8, 1))
+                .build();
+    }
+
+    private IntegrationResource resource(Project project, String providerResourceId) {
+        ProjectIntegration integration = ProjectIntegration.builder()
+                .id(20L)
+                .project(project)
+                .linkType(LinkType.GOOGLE)
+                .credentialType(IntegrationCredentialType.OAUTH)
+                .externalAccountId("google-account")
+                .externalAccountName("team@plog.test")
+                .providerConnectionId("google-account")
+                .build();
+        return IntegrationResource.builder()
+                .id(101L)
+                .projectIntegration(integration)
+                .resourceType(IntegrationResourceType.GOOGLE_DOCUMENT)
+                .providerResourceId(providerResourceId)
+                .resourceName("프로젝트 기획서")
+                .resourceUrl("https://docs.google.com/document/d/" + providerResourceId)
+                .resourceStatus(IntegrationResourceStatus.ACTIVE)
+                .build();
+    }
+
+    private static final class CountingFailureCollector implements IntegrationResourceCollector {
+        private final int statusCode;
+        private int attempts;
+
+        private CountingFailureCollector(int statusCode) {
+            this.statusCode = statusCode;
+        }
+
+        @Override
+        public LinkType provider() {
+            return LinkType.GOOGLE;
+        }
+
+        @Override
+        public void collect(IntegrationResource resource) {
+            attempts++;
+            throw new ProviderResourceAccessException(statusCode, null);
+        }
+
+        private int attempts() {
+            return attempts;
+        }
     }
 }
