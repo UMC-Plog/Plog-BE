@@ -62,14 +62,14 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
         JsonNode document = get(DOCS_API + "/documents/" + fileId
                 + "?suggestionsViewMode=SUGGESTIONS_INLINE&includeTabsContent=true", token);
         activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DOCUMENT_SUGGESTION,
-                "document-snapshot:" + fileId + ":" + document.path("revisionId").asText("current"), null, null, null,
+                "document-snapshot:" + fileId + ":" + snapshotVersion(document), null, null, null,
                 null, resource.getResourceUrl(), document.toString());
     }
 
     private void collectPresentationSnapshot(IntegrationResource resource, String fileId, String token) {
         JsonNode presentation = get(SLIDES_API + "/presentations/" + fileId, token);
         activityStoreService.store(resource, IntegrationActivityType.GOOGLE_PRESENTATION_SNAPSHOT,
-                "presentation-snapshot:" + fileId, null, null, null, null,
+                "presentation-snapshot:" + fileId + ":" + snapshotVersion(presentation), null, null, null, null,
                 resource.getResourceUrl(), presentation.toString());
     }
 
@@ -189,6 +189,13 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 algorithm is not available", exception);
         }
+    }
+
+    private String snapshotVersion(JsonNode snapshot) {
+        String revisionId = snapshot.path("revisionId").asText(null);
+        return revisionId == null || revisionId.isBlank()
+                ? sha256(canonicalJson(snapshot))
+                : revisionId;
     }
 
     private String canonicalJson(JsonNode node) {
