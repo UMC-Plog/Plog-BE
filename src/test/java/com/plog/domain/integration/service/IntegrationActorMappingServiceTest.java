@@ -1,20 +1,15 @@
 package com.plog.domain.integration.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 
+import com.plog.domain.integration.entity.IntegrationIdentityAliasType;
 import com.plog.domain.integration.entity.ProjectIntegration;
+import com.plog.domain.integration.entity.ProjectMemberIntegrationIdentity;
+import com.plog.domain.integration.entity.ProjectMemberIntegrationIdentityAlias;
 import com.plog.domain.integration.repository.ProjectMemberIntegrationIdentityAliasRepository;
 import com.plog.domain.integration.repository.ProjectMemberIntegrationIdentityRepository;
-import com.plog.domain.project.entity.MemberStatus;
-import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
-import com.plog.domain.project.repository.ProjectMemberRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -32,37 +27,92 @@ class IntegrationActorMappingServiceTest {
     @Mock
     private ProjectMemberIntegrationIdentityAliasRepository aliasRepository;
 
-    @Mock
-    private ProjectMemberRepository projectMemberRepository;
-
     @InjectMocks
     private IntegrationActorMappingService integrationActorMappingService;
 
     @Test
-    void queriesOnlyTheMatchingActiveProjectMemberForEmailFallback() {
+    void treatsIdPrefixedStoredValueAsRawProviderId() {
+        assertThat(ProviderActorKey.fromStored("id:provider-user"))
+                .isEqualTo(ProviderActorKey.providerId("id:provider-user"));
+    }
+
+    @Test
+    void resolvesAnExplicitProviderActorIdMappingFirst() {
         ProjectMember member = ProjectMember.builder().id(10L).build();
-        Project project = mock(Project.class);
-        given(project.getId()).willReturn(1L);
         ProjectIntegration integration = ProjectIntegration.builder()
                 .id(2L)
-                .project(project)
                 .build();
         given(identityRepository.findByProjectIntegrationIdAndProviderActorId(2L, "actor-1"))
-                .willReturn(Optional.empty());
-        given(aliasRepository.findAllByProjectIntegrationIdAndAliasTypeAndAliasValue(any(), any(), any()))
-                .willReturn(List.of());
-        given(projectMemberRepository.findAllByProjectIdAndStatusAndUserEmailIgnoreCase(
-                1L, MemberStatus.ACTIVE, "vana@plog.test"
-        )).willReturn(List.of(member));
+                .willReturn(Optional.of(ProjectMemberIntegrationIdentity.builder()
+                        .projectMember(member)
+                        .build()));
 
         ProjectMember resolved = integrationActorMappingService.resolve(
                 integration, "actor-1", "vana", "vana@plog.test"
         );
 
         assertThat(resolved).isSameAs(member);
-        verify(projectMemberRepository).findAllByProjectIdAndStatusAndUserEmailIgnoreCase(
-                1L, MemberStatus.ACTIVE, "vana@plog.test"
+    }
+
+    @Test
+    void resolvesOnlyExplicitAliasesAndDoesNotTrustAnUnregisteredActivityEmail() {
+        ProjectMember member = ProjectMember.builder().id(10L).build();
+        ProjectIntegration integration = ProjectIntegration.builder().id(2L).build();
+        ProjectMemberIntegrationIdentity identity = ProjectMemberIntegrationIdentity.builder()
+                .projectMember(member)
+                .build();
+        given(identityRepository.findByProjectIntegrationIdAndProviderActorId(
+                2L, "email:vana@plog.test"
+        ))
+                .willReturn(Optional.empty());
+        given(identityRepository.findByProjectIntegrationIdAndProviderActorId(2L, "login:vana"))
+                .willReturn(Optional.empty());
+        given(aliasRepository.findAllByProjectIntegrationIdAndAliasTypeAndAliasValue(
+                2L, IntegrationIdentityAliasType.EMAIL, "vana@plog.test"
+        )).willReturn(List.of());
+        given(aliasRepository.findAllByProjectIntegrationIdAndAliasTypeAndAliasValue(
+                2L, IntegrationIdentityAliasType.LOGIN, "vana"
+        )).willReturn(List.of(ProjectMemberIntegrationIdentityAlias.builder()
+                .identity(identity)
+                .build()));
+
+        ProjectMember resolved = integrationActorMappingService.resolve(
+                integration, null, "vana", "vana@plog.test"
         );
-        verify(projectMemberRepository, never()).findActiveMembers(any(), eq(MemberStatus.ACTIVE));
+        ProjectMember unresolved = integrationActorMappingService.resolve(
+                integration, null, null, "unregistered@plog.test"
+        );
+
+        assertThat(resolved).isSameAs(member);
+        assertThat(unresolved).isNull();
+    }
+
+    @Test
+    void doesNotFallbackToSharedEmailWhenAStableProviderIdIsPresent() {
+        ProjectIntegration integration = ProjectIntegration.builder().id(2L).build();
+        given(identityRepository.findByProjectIntegrationIdAndProviderActorId(2L, "actor-2"))
+                .willReturn(Optional.empty());
+
+        ProjectMember resolved = integrationActorMappingService.resolve(
+                integration, "actor-2", "shared", "shared@plog.test"
+        );
+
+        assertThat(resolved).isNull();
+    }
+
+    @Test
+    void resolvesASelectedLoginOnlyActorWithoutRequiringAnAlias() {
+        ProjectMember member = ProjectMember.builder().id(10L).build();
+        ProjectIntegration integration = ProjectIntegration.builder().id(2L).build();
+        given(identityRepository.findByProjectIntegrationIdAndProviderActorId(2L, "login:display-name"))
+                .willReturn(Optional.of(ProjectMemberIntegrationIdentity.builder()
+                        .projectMember(member)
+                        .build()));
+
+        ProjectMember resolved = integrationActorMappingService.resolve(
+                integration, null, "display-name", null
+        );
+
+        assertThat(resolved).isSameAs(member);
     }
 }

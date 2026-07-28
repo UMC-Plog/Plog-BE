@@ -4,7 +4,10 @@ import com.plog.domain.integration.controller.docs.IntegrationControllerDoc;
 import com.plog.domain.integration.config.IntegrationRedirectProperties;
 import com.plog.domain.integration.dto.request.FigmaResourceRegisterRequest;
 import com.plog.domain.integration.dto.request.GoogleResourceRegisterRequest;
+import com.plog.domain.integration.dto.request.IntegrationActorMappingRequest;
 import com.plog.domain.integration.dto.request.NotionResourceRegisterRequest;
+import com.plog.domain.integration.dto.response.IntegrationActorMappingListResponse;
+import com.plog.domain.integration.dto.response.IntegrationActorMappingResponse;
 import com.plog.domain.integration.dto.response.IntegrationAuthorizationResponse;
 import com.plog.domain.integration.dto.response.IntegrationCollectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationConnectionResponse;
@@ -18,6 +21,7 @@ import com.plog.domain.integration.service.FigmaIntegrationService;
 import com.plog.domain.integration.service.GithubIntegrationService;
 import com.plog.domain.integration.service.GoogleIntegrationService;
 import com.plog.domain.integration.service.IntegrationDataCollectionService;
+import com.plog.domain.integration.service.IntegrationActorMappingManagementService;
 import com.plog.domain.integration.service.IntegrationResourceService;
 import com.plog.domain.integration.service.IntegrationService;
 import com.plog.domain.integration.service.NotionIntegrationService;
@@ -35,6 +39,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -48,6 +53,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class IntegrationController implements IntegrationControllerDoc {
 
     private final IntegrationService integrationService;
+    private final IntegrationActorMappingManagementService integrationActorMappingManagementService;
     private final IntegrationDataCollectionService integrationDataCollectionService;
     private final GithubIntegrationService githubIntegrationService;
     private final FigmaIntegrationService figmaIntegrationService;
@@ -108,6 +114,43 @@ public class IntegrationController implements IntegrationControllerDoc {
         IntegrationResourceListResponse response = integrationResourceService.getResources(
                 projectId, userId, parseLinkType(provider));
         return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_RESOURCES_RETRIEVED, response));
+    }
+
+    @Override
+    @GetMapping("/projects/{projectId}/integrations/{provider}/actor-mappings")
+    public ResponseEntity<ApiResponse<IntegrationActorMappingListResponse>> getActorMappings(
+            @PathVariable Long projectId,
+            @PathVariable String provider,
+            @AuthenticationPrincipal Long userId
+    ) {
+        IntegrationActorMappingListResponse response = integrationActorMappingManagementService.getMappings(
+                projectId, userId, parseLinkType(provider));
+        return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.ACTOR_MAPPINGS_RETRIEVED, response));
+    }
+
+    @Override
+    @PutMapping("/projects/{projectId}/integrations/{provider}/actor-mappings/me")
+    public ResponseEntity<ApiResponse<IntegrationActorMappingResponse>> saveMyActorMapping(
+            @PathVariable Long projectId,
+            @PathVariable String provider,
+            @Valid @RequestBody IntegrationActorMappingRequest request,
+            @AuthenticationPrincipal Long userId
+    ) {
+        IntegrationActorMappingResponse response = integrationActorMappingManagementService.saveMyMapping(
+                projectId, userId, parseLinkType(provider), request);
+        return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.ACTOR_MAPPING_SAVED, response));
+    }
+
+    @Override
+    @DeleteMapping("/projects/{projectId}/integrations/{provider}/actor-mappings/me")
+    public ResponseEntity<ApiResponse<IntegrationActorMappingResponse>> removeMyActorMapping(
+            @PathVariable Long projectId,
+            @PathVariable String provider,
+            @AuthenticationPrincipal Long userId
+    ) {
+        IntegrationActorMappingResponse response = integrationActorMappingManagementService.removeMyMapping(
+                projectId, userId, parseLinkType(provider));
+        return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.ACTOR_MAPPING_REMOVED, response));
     }
 
     @Override

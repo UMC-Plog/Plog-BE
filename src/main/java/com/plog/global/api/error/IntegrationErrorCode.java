@@ -22,7 +22,11 @@ public enum IntegrationErrorCode implements BaseErrorCode {
     PROJECT_INTEGRATION_ALREADY_CONNECTED(HttpStatus.CONFLICT, "INTEGRATION011", "이미 연동된 외부 계정입니다. 기존 연동을 해제한 뒤 다시 시도해주세요."),
     PROVIDER_TEMPORARILY_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "INTEGRATION012", "외부 provider를 일시적으로 확인할 수 없습니다. 잠시 후 다시 시도해주세요."),
     UNSUPPORTED_GOOGLE_RESOURCE_TYPE(HttpStatus.BAD_REQUEST, "INTEGRATION013", "Google Docs 또는 네이티브 Google Slides 파일만 등록할 수 있습니다."),
-    INVALID_EXTERNAL_RESOURCE_URL(HttpStatus.BAD_REQUEST, "INTEGRATION014", "외부 리소스 URL 형식이 올바르지 않습니다.");
+    INVALID_EXTERNAL_RESOURCE_URL(HttpStatus.BAD_REQUEST, "INTEGRATION014", "외부 리소스 URL 형식이 올바르지 않습니다."),
+    PROVIDER_ACTOR_NOT_FOUND(HttpStatus.NOT_FOUND, "INTEGRATION015", "선택한 provider 계정을 수집 활동에서 찾을 수 없습니다."),
+    ACTOR_ALREADY_MAPPED(HttpStatus.CONFLICT, "INTEGRATION016", "이미 다른 프로젝트 멤버에게 매핑된 외부 계정입니다."),
+    ACTOR_MAPPING_NOT_FOUND(HttpStatus.NOT_FOUND, "INTEGRATION017", "현재 멤버의 외부 계정 매핑을 찾을 수 없습니다."),
+    ACTOR_MAPPING_AMBIGUOUS(HttpStatus.CONFLICT, "INTEGRATION018", "외부 계정 식별값이 여러 프로젝트 멤버의 매핑과 충돌합니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

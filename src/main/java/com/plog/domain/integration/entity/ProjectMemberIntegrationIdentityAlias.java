@@ -26,11 +26,13 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "project_member_integration_identity_aliases", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_integration_identity_alias", columnNames = {
+        @UniqueConstraint(name = ProjectMemberIntegrationIdentityAlias.UNIQUE_ALIAS_CONSTRAINT, columnNames = {
                 "project_integration_id", "alias_type", "alias_value"
         })
 })
 public class ProjectMemberIntegrationIdentityAlias extends BaseEntity {
+
+    public static final String UNIQUE_ALIAS_CONSTRAINT = "uk_integration_identity_alias";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
