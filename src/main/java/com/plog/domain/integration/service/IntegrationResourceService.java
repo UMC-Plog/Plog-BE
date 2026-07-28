@@ -154,6 +154,13 @@ public class IntegrationResourceService {
         }
     }
 
+    @Transactional
+    public void registerGithubInstallationRepositories(Long projectId) {
+        projectIntegrationRepository.findByProjectIdAndLinkType(projectId, LinkType.GITHUB)
+                .filter(ProjectIntegration::isConnected)
+                .ifPresent(this::registerGithubInstallationRepositories);
+    }
+
     private ProjectMember requireActiveMember(Long projectId, Long userId) {
         if (!projectRepository.existsById(projectId)) {
             throw new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND);
