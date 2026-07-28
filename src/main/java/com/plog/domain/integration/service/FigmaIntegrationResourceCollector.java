@@ -6,6 +6,8 @@ import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.LinkType;
 import java.net.URI;
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
@@ -38,15 +40,7 @@ class FigmaIntegrationResourceCollector implements IntegrationResourceCollector 
                 "file:" + fileKey + ":" + file.path("version").asText("current"), null, null, null,
                 parseInstant(file.path("lastModified").asText(null)), resource.getResourceUrl(), file.toString());
 
-        JsonNode versions = get("/v1/files/" + fileKey + "/versions", token);
-        for (JsonNode version : versions.path("versions")) {
-            JsonNode user = version.path("user");
-            activityStoreService.store(resource, IntegrationActivityType.FIGMA_FILE_VERSION,
-                    "version:" + version.path("id").asText(), user.path("id").asText(null),
-                    user.path("handle").asText(null), user.path("email").asText(null),
-                    parseInstant(version.path("created_at").asText(null)), resource.getResourceUrl(),
-                    version.toString());
-        }
+        collectVersions(resource, fileKey, token);
 
         JsonNode comments = get("/v1/files/" + fileKey + "/comments", token);
         for (JsonNode comment : comments.path("comments")) {
@@ -68,10 +62,30 @@ class FigmaIntegrationResourceCollector implements IntegrationResourceCollector 
         }
     }
 
+    private void collectVersions(IntegrationResource resource, String fileKey, String token) {
+        String nextPage = "/v1/files/" + fileKey + "/versions";
+        Set<String> requestedPages = new HashSet<>();
+        while (nextPage != null && !nextPage.isBlank()) {
+            if (!requestedPages.add(nextPage)) {
+                throw new ProviderResourceAccessException(503, null);
+            }
+            JsonNode response = get(nextPage, token);
+            for (JsonNode version : response.path("versions")) {
+                JsonNode user = version.path("user");
+                activityStoreService.store(resource, IntegrationActivityType.FIGMA_FILE_VERSION,
+                        "version:" + version.path("id").asText(), user.path("id").asText(null),
+                        user.path("handle").asText(null), user.path("email").asText(null),
+                        parseInstant(version.path("created_at").asText(null)), resource.getResourceUrl(),
+                        version.toString());
+            }
+            nextPage = response.path("pagination").path("next_page").asText(null);
+        }
+    }
+
     private JsonNode get(String path, String token) {
         try {
             return restClient.get()
-                    .uri(URI.create(API_BASE_URL + path))
+                    .uri(URI.create(path.startsWith("http") ? path : API_BASE_URL + path))
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .retrieve()
                     .body(JsonNode.class);
