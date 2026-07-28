@@ -72,6 +72,7 @@ public class ChatMessageQueryService {
         }
         return Math.min(size, MAX_SIZE);
     }
+    
 
     private ChatMessageResponse toResponse(ChatMessage chatMessage, List<ChatAttachment> attachments) {
         var sender = chatMessage.getProjectMember();
