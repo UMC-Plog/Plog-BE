@@ -4,6 +4,7 @@ import com.plog.domain.chat.dto.response.ChatMessageListResponse;
 import com.plog.domain.chat.dto.response.ChatMessageResponse;
 import com.plog.domain.chat.entity.ChatAttachment;
 import com.plog.domain.chat.entity.ChatMessage;
+import com.plog.domain.chat.entity.ChatRoom;
 import com.plog.domain.chat.repository.ChatAttachmentRepository;
 import com.plog.domain.chat.repository.ChatMessageRepository;
 import com.plog.domain.chat.repository.ChatRoomRepository;
@@ -64,6 +65,29 @@ public class ChatMessageQueryService {
                 : null;
 
         return new ChatMessageListResponse(messages, hasNext, nextCursor);
+    }
+
+    /**
+     * roomId 없이 chatId만으로 단건 조회한다(알림 딥링크 등). 메시지에서 역으로 room을 찾아
+     * 권한을 검증한다. room이 없는(구버전 backfill 이전) 메시지는 권한 검증 자체가
+     * 불가능하므로 존재하지 않는 메시지와 동일하게 처리한다.
+     */
+    @Transactional(readOnly = true)
+    public ChatMessageResponse getMessageDetail(Long chatId, Long userId) {
+        ChatMessage chatMessage = chatMessageRepository.findWithRoomAndSenderById(chatId)
+                .orElseThrow(() -> new ApiException(ChatErrorCode.CHAT_MESSAGE_NOT_FOUND));
+
+        ChatRoom room = chatMessage.getChatRoom();
+        if (room == null) {
+            throw new ApiException(ChatErrorCode.CHAT_MESSAGE_NOT_FOUND);
+        }
+        chatRoomRepository.findAccessibleRoom(room.getId(), userId, MemberStatus.ACTIVE)
+                .orElseThrow(() -> new ApiException(ChatErrorCode.FORBIDDEN_CHAT_ROOM_ACCESS));
+
+        List<ChatAttachment> attachments = chatAttachmentRepository
+                .findAllByChatMessageIdOrderByIdAsc(chatMessage.getId());
+
+        return toResponse(chatMessage, attachments);
     }
 
     private int clampSize(Integer size) {
