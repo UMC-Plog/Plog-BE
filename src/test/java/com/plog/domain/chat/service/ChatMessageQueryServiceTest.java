@@ -16,6 +16,7 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.user.entity.ProfilePreset;
 import com.plog.domain.user.entity.User;
+import com.plog.global.api.error.ChatErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.util.List;
 import java.util.Optional;
@@ -42,15 +43,17 @@ class ChatMessageQueryServiceTest {
     }
 
     @Test
-    void 존재하지_않는_메시지는_예외() {
+    void 존재하지_않는_메시지는_CHAT_MESSAGE_NOT_FOUND() {
         when(chatMessageRepository.findWithRoomAndSenderById(1L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getMessageDetail(1L, 100L))
-                .isInstanceOf(ApiException.class);
+                .isInstanceOf(ApiException.class)
+                .satisfies(exception -> assertThat(((ApiException) exception).getErrorCode())
+                        .isEqualTo(ChatErrorCode.CHAT_MESSAGE_NOT_FOUND));
     }
 
     @Test
-    void 프로젝트_비접근자는_예외() {
+    void 프로젝트_비접근자는_FORBIDDEN_CHAT_ROOM_ACCESS() {
         ChatRoom room = mock(ChatRoom.class);
         when(room.getId()).thenReturn(5L);
         ChatMessage message = mock(ChatMessage.class);
@@ -60,17 +63,21 @@ class ChatMessageQueryServiceTest {
         when(chatRoomRepository.findAccessibleRoom(5L, 100L, MemberStatus.ACTIVE)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getMessageDetail(1L, 100L))
-                .isInstanceOf(ApiException.class);
+                .isInstanceOf(ApiException.class)
+                .satisfies(exception -> assertThat(((ApiException) exception).getErrorCode())
+                        .isEqualTo(ChatErrorCode.FORBIDDEN_CHAT_ROOM_ACCESS));
     }
 
     @Test
-    void room이_없는_레거시_메시지는_존재하지_않는_것으로_처리() {
+    void room이_없는_레거시_메시지는_CHAT_MESSAGE_NOT_FOUND로_처리() {
         ChatMessage message = mock(ChatMessage.class);
         lenient().when(message.getChatRoom()).thenReturn(null);
         when(chatMessageRepository.findWithRoomAndSenderById(1L)).thenReturn(Optional.of(message));
 
         assertThatThrownBy(() -> service.getMessageDetail(1L, 100L))
-                .isInstanceOf(ApiException.class);
+                .isInstanceOf(ApiException.class)
+                .satisfies(exception -> assertThat(((ApiException) exception).getErrorCode())
+                        .isEqualTo(ChatErrorCode.CHAT_MESSAGE_NOT_FOUND));
     }
 
     @Test
