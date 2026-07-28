@@ -29,6 +29,7 @@ import com.plog.domain.integration.service.GoogleIntegrationService;
 import com.plog.domain.integration.service.IntegrationResourceService;
 import com.plog.domain.integration.service.IntegrationService;
 import com.plog.domain.integration.service.NotionIntegrationService;
+import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.security.jwt.JwtProvider;
@@ -321,6 +322,99 @@ class IntegrationControllerTest {
                 .andExpect(jsonPath("$.code").value("INTEGRATION005"))
                 .andExpect(jsonPath("$.result.resourceType").value("FIGMA_FILE"))
                 .andExpect(jsonPath("$.result.resourceName").value("Plog Design"));
+    }
+
+    @Test
+    @DisplayName("등록 리소스 조회에서 provider 연동이 없으면 404와 INTEGRATION006을 반환한다")
+    void getResourcesReturnsIntegrationNotFound() throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationResourceService.getResources(eq(projectId), eq(userId), eq(LinkType.FIGMA)))
+                .willThrow(new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND));
+
+        mockMvc.perform(get("/api/projects/{projectId}/integrations/{provider}/resources", projectId, "figma"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("INTEGRATION006"));
+    }
+
+    @Test
+    @DisplayName("Notion 후보 조회에서 provider 접근 권한이 없으면 403과 INTEGRATION010을 반환한다")
+    void getNotionResourceCandidatesReturnsAccessDenied() throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationResourceService.getNotionCandidates(eq(projectId), eq(userId), eq("회의록")))
+                .willThrow(new ApiException(IntegrationErrorCode.PROVIDER_RESOURCE_ACCESS_DENIED));
+
+        mockMvc.perform(get("/api/projects/{projectId}/integrations/notion/resources/candidates", projectId)
+                        .param("query", "회의록"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("INTEGRATION010"));
+    }
+
+    @Test
+    @DisplayName("Notion 등록 대상이 이미 있으면 409와 INTEGRATION008을 반환한다")
+    void registerNotionResourceReturnsAlreadyRegistered() throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationResourceService.registerNotion(
+                eq(projectId), eq(userId), any(NotionResourceRegisterRequest.class)))
+                .willThrow(new ApiException(IntegrationErrorCode.EXTERNAL_RESOURCE_ALREADY_REGISTERED));
+
+        mockMvc.perform(post("/api/projects/{projectId}/integrations/notion/resources", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "resourceType": "PAGE",
+                                  "providerResourceId": "notion-page-id"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INTEGRATION008"));
+    }
+
+    @Test
+    @DisplayName("Google 등록 대상이 provider에서 없으면 404와 INTEGRATION007을 반환한다")
+    void registerGoogleResourceReturnsResourceNotFound() throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationResourceService.registerGoogle(
+                eq(projectId), eq(userId), any(GoogleResourceRegisterRequest.class)))
+                .willThrow(new ApiException(IntegrationErrorCode.EXTERNAL_RESOURCE_NOT_FOUND));
+
+        mockMvc.perform(post("/api/projects/{projectId}/integrations/google/resources", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fileId": "missing-google-file-id"
+                                }
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("INTEGRATION007"));
+    }
+
+    @Test
+    @DisplayName("Figma 리소스 접근 권한이 없으면 403과 INTEGRATION010을 반환한다")
+    void registerFigmaResourceReturnsAccessDenied() throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationResourceService.registerFigma(
+                eq(projectId), eq(userId), any(FigmaResourceRegisterRequest.class)))
+                .willThrow(new ApiException(IntegrationErrorCode.PROVIDER_RESOURCE_ACCESS_DENIED));
+
+        mockMvc.perform(post("/api/projects/{projectId}/integrations/figma/resources", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fileUrl": "https://www.figma.com/design/figma-file-key/Plog"
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("INTEGRATION010"));
     }
 
     private void authenticate(Long userId) {
