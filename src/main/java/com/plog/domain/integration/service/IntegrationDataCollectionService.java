@@ -5,9 +5,7 @@ import com.plog.domain.integration.dto.response.IntegrationCollectionResponse;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.IntegrationResourceStatus;
 import com.plog.domain.integration.entity.LinkType;
-import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.IntegrationResourceRepository;
-import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.global.api.error.ProjectErrorCode;
@@ -45,7 +43,6 @@ public class IntegrationDataCollectionService {
     private final IntegrationResourceRepository integrationResourceRepository;
     private final ProjectRepository projectRepository;
     private final ProjectAccessService projectAccessService;
-    private final ProjectIntegrationRepository projectIntegrationRepository;
     private final IntegrationResourceService integrationResourceService;
     private final Map<LinkType, IntegrationResourceCollector> collectorByProvider;
     private final IntegrationActivityStoreService integrationActivityStoreService;
@@ -57,7 +54,6 @@ public class IntegrationDataCollectionService {
             IntegrationResourceRepository integrationResourceRepository,
             ProjectRepository projectRepository,
             ProjectAccessService projectAccessService,
-            ProjectIntegrationRepository projectIntegrationRepository,
             IntegrationResourceService integrationResourceService,
             List<IntegrationResourceCollector> collectors,
             IntegrationActivityStoreService integrationActivityStoreService,
@@ -67,7 +63,6 @@ public class IntegrationDataCollectionService {
         this.integrationResourceRepository = integrationResourceRepository;
         this.projectRepository = projectRepository;
         this.projectAccessService = projectAccessService;
-        this.projectIntegrationRepository = projectIntegrationRepository;
         this.integrationResourceService = integrationResourceService;
         this.collectorByProvider = collectorMap(collectors);
         this.integrationActivityStoreService = integrationActivityStoreService;
@@ -140,9 +135,7 @@ public class IntegrationDataCollectionService {
     }
 
     private void synchronizeGithubRepositories(Long projectId) {
-        projectIntegrationRepository.findByProjectIdAndLinkType(projectId, LinkType.GITHUB)
-                .filter(ProjectIntegration::isConnected)
-                .ifPresent(integrationResourceService::registerGithubInstallationRepositories);
+        integrationResourceService.registerGithubInstallationRepositories(projectId);
     }
 
     private boolean collectResource(

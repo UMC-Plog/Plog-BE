@@ -13,7 +13,6 @@ import com.plog.domain.integration.entity.IntegrationResourceType;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.IntegrationResourceRepository;
-import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
@@ -21,7 +20,6 @@ import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,9 +37,6 @@ class IntegrationDataCollectionServiceTest {
 
     @Mock
     private ProjectAccessService projectAccessService;
-
-    @Mock
-    private ProjectIntegrationRepository projectIntegrationRepository;
 
     @Mock
     private IntegrationResourceService integrationResourceService;
@@ -77,7 +72,6 @@ class IntegrationDataCollectionServiceTest {
                 integrationResourceRepository,
                 projectRepository,
                 projectAccessService,
-                projectIntegrationRepository,
                 integrationResourceService,
                 List.of(collector),
                 integrationActivityStoreService,
@@ -128,8 +122,6 @@ class IntegrationDataCollectionServiceTest {
                 .resourceStatus(IntegrationResourceStatus.ACTIVE)
                 .build();
         given(projectRepository.existsById(projectId)).willReturn(true);
-        given(projectIntegrationRepository.findByProjectIdAndLinkType(projectId, LinkType.GITHUB))
-                .willReturn(Optional.empty());
         given(integrationResourceRepository
                 .findAllByProjectIntegrationProjectIdAndResourceStatusOrderByIdAsc(
                         projectId, IntegrationResourceStatus.ACTIVE))
@@ -174,8 +166,6 @@ class IntegrationDataCollectionServiceTest {
         CountingFailureCollector failureCollector = new CountingFailureCollector(503);
         IntegrationDataCollectionService service = serviceWith(failureCollector);
         given(projectRepository.existsById(projectId)).willReturn(true);
-        given(projectIntegrationRepository.findByProjectIdAndLinkType(projectId, LinkType.GITHUB))
-                .willReturn(Optional.empty());
         given(integrationResourceRepository
                 .findAllByProjectIntegrationProjectIdAndResourceStatusOrderByIdAsc(
                         projectId, IntegrationResourceStatus.ACTIVE))
@@ -196,8 +186,6 @@ class IntegrationDataCollectionServiceTest {
         IntegrationResource resource = resource(project(projectId), "denied-file");
         IntegrationDataCollectionService service = serviceWith(new CountingFailureCollector(statusCode));
         given(projectRepository.existsById(projectId)).willReturn(true);
-        given(projectIntegrationRepository.findByProjectIdAndLinkType(projectId, LinkType.GITHUB))
-                .willReturn(Optional.empty());
         given(integrationResourceRepository
                 .findAllByProjectIntegrationProjectIdAndResourceStatusOrderByIdAsc(
                         projectId, IntegrationResourceStatus.ACTIVE))
@@ -215,7 +203,6 @@ class IntegrationDataCollectionServiceTest {
                 integrationResourceRepository,
                 projectRepository,
                 projectAccessService,
-                projectIntegrationRepository,
                 integrationResourceService,
                 List.of(resourceCollector),
                 integrationActivityStoreService,
