@@ -455,6 +455,34 @@ class IntegrationControllerTest {
                 .andExpect(jsonPath("$.result.failures[0].reason").value("provider resource access denied"));
     }
 
+    @Test
+    @DisplayName("수집할 프로젝트가 없으면 404와 PROJECT001을 반환한다")
+    void collectIntegrationDataReturnsProjectNotFound() throws Exception {
+        Long projectId = 999L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationDataCollectionService.collectNow(projectId, userId))
+                .willThrow(new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
+
+        mockMvc.perform(post("/api/projects/{projectId}/integrations/collect", projectId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PROJECT001"));
+    }
+
+    @Test
+    @DisplayName("활성 프로젝트 멤버가 아니면 수집 요청에 403과 PROJECT002를 반환한다")
+    void collectIntegrationDataReturnsProjectMemberRequired() throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationDataCollectionService.collectNow(projectId, userId))
+                .willThrow(new ApiException(ProjectErrorCode.PROJECT_MEMBER_REQUIRED));
+
+        mockMvc.perform(post("/api/projects/{projectId}/integrations/collect", projectId))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PROJECT002"));
+    }
+
     private void authenticate(Long userId) {
         SecurityContextHolder.getContext().setAuthentication(
                 new TestingAuthenticationToken(userId, null)
