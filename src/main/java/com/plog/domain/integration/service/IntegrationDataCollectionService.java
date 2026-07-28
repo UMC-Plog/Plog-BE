@@ -12,7 +12,11 @@ import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
+import jakarta.persistence.PersistenceException;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashSet;
@@ -22,13 +26,21 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionException;
+import org.springframework.web.client.RestClientResponseException;
 
 /** 등록된 외부 연동 리소스의 provider 활동 원문을 수동으로 수집한다. */
 @Service
+@Slf4j
 public class IntegrationDataCollectionService {
 
     private static final int MAX_TEMPORARY_ATTEMPTS = 2;
+    private static final Duration BASE_RETRY_DELAY = Duration.ofMillis(200);
+    private static final Duration MAX_RETRY_DELAY = Duration.ofSeconds(5);
 
     private final IntegrationResourceRepository integrationResourceRepository;
     private final ProjectRepository projectRepository;
@@ -150,8 +162,12 @@ public class IntegrationDataCollectionService {
                 if (handleProviderFailure(resource, failures, exception, attempt)) {
                     return false;
                 }
+            } catch (DataAccessException | TransactionException | PersistenceException exception) {
+                throw exception;
             } catch (RuntimeException exception) {
-                failures.add(new CollectionFailure(resource, "collection failed"));
+                log.error("Integration resource collection failed. resourceId={}", resource.getId(), exception);
+                failures.add(new CollectionFailure(
+                        resource, "collection failed: " + exception.getClass().getSimpleName()));
                 return false;
             } finally {
                 integrationActivityStoreService.endResourceCollection();
@@ -193,11 +209,59 @@ public class IntegrationDataCollectionService {
             failures.add(new CollectionFailure(resource, "provider resource not found"));
             return true;
         }
+        if (!isTemporaryFailure(exception.statusCode())) {
+            failures.add(new CollectionFailure(
+                    resource, "provider request failed: HTTP " + exception.statusCode()));
+            return true;
+        }
         if (attempt == MAX_TEMPORARY_ATTEMPTS) {
             failures.add(new CollectionFailure(resource, "provider temporarily unavailable"));
             return true;
         }
+        waitBeforeRetry(exception, attempt);
         return false;
+    }
+
+    private boolean isTemporaryFailure(int statusCode) {
+        return statusCode == 429 || statusCode >= 500;
+    }
+
+    private void waitBeforeRetry(ProviderResourceAccessException exception, int attempt) {
+        Duration delay = retryAfter(exception);
+        if (delay == null) {
+            delay = BASE_RETRY_DELAY.multipliedBy(1L << (attempt - 1));
+        }
+        delay = delay.compareTo(MAX_RETRY_DELAY) > 0 ? MAX_RETRY_DELAY : delay;
+        try {
+            Thread.sleep(delay.toMillis());
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Integration collection retry was interrupted", interruptedException);
+        }
+    }
+
+    private Duration retryAfter(ProviderResourceAccessException exception) {
+        if (!(exception.getCause() instanceof RestClientResponseException responseException)
+                || responseException.getResponseHeaders() == null) {
+            return null;
+        }
+        String value = responseException.getResponseHeaders().getFirst(HttpHeaders.RETRY_AFTER);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Duration.ofSeconds(Math.max(0L, Long.parseLong(value)));
+        } catch (NumberFormatException ignored) {
+            try {
+                Duration delay = Duration.between(
+                        Instant.now(),
+                        ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant()
+                );
+                return delay.isNegative() ? Duration.ZERO : delay;
+            } catch (RuntimeException invalidHeader) {
+                return null;
+            }
+        }
     }
 
     private record CollectionOutcome(

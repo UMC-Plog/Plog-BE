@@ -4,6 +4,7 @@ import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.repository.IntegrationResourceRepository;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataRetrievalFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +33,7 @@ class IntegrationResourceCollectionStateService {
 
     private IntegrationResource requireResource(Long resourceId) {
         return integrationResourceRepository.findById(resourceId)
-                .orElseThrow(() -> new IllegalStateException(
+                .orElseThrow(() -> new DataRetrievalFailureException(
                         "Integration resource disappeared during collection: " + resourceId));
     }
 }
