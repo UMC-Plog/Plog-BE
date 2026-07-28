@@ -29,7 +29,7 @@ import org.springframework.web.client.RestClientResponseException;
 class GoogleIntegrationResourceCollector implements IntegrationResourceCollector {
 
     private static final String DRIVE_API = "https://www.googleapis.com/drive/v3";
-    private static final String DRIVE_ACTIVITY_API = "https://www.googleapis.com/drive/activity/v2";
+    private static final String DRIVE_ACTIVITY_API = "https://driveactivity.googleapis.com/v2";
     private static final String DOCS_API = "https://docs.googleapis.com/v1";
     private static final String SLIDES_API = "https://slides.googleapis.com/v1";
 
@@ -59,7 +59,8 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     }
 
     private void collectDocumentSnapshot(IntegrationResource resource, String fileId, String token) {
-        JsonNode document = get(DOCS_API + "/documents/" + fileId + "?suggestionsViewMode=PREVIEW_WITH_SUGGESTIONS", token);
+        JsonNode document = get(DOCS_API + "/documents/" + fileId
+                + "?suggestionsViewMode=SUGGESTIONS_INLINE&includeTabsContent=true", token);
         activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DOCUMENT_SUGGESTION,
                 "document-snapshot:" + fileId + ":" + document.path("revisionId").asText("current"), null, null, null,
                 null, resource.getResourceUrl(), document.toString());
