@@ -94,12 +94,4 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
             @Param("status") MemberStatus status
     );
 
-    @Query("select member from ProjectMember member join fetch member.user "
-            + "where member.project.id = :projectId and member.status = :status "
-            + "and lower(member.user.email) = lower(:email)")
-    List<ProjectMember> findAllByProjectIdAndStatusAndUserEmailIgnoreCase(
-            @Param("projectId") Long projectId,
-            @Param("status") MemberStatus status,
-            @Param("email") String email
-    );
 }
