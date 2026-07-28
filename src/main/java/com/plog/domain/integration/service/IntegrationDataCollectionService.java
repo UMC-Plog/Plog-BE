@@ -14,18 +14,16 @@ import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /** 등록된 외부 연동 리소스의 provider 활동 원문을 수동으로 수집한다. */
 @Service
-@RequiredArgsConstructor
 public class IntegrationDataCollectionService {
 
     private static final int MAX_TEMPORARY_ATTEMPTS = 2;
@@ -35,9 +33,29 @@ public class IntegrationDataCollectionService {
     private final ProjectAccessService projectAccessService;
     private final ProjectIntegrationRepository projectIntegrationRepository;
     private final IntegrationResourceService integrationResourceService;
-    private final List<IntegrationResourceCollector> collectors;
+    private final Map<LinkType, IntegrationResourceCollector> collectorByProvider;
     private final IntegrationActivityStoreService integrationActivityStoreService;
     private final IntegrationVerificationService integrationVerificationService;
+
+    public IntegrationDataCollectionService(
+            IntegrationResourceRepository integrationResourceRepository,
+            ProjectRepository projectRepository,
+            ProjectAccessService projectAccessService,
+            ProjectIntegrationRepository projectIntegrationRepository,
+            IntegrationResourceService integrationResourceService,
+            List<IntegrationResourceCollector> collectors,
+            IntegrationActivityStoreService integrationActivityStoreService,
+            IntegrationVerificationService integrationVerificationService
+    ) {
+        this.integrationResourceRepository = integrationResourceRepository;
+        this.projectRepository = projectRepository;
+        this.projectAccessService = projectAccessService;
+        this.projectIntegrationRepository = projectIntegrationRepository;
+        this.integrationResourceService = integrationResourceService;
+        this.collectorByProvider = collectorMap(collectors);
+        this.integrationActivityStoreService = integrationActivityStoreService;
+        this.integrationVerificationService = integrationVerificationService;
+    }
 
     /** 진행 중 프로젝트도 수집할 수 있으며 프로젝트 상태는 변경하지 않는다. */
     @Transactional
@@ -63,8 +81,6 @@ public class IntegrationDataCollectionService {
     }
 
     private CollectionOutcome collectResources(Long projectId) {
-        Map<LinkType, IntegrationResourceCollector> collectorByProvider = collectors.stream()
-                .collect(Collectors.toMap(IntegrationResourceCollector::provider, collector -> collector));
         List<CollectionFailure> failures = new ArrayList<>();
         Set<Long> verifiedIntegrationIds = new HashSet<>();
         List<IntegrationResource> resources = integrationResourceRepository
@@ -84,6 +100,19 @@ public class IntegrationDataCollectionService {
             }
         }
         return new CollectionOutcome(resources.size(), collectedResourceCount, List.copyOf(failures));
+    }
+
+    private Map<LinkType, IntegrationResourceCollector> collectorMap(
+            List<IntegrationResourceCollector> collectors
+    ) {
+        Map<LinkType, IntegrationResourceCollector> collectorByProvider = new EnumMap<>(LinkType.class);
+        for (IntegrationResourceCollector collector : collectors) {
+            IntegrationResourceCollector duplicate = collectorByProvider.put(collector.provider(), collector);
+            if (duplicate != null) {
+                throw new IllegalStateException("Duplicate integration collector: " + collector.provider());
+            }
+        }
+        return Map.copyOf(collectorByProvider);
     }
 
     private void synchronizeGithubRepositories(Long projectId) {
