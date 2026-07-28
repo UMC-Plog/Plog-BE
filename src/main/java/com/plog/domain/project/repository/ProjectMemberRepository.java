@@ -94,4 +94,16 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
             @Param("status") MemberStatus status
     );
 
+    // 채팅 @멘션용
+    // 채팅 멘션 매칭용. an_nickname이 없으면(null) user.nickname으로 대체해서 비교한다.
+    // 표시 닉네임(anNickname 우선, 없으면 user.nickname) 정책과 동일한 기준으로 맞춰야
+    // "화면에 보이는 이름으로 멘션했는데 안 걸리는" 문제가 생기지 않는다.
+    @Query("select member from ProjectMember member "
+            + "where member.project.id = :projectId and member.status = :status "
+            + "and coalesce(member.anNickname, member.user.nickname) in :nicknames")
+    List<ProjectMember> findActiveMembersByProjectIdAndNicknameIn(
+            @Param("projectId") Long projectId,
+            @Param("status") MemberStatus status,
+            @Param("nicknames") Collection<String> nicknames
+    );
 }

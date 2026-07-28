@@ -9,6 +9,8 @@ import com.plog.domain.chat.event.ChatMessageSavedEvent;
 import com.plog.domain.chat.repository.ChatAttachmentRepository;
 import com.plog.domain.chat.repository.ChatMessageRepository;
 import com.plog.domain.chat.repository.ChatRoomRepository;
+import com.plog.domain.chat.util.ChatMentionParser;
+import com.plog.domain.notification.event.ChatMentionEvent;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
@@ -25,12 +27,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class ChatMessageAppender {
 
     private static final String LOCK_TIMEOUT_SQL = "SET LOCAL lock_timeout = '3s'";
+    private static final int MAX_MENTION_PREVIEW_LENGTH = 100;
 
     private final ChatRoomRepository chatRoomRepository;
     private final ChatMessageRepository chatMessageRepository;
@@ -78,7 +83,8 @@ public class ChatMessageAppender {
 
     /** WebSocket 경로 전용: STOMP Principal의 userId로 프로젝트 멤버를 찾아 메시지를 남긴다.
      *  clientMessageId로 멱등 처리하고, 커밋 후 브로드캐스트 이벤트를 발행한다.
-     *  첨부는 새로 생성된 메시지에 대해서만 저장한다(멱등 히트 시 이미 저장된 첨부를 재사용) */
+     *  첨부는 새로 생성된 메시지에 대해서만 저장한다(멱등 히트 시 이미 저장된 첨부를 재사용)
+     *  멘션 파싱/이벤트 발행도 신규 저장 시에만 수행한다(재전송 시 중복 알림 방지) */
     @Transactional
     public ChatMessage appendByUser(
             Long chatRoomId,
@@ -92,14 +98,57 @@ public class ChatMessageAppender {
                 .findByProjectIdAndUserIdAndStatus(room.getProject().getId(), userId, MemberStatus.ACTIVE)
                 .orElseThrow(() -> new ApiException(ChatErrorCode.FORBIDDEN_CHAT_ROOM_ACCESS));
 
-        ChatMessage chatMessage = chatMessageRepository
-                .findByChatRoomIdAndProjectMemberIdAndClientMessageId(room.getId(), member.getId(), clientMessageId)
-                .orElseGet(() -> createAndSaveWithAttachments(
-                        room, member, userId, clientMessageId, message, attachments));
+        Optional<ChatMessage> existing = chatMessageRepository
+                .findByChatRoomIdAndProjectMemberIdAndClientMessageId(room.getId(), member.getId(), clientMessageId);
+        boolean isNewMessage = existing.isEmpty();
+        ChatMessage chatMessage = existing.orElseGet(() -> createAndSaveWithAttachments(
+                room, member, userId, clientMessageId, message, attachments));
 
         // 커밋 후에만 발행됨(AFTER_COMMIT) — 재전송(멱등 히트)이어도 재브로드캐스트를 유도하기 위해 항상 발행
         eventPublisher.publishEvent(new ChatMessageSavedEvent(chatMessage.getId()));
+
+        // 멘션 알림은 신규 저장 시에만 발행한다. 멱등 히트(재전송)까지 발행하면
+        // 같은 메시지에 대해 알림이 중복 발송된다.
+        if (isNewMessage) {
+            publishMentionEventIfAny(room, member, chatMessage, message);
+        }
         return chatMessage;
+    }
+
+    private void publishMentionEventIfAny(ChatRoom room, ProjectMember sender, ChatMessage chatMessage, String message) {
+        Set<String> nicknameCandidates = ChatMentionParser.extractNicknameCandidates(message);
+        if (nicknameCandidates.isEmpty()) {
+            return;
+        }
+
+        List<ProjectMember> matchedMembers = projectMemberRepository.findActiveMembersByProjectIdAndNicknameIn(
+                room.getProject().getId(), MemberStatus.ACTIVE, nicknameCandidates);
+
+        List<Long> mentionMemberIds = matchedMembers.stream()
+                .map(ProjectMember::getId)
+                .filter(id -> !id.equals(sender.getId())) // 자기 자신 멘션 제외
+                .distinct()
+                .toList();
+        if (mentionMemberIds.isEmpty()) {
+            return;
+        }
+
+        eventPublisher.publishEvent(new ChatMentionEvent(
+                room.getProject().getId(),
+                chatMessage.getId(),
+                sender.getId(),
+                mentionMemberIds,
+                truncatePreview(message)
+        ));
+    }
+
+    private String truncatePreview(String message) {
+        if (message == null) {
+            return null;
+        }
+        String trimmed = message.trim();
+        return trimmed.length() <= MAX_MENTION_PREVIEW_LENGTH
+                ? trimmed : trimmed.substring(0, MAX_MENTION_PREVIEW_LENGTH) + "…";
     }
 
     private ChatMessage createAndSaveWithAttachments(
