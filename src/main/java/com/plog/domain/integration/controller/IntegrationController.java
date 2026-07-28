@@ -2,14 +2,23 @@ package com.plog.domain.integration.controller;
 
 import com.plog.domain.integration.controller.docs.IntegrationControllerDoc;
 import com.plog.domain.integration.config.IntegrationRedirectProperties;
+import com.plog.domain.integration.dto.request.FigmaResourceRegisterRequest;
+import com.plog.domain.integration.dto.request.GoogleResourceRegisterRequest;
+import com.plog.domain.integration.dto.request.NotionResourceRegisterRequest;
 import com.plog.domain.integration.dto.response.IntegrationAuthorizationResponse;
+import com.plog.domain.integration.dto.response.IntegrationCollectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationConnectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationDisconnectionResponse;
+import com.plog.domain.integration.dto.response.IntegrationResourceCandidateResponse;
+import com.plog.domain.integration.dto.response.IntegrationResourceListResponse;
+import com.plog.domain.integration.dto.response.IntegrationResourceResponse;
 import com.plog.domain.integration.dto.response.IntegrationStatusResponse;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.service.FigmaIntegrationService;
 import com.plog.domain.integration.service.GithubIntegrationService;
 import com.plog.domain.integration.service.GoogleIntegrationService;
+import com.plog.domain.integration.service.IntegrationDataCollectionService;
+import com.plog.domain.integration.service.IntegrationResourceService;
 import com.plog.domain.integration.service.IntegrationService;
 import com.plog.domain.integration.service.NotionIntegrationService;
 import com.plog.global.api.error.IntegrationErrorCode;
@@ -17,6 +26,8 @@ import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.IntegrationSuccessCode;
 import com.plog.global.api.response.ProjectSuccessCode;
+import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -24,6 +35,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -36,10 +48,12 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class IntegrationController implements IntegrationControllerDoc {
 
     private final IntegrationService integrationService;
+    private final IntegrationDataCollectionService integrationDataCollectionService;
     private final GithubIntegrationService githubIntegrationService;
     private final FigmaIntegrationService figmaIntegrationService;
     private final NotionIntegrationService notionIntegrationService;
     private final GoogleIntegrationService googleIntegrationService;
+    private final IntegrationResourceService integrationResourceService;
     private final IntegrationRedirectProperties redirectProperties;
 
     @Override
@@ -82,6 +96,76 @@ public class IntegrationController implements IntegrationControllerDoc {
         IntegrationDisconnectionResponse response = integrationService.disconnect(
                 projectId, userId, parseLinkType(provider));
         return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_DISCONNECTED, response));
+    }
+
+    @Override
+    @GetMapping("/projects/{projectId}/integrations/{provider}/resources")
+    public ResponseEntity<ApiResponse<IntegrationResourceListResponse>> getResources(
+            @PathVariable Long projectId,
+            @PathVariable String provider,
+            @AuthenticationPrincipal Long userId
+    ) {
+        IntegrationResourceListResponse response = integrationResourceService.getResources(
+                projectId, userId, parseLinkType(provider));
+        return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_RESOURCES_RETRIEVED, response));
+    }
+
+    @Override
+    @GetMapping("/projects/{projectId}/integrations/notion/resources/candidates")
+    public ResponseEntity<ApiResponse<List<IntegrationResourceCandidateResponse>>> getNotionResourceCandidates(
+            @PathVariable Long projectId,
+            @RequestParam(required = false) String query,
+            @AuthenticationPrincipal Long userId
+    ) {
+        List<IntegrationResourceCandidateResponse> response = integrationResourceService.getNotionCandidates(
+                projectId, userId, query);
+        return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_RESOURCES_RETRIEVED, response));
+    }
+
+    @Override
+    @PostMapping("/projects/{projectId}/integrations/notion/resources")
+    public ResponseEntity<ApiResponse<IntegrationResourceResponse>> registerNotionResource(
+            @PathVariable Long projectId,
+            @Valid @RequestBody NotionResourceRegisterRequest request,
+            @AuthenticationPrincipal Long userId
+    ) {
+        IntegrationResourceResponse response = integrationResourceService.registerNotion(projectId, userId, request);
+        return ResponseEntity.status(IntegrationSuccessCode.INTEGRATION_RESOURCE_REGISTERED.getHttpStatus())
+                .body(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_RESOURCE_REGISTERED, response));
+    }
+
+    @Override
+    @PostMapping("/projects/{projectId}/integrations/google/resources")
+    public ResponseEntity<ApiResponse<IntegrationResourceResponse>> registerGoogleResource(
+            @PathVariable Long projectId,
+            @Valid @RequestBody GoogleResourceRegisterRequest request,
+            @AuthenticationPrincipal Long userId
+    ) {
+        IntegrationResourceResponse response = integrationResourceService.registerGoogle(projectId, userId, request);
+        return ResponseEntity.status(IntegrationSuccessCode.INTEGRATION_RESOURCE_REGISTERED.getHttpStatus())
+                .body(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_RESOURCE_REGISTERED, response));
+    }
+
+    @Override
+    @PostMapping("/projects/{projectId}/integrations/figma/resources")
+    public ResponseEntity<ApiResponse<IntegrationResourceResponse>> registerFigmaResource(
+            @PathVariable Long projectId,
+            @Valid @RequestBody FigmaResourceRegisterRequest request,
+            @AuthenticationPrincipal Long userId
+    ) {
+        IntegrationResourceResponse response = integrationResourceService.registerFigma(projectId, userId, request);
+        return ResponseEntity.status(IntegrationSuccessCode.INTEGRATION_RESOURCE_REGISTERED.getHttpStatus())
+                .body(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_RESOURCE_REGISTERED, response));
+    }
+
+    @Override
+    @PostMapping("/projects/{projectId}/integrations/collect")
+    public ResponseEntity<ApiResponse<IntegrationCollectionResponse>> collectIntegrationData(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal Long userId
+    ) {
+        IntegrationCollectionResponse response = integrationDataCollectionService.collectNow(projectId, userId);
+        return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_DATA_COLLECTED, response));
     }
 
     @Override

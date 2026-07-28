@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.plog.domain.project.dto.ProjectSettingsDto;
 import com.plog.domain.project.service.ProjectSettingsService;
 import com.plog.global.security.jwt.JwtProvider;
+import com.plog.global.security.jwt.MediaTokenProvider;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,8 @@ class ProjectSettingsControllerTest {
     private ProjectSettingsService projectSettingsService;
     @MockitoBean
     private JwtProvider jwtProvider;
+    @MockitoBean
+    private MediaTokenProvider mediaTokenProvider;
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;
 

@@ -26,7 +26,8 @@ class RefreshTokenServiceTest {
     private static final Duration REFRESH_TTL = Duration.ofDays(14);
 
     private final JwtProperties jwtProperties = new JwtProperties(
-            "test-secret-key-that-is-long-enough-for-hs256", Duration.ofMinutes(30), REFRESH_TTL);
+            "test-secret-key-that-is-long-enough-for-hs256", Duration.ofMinutes(30), REFRESH_TTL,
+            Duration.ofDays(14));
 
     @Mock
     private RefreshTokenRepository refreshTokenRepository;

@@ -10,6 +10,7 @@ import com.plog.domain.user.dto.request.ProfileUpdateRequest;
 import com.plog.domain.user.entity.ProfilePreset;
 import com.plog.domain.user.service.ProfileService;
 import com.plog.global.security.jwt.JwtProvider;
+import com.plog.global.security.jwt.MediaTokenProvider;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,8 @@ class ProfileControllerTest {
     private ProfileService profileService;
     @MockitoBean
     private JwtProvider jwtProvider;
+    @MockitoBean
+    private MediaTokenProvider mediaTokenProvider;
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;
 

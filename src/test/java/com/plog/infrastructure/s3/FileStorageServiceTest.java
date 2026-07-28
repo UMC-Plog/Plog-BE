@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import com.plog.global.api.exception.ApiException;
@@ -21,7 +22,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectTaggingRequest;
 import software.amazon.awssdk.services.s3.model.Tag;
@@ -244,5 +248,22 @@ class FileStorageServiceTest {
                 UploadedFileStatus.ORPHANED, 7L);
 
         assertThat(tagged).isFalse();
+    }
+
+    @Test
+    void openStream은_객체가_없으면_비어있는_Optional을_준다() {
+        given(s3Client.getObject(any(GetObjectRequest.class)))
+                .willThrow(NoSuchKeyException.builder().message("missing").build());
+
+        assertThat(service.openStream("chats/users/1/uuid/a.png")).isEmpty();
+    }
+
+    @Test
+    void openStream은_S3_스트림을_그대로_전달한다() {
+        @SuppressWarnings("unchecked")
+        ResponseInputStream<GetObjectResponse> stream = mock(ResponseInputStream.class);
+        given(s3Client.getObject(any(GetObjectRequest.class))).willReturn(stream);
+
+        assertThat(service.openStream("chats/users/1/uuid/a.png")).contains(stream);
     }
 }

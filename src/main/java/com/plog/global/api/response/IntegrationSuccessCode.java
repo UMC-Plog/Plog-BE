@@ -11,7 +11,10 @@ public enum IntegrationSuccessCode implements BaseCode {
 
     AUTHORIZATION_URL_ISSUED(HttpStatus.OK, "INTEGRATION001", "외부 연동 인증 URL을 발급했습니다."),
     INTEGRATION_CONNECTED(HttpStatus.OK, "INTEGRATION002", "외부 연동을 완료했습니다."),
-    INTEGRATION_DISCONNECTED(HttpStatus.OK, "INTEGRATION003", "외부 연동을 해제했습니다.");
+    INTEGRATION_DISCONNECTED(HttpStatus.OK, "INTEGRATION003", "외부 연동을 해제했습니다."),
+    INTEGRATION_RESOURCES_RETRIEVED(HttpStatus.OK, "INTEGRATION004", "외부 연동 리소스를 조회했습니다."),
+    INTEGRATION_RESOURCE_REGISTERED(HttpStatus.CREATED, "INTEGRATION005", "외부 연동 리소스를 등록했습니다."),
+    INTEGRATION_DATA_COLLECTED(HttpStatus.OK, "INTEGRATION006", "외부 연동 데이터를 수집했습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

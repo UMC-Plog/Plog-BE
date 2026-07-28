@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.plog.global.security.jwt.JwtProvider;
+import com.plog.global.security.jwt.MediaTokenProvider;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +35,8 @@ class FileStorageControllerTest {
     private UploadedFileService uploadedFileService;
     @MockitoBean
     private JwtProvider jwtProvider;
+    @MockitoBean
+    private MediaTokenProvider mediaTokenProvider;
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;
 

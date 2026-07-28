@@ -8,6 +8,8 @@ import com.plog.domain.user.dto.response.TokenResponse;
 import com.plog.domain.user.entity.ProviderType;
 import com.plog.domain.user.entity.SocialLoginStatus;
 import com.plog.domain.user.service.SocialLoginService;
+import com.plog.global.security.jwt.MediaCookieFactory;
+import org.springframework.http.HttpHeaders;
 import com.plog.domain.user.service.SocialSignupService;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -27,11 +29,14 @@ public class SocialAuthController implements SocialAuthControllerDoc {
 
     private final SocialLoginService socialLoginService;
     private final SocialSignupService socialSignupService;
+    private final MediaCookieFactory mediaCookieFactory;
 
     public SocialAuthController(SocialLoginService socialLoginService,
-                                SocialSignupService socialSignupService) {
+                                SocialSignupService socialSignupService,
+                                MediaCookieFactory mediaCookieFactory) {
         this.socialLoginService = socialLoginService;
         this.socialSignupService = socialSignupService;
+        this.mediaCookieFactory = mediaCookieFactory;
     }
 
     // 리터럴 경로(/signup)가 템플릿(/{provider})보다 먼저 매칭되므로 두 매핑은 충돌하지 않는다.
@@ -44,7 +49,14 @@ public class SocialAuthController implements SocialAuthControllerDoc {
         AuthSuccessCode code = response.status() == SocialLoginStatus.LOGIN
                 ? AuthSuccessCode.SOCIAL_LOGIN_SUCCESS
                 : AuthSuccessCode.SOCIAL_SIGNUP_REQUIRED;
-        return ResponseEntity.status(code.getHttpStatus()).body(ApiResponse.success(code, response));
+
+        // SIGNUP_REQUIRED 에는 토큰이 없다(ticket/email 만 내려간다) → 쿠키를 심지 않는다.
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(code.getHttpStatus());
+        if (response.status() == SocialLoginStatus.LOGIN) {
+            builder.header(HttpHeaders.SET_COOKIE,
+                    mediaCookieFactory.issue(response.accessToken()).toString());
+        }
+        return builder.body(ApiResponse.success(code, response));
     }
 
     @Override
@@ -53,6 +65,8 @@ public class SocialAuthController implements SocialAuthControllerDoc {
             @Valid @RequestBody SocialSignupRequest request) {
         TokenResponse tokens = socialSignupService.signup(request);
         return ResponseEntity.status(AuthSuccessCode.SOCIAL_SIGNUP_COMPLETED.getHttpStatus())
+                .header(HttpHeaders.SET_COOKIE,
+                        mediaCookieFactory.issue(tokens.accessToken()).toString())
                 .body(ApiResponse.success(AuthSuccessCode.SOCIAL_SIGNUP_COMPLETED, tokens));
     }
 

@@ -11,6 +11,7 @@ import com.plog.domain.evaluation.dto.request.SelfFeedbackCreateRequest;
 import com.plog.domain.evaluation.dto.response.SelfFeedbackUpdateResponse;
 import com.plog.domain.evaluation.service.SelfFeedbackService;
 import com.plog.global.security.jwt.JwtProvider;
+import com.plog.global.security.jwt.MediaTokenProvider;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,8 @@ class SelfFeedbackControllerTest {
 
     @MockitoBean
     private JwtProvider jwtProvider;
+    @MockitoBean
+    private MediaTokenProvider mediaTokenProvider;
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;

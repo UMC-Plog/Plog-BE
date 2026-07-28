@@ -23,6 +23,7 @@ import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.security.jwt.JwtProvider;
+import com.plog.global.security.jwt.MediaTokenProvider;
 import java.time.LocalDate;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,8 @@ class ProjectControllerTest {
 
     @MockitoBean
     private JwtProvider jwtProvider;
+    @MockitoBean
+    private MediaTokenProvider mediaTokenProvider;
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;
