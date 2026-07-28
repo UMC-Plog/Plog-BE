@@ -15,6 +15,8 @@ import com.plog.domain.integration.dto.NotionResourceType;
 import com.plog.domain.integration.dto.request.FigmaResourceRegisterRequest;
 import com.plog.domain.integration.dto.request.GoogleResourceRegisterRequest;
 import com.plog.domain.integration.dto.request.NotionResourceRegisterRequest;
+import com.plog.domain.integration.dto.response.IntegrationCollectionFailureResponse;
+import com.plog.domain.integration.dto.response.IntegrationCollectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationItemResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceCandidateResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceListResponse;
@@ -26,6 +28,7 @@ import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.service.FigmaIntegrationService;
 import com.plog.domain.integration.service.GithubIntegrationService;
 import com.plog.domain.integration.service.GoogleIntegrationService;
+import com.plog.domain.integration.service.IntegrationDataCollectionService;
 import com.plog.domain.integration.service.IntegrationResourceService;
 import com.plog.domain.integration.service.IntegrationService;
 import com.plog.domain.integration.service.NotionIntegrationService;
@@ -60,6 +63,9 @@ class IntegrationControllerTest {
 
     @MockitoBean
     private IntegrationResourceService integrationResourceService;
+
+    @MockitoBean
+    private IntegrationDataCollectionService integrationDataCollectionService;
 
     @MockitoBean
     private GithubIntegrationService githubIntegrationService;
@@ -415,6 +421,38 @@ class IntegrationControllerTest {
                                 """))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("INTEGRATION010"));
+    }
+
+    @Test
+    @DisplayName("외부 연동 데이터 수동 수집 결과에 성공 수와 실패 리소스 정보를 반환한다")
+    void collectIntegrationDataReturnsCollectionResult() throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationDataCollectionService.collectNow(eq(projectId), eq(userId)))
+                .willReturn(new IntegrationCollectionResponse(
+                        projectId,
+                        3,
+                        2,
+                        List.of(new IntegrationCollectionFailureResponse(
+                                12L,
+                                LinkType.GOOGLE,
+                                "캡스톤 발표자료",
+                                "provider resource access denied"
+                        ))
+                ));
+
+        mockMvc.perform(post("/api/projects/{projectId}/integrations/collect", projectId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.code").value("INTEGRATION006"))
+                .andExpect(jsonPath("$.result.projectId").value(projectId))
+                .andExpect(jsonPath("$.result.requestedResourceCount").value(3))
+                .andExpect(jsonPath("$.result.collectedResourceCount").value(2))
+                .andExpect(jsonPath("$.result.failures[0].resourceId").value(12L))
+                .andExpect(jsonPath("$.result.failures[0].linkType").value("GOOGLE"))
+                .andExpect(jsonPath("$.result.failures[0].resourceName").value("캡스톤 발표자료"))
+                .andExpect(jsonPath("$.result.failures[0].reason").value("provider resource access denied"));
     }
 
     private void authenticate(Long userId) {
