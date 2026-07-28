@@ -9,7 +9,6 @@ public record PeerEvaluationDetailResponse(
         Long peerId,
         int collaborationScore,
         int initiativeScore,
-        int responsibilityScore,
         int communicationScore,
         int outputScore,
         List<String> keyword,
@@ -20,7 +19,6 @@ public record PeerEvaluationDetailResponse(
                 .peerId(evaluation.getId())
                 .collaborationScore(evaluation.getCollaborationScore())
                 .initiativeScore(evaluation.getInitiativeScore())
-                .responsibilityScore(evaluation.getResponsibilityScore())
                 .communicationScore(evaluation.getCommunicationScore())
                 .outputScore(evaluation.getOutputScore())
                 .keyword(evaluation.getKeywords())

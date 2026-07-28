@@ -12,7 +12,6 @@ public record PeerEvaluationCreateRequest(
         int collaborationScore,
 
         @Min(1) @Max(5) int initiativeScore,
-        @Min(1) @Max(5) int responsibilityScore,
         @Min(1) @Max(5) int communicationScore,
         @Min(1) @Max(5) int outputScore,
 

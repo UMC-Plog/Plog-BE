@@ -97,7 +97,6 @@ public class EvaluationService {
                 .evaluatee(evaluatee)
                 .collaborationScore(request.collaborationScore())
                 .initiativeScore(request.initiativeScore())
-                .responsibilityScore(request.responsibilityScore())
                 .communicationScore(request.communicationScore())
                 .outputScore(request.outputScore())
                 .keywords(request.keywords())
@@ -130,7 +129,6 @@ public class EvaluationService {
         evaluation.update(
                 request.collaborationScore(),
                 request.initiativeScore(),
-                request.responsibilityScore(),
                 request.communicationScore(),
                 request.outputScore(),
                 request.keywords(),
@@ -143,7 +141,6 @@ public class EvaluationService {
     private boolean hasUniformScores(PeerEvaluationCreateRequest request) {
         int firstScore = request.collaborationScore();
         return firstScore == request.initiativeScore() &&
-                firstScore == request.responsibilityScore() &&
                 firstScore == request.communicationScore() &&
                 firstScore == request.outputScore();
     }
