@@ -6,6 +6,7 @@ import com.plog.domain.integration.dto.request.FigmaResourceRegisterRequest;
 import com.plog.domain.integration.dto.request.GoogleResourceRegisterRequest;
 import com.plog.domain.integration.dto.request.NotionResourceRegisterRequest;
 import com.plog.domain.integration.dto.response.IntegrationAuthorizationResponse;
+import com.plog.domain.integration.dto.response.IntegrationCollectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationConnectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationDisconnectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceCandidateResponse;
@@ -16,6 +17,7 @@ import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.service.FigmaIntegrationService;
 import com.plog.domain.integration.service.GithubIntegrationService;
 import com.plog.domain.integration.service.GoogleIntegrationService;
+import com.plog.domain.integration.service.IntegrationDataCollectionService;
 import com.plog.domain.integration.service.IntegrationResourceService;
 import com.plog.domain.integration.service.IntegrationService;
 import com.plog.domain.integration.service.NotionIntegrationService;
@@ -46,6 +48,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class IntegrationController implements IntegrationControllerDoc {
 
     private final IntegrationService integrationService;
+    private final IntegrationDataCollectionService integrationDataCollectionService;
     private final GithubIntegrationService githubIntegrationService;
     private final FigmaIntegrationService figmaIntegrationService;
     private final NotionIntegrationService notionIntegrationService;
@@ -153,6 +156,15 @@ public class IntegrationController implements IntegrationControllerDoc {
         IntegrationResourceResponse response = integrationResourceService.registerFigma(projectId, userId, request);
         return ResponseEntity.status(IntegrationSuccessCode.INTEGRATION_RESOURCE_REGISTERED.getHttpStatus())
                 .body(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_RESOURCE_REGISTERED, response));
+    }
+
+    @PostMapping("/projects/{projectId}/integrations/collect")
+    public ResponseEntity<ApiResponse<IntegrationCollectionResponse>> collectIntegrationData(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal Long userId
+    ) {
+        IntegrationCollectionResponse response = integrationDataCollectionService.collectNow(projectId, userId);
+        return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_DATA_COLLECTED, response));
     }
 
     @Override
