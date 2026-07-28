@@ -15,6 +15,7 @@ import com.plog.global.api.error.ReportErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.SliceResponse;
 import com.plog.global.security.jwt.JwtProvider;
+import com.plog.global.security.jwt.MediaTokenProvider;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -46,6 +47,8 @@ class ReportControllerTest {
 
     @MockitoBean
     private JwtProvider jwtProvider;
+    @MockitoBean
+    private MediaTokenProvider mediaTokenProvider;
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;

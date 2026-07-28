@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.plog.domain.project.dto.response.ProjectLeaveResponse;
 import com.plog.domain.project.service.ProjectLeaveService;
 import com.plog.global.security.jwt.JwtProvider;
+import com.plog.global.security.jwt.MediaTokenProvider;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,8 @@ class ProjectLeaveControllerTest {
 
     @MockitoBean
     private JwtProvider jwtProvider;
+    @MockitoBean
+    private MediaTokenProvider mediaTokenProvider;
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;

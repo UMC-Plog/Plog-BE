@@ -13,6 +13,7 @@ import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.service.ProjectListService;
 import com.plog.global.api.response.SliceResponse;
 import com.plog.global.security.jwt.JwtProvider;
+import com.plog.global.security.jwt.MediaTokenProvider;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -38,6 +39,8 @@ class ProjectListControllerTest {
 
     @MockitoBean
     private JwtProvider jwtProvider;
+    @MockitoBean
+    private MediaTokenProvider mediaTokenProvider;
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;

@@ -13,6 +13,8 @@ import com.plog.global.security.jwt.JwtAccessDeniedHandler;
 import com.plog.global.security.jwt.JwtAuthenticationEntryPoint;
 import com.plog.global.security.jwt.JwtAuthenticationFilter;
 import com.plog.global.security.jwt.JwtProvider;
+import com.plog.global.security.jwt.MediaCookieAuthenticationFilter;
+import com.plog.global.security.jwt.MediaTokenProvider;
 import io.jsonwebtoken.JwtException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -31,6 +33,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({
         SecurityConfig.class,
         JwtAuthenticationFilter.class,
+        MediaCookieAuthenticationFilter.class,
         JwtAuthenticationEntryPoint.class,
         JwtAccessDeniedHandler.class,
         ProjectJoinControllerSecurityTest.TestCorsConfiguration.class
@@ -45,6 +48,8 @@ class ProjectJoinControllerSecurityTest {
 
     @MockitoBean
     private JwtProvider jwtProvider;
+    @MockitoBean
+    private MediaTokenProvider mediaTokenProvider;
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;

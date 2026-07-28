@@ -17,12 +17,15 @@ spring:
 # SecurityConfig 의 setAllowedOrigins 는 정확 일치라 와일드카드가 통하지 않는다 → 주소를 그대로 적는다.
 # 커스텀 도메인 연결 전후 주소를 모두 넣어둬서, 프론트가 도메인을 붙일 때 백엔드 재배포가 필요 없게 한다.
 app:
+  # 채팅 첨부 프록시 URL을 절대 경로로 조립할 때 쓰는 API 오리진.
+  media:
+    base-url: https://api.umc-plog.site
   cors:
     allowed-origins:
       - http://localhost:5173         # Vite 로컬 프론트 (배포된 API로 개발)
       - http://localhost:3000
       - https://plog-fe.vercel.app    # Vercel 기본 도메인. 커스텀 도메인을 붙여도 alias 로 남는다
-      - https://umc-plog.site         # 프론트 커스텀 도메인(연결 예정). 백엔드는 api 서브도메인을 쓴다
+      - https://umc-plog.site         # 프론트 커스텀 도메인. 백엔드는 api 서브도메인을 쓴다
       - https://www.umc-plog.site     # Vercel 에서 www 를 primary 로 잡는 경우 Origin 이 이 값으로 온다
 
 server:

@@ -6,10 +6,13 @@ import com.plog.domain.user.dto.response.TokenResponse;
 import com.plog.domain.user.service.AuthService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.AuthSuccessCode;
+import com.plog.global.security.jwt.MediaCookieFactory;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -22,9 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final MediaCookieFactory mediaCookieFactory;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, MediaCookieFactory mediaCookieFactory) {
         this.authService = authService;
+        this.mediaCookieFactory = mediaCookieFactory;
     }
 
     @Operation(
@@ -40,7 +45,8 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<TokenResponse>> login(@Valid @RequestBody LoginRequest request) {
         TokenResponse tokens = authService.login(request.email(), request.password());
-        return success(AuthSuccessCode.LOGIN_SUCCESS, tokens);
+        return success(AuthSuccessCode.LOGIN_SUCCESS, tokens,
+                mediaCookieFactory.issue(tokens.accessToken()));
     }
 
     @Operation(
@@ -55,7 +61,8 @@ public class AuthController {
     @PostMapping("/reissue")
     public ResponseEntity<ApiResponse<TokenResponse>> reissue(@Valid @RequestBody TokenRefreshRequest request) {
         TokenResponse tokens = authService.reissue(request.refreshToken());
-        return success(AuthSuccessCode.TOKEN_REISSUED, tokens);
+        return success(AuthSuccessCode.TOKEN_REISSUED, tokens,
+                mediaCookieFactory.issue(tokens.accessToken()));
     }
 
     @Operation(
@@ -71,10 +78,18 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(@Valid @RequestBody TokenRefreshRequest request) {
         authService.logout(request.refreshToken());
-        return success(AuthSuccessCode.LOGOUT_SUCCESS, null);
+        return success(AuthSuccessCode.LOGOUT_SUCCESS, null, mediaCookieFactory.clear());
     }
 
-    private <T> ResponseEntity<ApiResponse<T>> success(AuthSuccessCode code, T result) {
-        return ResponseEntity.status(code.getHttpStatus()).body(ApiResponse.success(code, result));
+    /**
+     * 미디어 쿠키를 함께 심는다. 이미지 인라인 표시(&lt;img&gt;)는 Authorization 헤더를
+     * 실을 수 없어 이 쿠키가 유일한 인증 수단이다. 토큰을 만드는 응답이 하나라도 빠지면
+     * 그 경로로 로그인한 사용자만 채팅 이미지가 깨진다.
+     */
+    private <T> ResponseEntity<ApiResponse<T>> success(
+            AuthSuccessCode code, T result, ResponseCookie mediaCookie) {
+        return ResponseEntity.status(code.getHttpStatus())
+                .header(HttpHeaders.SET_COOKIE, mediaCookie.toString())
+                .body(ApiResponse.success(code, result));
     }
 }

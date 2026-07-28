@@ -11,6 +11,7 @@ import com.plog.domain.evaluation.dto.request.PeerEvaluationCreateRequest;
 import com.plog.domain.evaluation.dto.response.PeerEvaluationCreateResponse;
 import com.plog.domain.evaluation.service.EvaluationService;
 import com.plog.global.security.jwt.JwtProvider;
+import com.plog.global.security.jwt.MediaTokenProvider;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +38,8 @@ class EvaluationControllerTest {
 
     @MockitoBean
     private JwtProvider jwtProvider;
+    @MockitoBean
+    private MediaTokenProvider mediaTokenProvider;
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;

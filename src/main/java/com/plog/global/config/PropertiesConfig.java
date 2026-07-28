@@ -18,6 +18,7 @@ import org.springframework.context.annotation.Configuration;
         EmailVerificationProperties.class,
         WithdrawalProperties.class,
         CorsProperties.class,
+        MediaProperties.class,
         GithubIntegrationProperties.class,
         FigmaIntegrationProperties.class,
         NotionIntegrationProperties.class,

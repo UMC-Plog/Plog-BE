@@ -10,6 +10,8 @@ import com.plog.global.security.jwt.JwtAccessDeniedHandler;
 import com.plog.global.security.jwt.JwtAuthenticationEntryPoint;
 import com.plog.global.security.jwt.JwtAuthenticationFilter;
 import com.plog.global.security.jwt.JwtProvider;
+import com.plog.global.security.jwt.MediaCookieAuthenticationFilter;
+import com.plog.global.security.jwt.MediaTokenProvider;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -25,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({
         SecurityConfig.class,
         JwtAuthenticationFilter.class,
+        MediaCookieAuthenticationFilter.class,
         JwtAuthenticationEntryPoint.class,
         JwtAccessDeniedHandler.class
 })
@@ -35,6 +38,8 @@ class FcmTokenControllerSecurityTest {
     private FcmTokenService fcmTokenService;
     @MockitoBean
     private JwtProvider jwtProvider;
+    @MockitoBean
+    private MediaTokenProvider mediaTokenProvider;
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;
 

@@ -7,12 +7,15 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Set;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriUtils;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
@@ -150,6 +153,28 @@ public class FileStorageService {
                         .signatureDuration(duration).getObjectRequest(getObject).build())
                 .url().toString();
         return new FileStorageDto.PresignedDownloadResponse(downloadUrl, duration.getSeconds());
+    }
+
+    /**
+     * 프록시 전달용 S3 객체 스트림. 호출자가 반드시 닫아야 한다 —
+     * 새면 S3 커넥션 풀이 조용히 고갈되고 "한참 뒤 전체 첨부 먹통"으로 나타난다.
+     * <p>
+     * 객체가 없으면 Optional.empty(). headMatches/applyState 가 NoSuchKey 를 false 로
+     * 돌려주는 것과 같은 규약이다 — 도메인 에러코드는 호출자가 정한다.
+     */
+    public Optional<ResponseInputStream<GetObjectResponse>> openStream(String fileKey) {
+        ensureEnabled();
+        try {
+            return Optional.of(s3Client.getObject(
+                    GetObjectRequest.builder().bucket(bucket).key(fileKey).build()));
+        } catch (NoSuchKeyException exception) {
+            return Optional.empty();
+        } catch (S3Exception exception) {
+            if (exception.statusCode() == 404) {
+                return Optional.empty();
+            }
+            throw new ApiException(FileStorageErrorCode.FILE_STORAGE_ERROR, exception);
+        }
     }
 
     /**
