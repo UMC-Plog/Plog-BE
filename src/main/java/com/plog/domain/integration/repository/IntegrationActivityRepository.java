@@ -1,7 +1,9 @@
 package com.plog.domain.integration.repository;
 
 import com.plog.domain.integration.entity.IntegrationActivity;
+import com.plog.domain.project.entity.ProjectMember;
 import java.time.Instant;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -31,6 +33,89 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
             @Param("occurredAt") Instant occurredAt,
             @Param("sourceUrl") String sourceUrl,
             @Param("providerPayload") String providerPayload
+    );
+
+    @Query("select activity.actorProviderId as actorProviderId, "
+            + "activity.actorLogin as actorLogin, activity.actorEmail as actorEmail, "
+            + "count(activity.id) as activityCount, "
+            + "min(activity.occurredAt) as firstOccurredAt, max(activity.occurredAt) as lastOccurredAt "
+            + "from IntegrationActivity activity "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "
+            + "and (activity.actorProviderId is not null or activity.actorLogin is not null "
+            + "or activity.actorEmail is not null) "
+            + "group by activity.actorProviderId, activity.actorLogin, activity.actorEmail")
+    List<IntegrationActorObservation> findActorObservations(
+            @Param("projectIntegrationId") Long projectIntegrationId
+    );
+
+    @Modifying(flushAutomatically = true)
+    @Query("update IntegrationActivity activity set activity.projectMember = :projectMember "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "
+            + "and activity.projectMember is null "
+            + "and activity.actorProviderId = :actorProviderId")
+    int assignProjectMemberByProviderId(
+            @Param("projectIntegrationId") Long projectIntegrationId,
+            @Param("projectMember") ProjectMember projectMember,
+            @Param("actorProviderId") String actorProviderId
+    );
+
+    @Modifying(flushAutomatically = true)
+    @Query("update IntegrationActivity activity set activity.projectMember = :projectMember "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "
+            + "and activity.projectMember is null "
+            + "and activity.actorProviderId is null "
+            + "and lower(activity.actorEmail) = :actorEmail")
+    int assignProjectMemberByEmail(
+            @Param("projectIntegrationId") Long projectIntegrationId,
+            @Param("projectMember") ProjectMember projectMember,
+            @Param("actorEmail") String actorEmail
+    );
+
+    @Modifying(flushAutomatically = true)
+    @Query("update IntegrationActivity activity set activity.projectMember = :projectMember "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "
+            + "and activity.projectMember is null "
+            + "and activity.actorProviderId is null "
+            + "and lower(activity.actorLogin) = :actorLogin")
+    int assignProjectMemberByLogin(
+            @Param("projectIntegrationId") Long projectIntegrationId,
+            @Param("projectMember") ProjectMember projectMember,
+            @Param("actorLogin") String actorLogin
+    );
+
+    @Modifying(flushAutomatically = true)
+    @Query("update IntegrationActivity activity set activity.projectMember = null "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "
+            + "and activity.projectMember = :expectedMember "
+            + "and activity.actorProviderId = :actorProviderId")
+    int clearProjectMemberByProviderId(
+            @Param("projectIntegrationId") Long projectIntegrationId,
+            @Param("expectedMember") ProjectMember expectedMember,
+            @Param("actorProviderId") String actorProviderId
+    );
+
+    @Modifying(flushAutomatically = true)
+    @Query("update IntegrationActivity activity set activity.projectMember = null "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "
+            + "and activity.projectMember = :expectedMember "
+            + "and activity.actorProviderId is null "
+            + "and lower(activity.actorEmail) = :actorEmail")
+    int clearProjectMemberByEmail(
+            @Param("projectIntegrationId") Long projectIntegrationId,
+            @Param("expectedMember") ProjectMember expectedMember,
+            @Param("actorEmail") String actorEmail
+    );
+
+    @Modifying(flushAutomatically = true)
+    @Query("update IntegrationActivity activity set activity.projectMember = null "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "
+            + "and activity.projectMember = :expectedMember "
+            + "and activity.actorProviderId is null "
+            + "and lower(activity.actorLogin) = :actorLogin")
+    int clearProjectMemberByLogin(
+            @Param("projectIntegrationId") Long projectIntegrationId,
+            @Param("expectedMember") ProjectMember expectedMember,
+            @Param("actorLogin") String actorLogin
     );
 
     void deleteAllByIntegrationResourceProjectIntegrationId(Long projectIntegrationId);
