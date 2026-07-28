@@ -61,14 +61,13 @@ class EvaluationServiceTest {
                 .evaluatee(evaluatee)
                 .collaborationScore(1)
                 .initiativeScore(1)
-                .responsibilityScore(1)
                 .communicationScore(1)
                 .outputScore(1)
                 .keywords(List.of("기존 키워드"))
                 .feedback("기존 평가")
                 .build();
         PeerEvaluationCreateRequest request = new PeerEvaluationCreateRequest(
-                4, 4, 5, 5, 4, List.of("소통능력"), "수정된 동료 평가");
+                4, 4, 5, 4, List.of("소통능력"), "수정된 동료 평가");
         when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(evaluator));
         when(projectMemberRepository.findById(20L)).thenReturn(Optional.of(evaluatee));
         when(peerEvaluationRepository.findByEvaluatorIdAndEvaluateeId(10L, 20L)).thenReturn(Optional.of(evaluation));
@@ -91,7 +90,7 @@ class EvaluationServiceTest {
         when(projectMemberRepository.findById(20L)).thenReturn(Optional.of(evaluatee));
 
         assertThatThrownBy(() -> evaluationService.updatePeerEvaluation(
-                1L, 20L, 7L, new PeerEvaluationCreateRequest(4, 4, 5, 5, 4, List.of("소통능력"), "수정된 동료 평가")))
+                1L, 20L, 7L, new PeerEvaluationCreateRequest(4, 4, 5, 4, List.of("소통능력"), "수정된 동료 평가")))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode())
                                 .isEqualTo(EvaluationErrorCode.CANNOT_MODIFY_EVALUATION_AFTER_PUBLISH));

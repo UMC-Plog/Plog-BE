@@ -50,9 +50,6 @@ public class PeerEvaluation extends BaseEntity {
     @Column(name = "initiative_score", nullable = false)
     private int initiativeScore;
 
-    @Column(name = "responsibility_score", nullable = false)
-    private int responsibilityScore;
-
     @Column(name = "communication_score", nullable = false)
     private int communicationScore;
 
@@ -69,7 +66,6 @@ public class PeerEvaluation extends BaseEntity {
     public void update(
             int collaborationScore,
             int initiativeScore,
-            int responsibilityScore,
             int communicationScore,
             int outputScore,
             List<String> keywords,
@@ -77,7 +73,6 @@ public class PeerEvaluation extends BaseEntity {
     ) {
         this.collaborationScore = collaborationScore;
         this.initiativeScore = initiativeScore;
-        this.responsibilityScore = responsibilityScore;
         this.communicationScore = communicationScore;
         this.outputScore = outputScore;
         this.keywords = keywords;
