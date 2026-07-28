@@ -53,7 +53,10 @@ class FigmaIntegrationResourceCollector implements IntegrationResourceCollector 
             for (JsonNode reaction : comment.path("reactions")) {
                 JsonNode reactionUser = reaction.path("user");
                 activityStoreService.store(resource, IntegrationActivityType.FIGMA_COMMENT_REACTION,
-                        "reaction:" + comment.path("id").asText() + ":" + reaction.path("id").asText(),
+                        "reaction:" + comment.path("id").asText()
+                                + ":" + reactionUser.path("id").asText()
+                                + ":" + reaction.path("emoji").asText()
+                                + ":" + reaction.path("created_at").asText(),
                         reactionUser.path("id").asText(null), reactionUser.path("handle").asText(null),
                         reactionUser.path("email").asText(null),
                         parseInstant(reaction.path("created_at").asText(null)), resource.getResourceUrl(),
