@@ -108,4 +108,24 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
             @Param("status") MemberStatus status,
             @Param("nicknames") Collection<String> nicknames
     );
+
+    // 멘션 가능한 멤버 목록(채팅 @자동완성용). 표시 닉네임 기준(anNickname 우선, 없으면 user.nickname)으로
+    // 검색/정렬한다 — 멘션 매칭(findActiveMembersByProjectIdAndNicknameIn)과 동일한 기준을 써야
+    // "목록에서 고른 이름"과 "실제 매칭되는 이름"이 어긋나지 않는다.
+    // keyword는 null을 절대 넘기면 안 된다. PostgreSQL이 "(:keyword is null or ...)" 형태에서
+    // null-only 파라미터의 타입을 추론하지 못해 bytea로 잘못 캐스팅하는 문제가 있었다
+    // (lower(bytea) 함수 없음 에러). 호출부(Service)에서 null/blank면 빈 문자열("")로 정규화해서 넘긴다.
+    // 빈 문자열이면 LIKE '%%'가 되어 전체 매칭과 동일하게 동작한다.
+    @EntityGraph(attributePaths = {"user"})
+    @Query("select member from ProjectMember member "
+            + "where member.project.id = :projectId and member.status = :status "
+            + "and member.id <> :excludeMemberId "
+            + "and lower(coalesce(member.anNickname, member.user.nickname)) like lower(concat('%', :keyword, '%')) "
+            + "order by coalesce(member.anNickname, member.user.nickname) asc")
+    List<ProjectMember> findMentionableMembers(
+            @Param("projectId") Long projectId,
+            @Param("status") MemberStatus status,
+            @Param("excludeMemberId") Long excludeMemberId,
+            @Param("keyword") String keyword
+    );
 }

@@ -24,7 +24,7 @@ public class NotificationController {
 
     // 다른 목록 API(채팅 메시지 목록, MAX_SIZE=100)와 동일한 상한 정책을 따른다.
     private static final int MAX_PAGE_SIZE = 100;
-    
+
     private final NotificationQueryService notificationQueryService;
 
     @Operation(
