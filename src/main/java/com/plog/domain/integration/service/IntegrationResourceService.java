@@ -21,15 +21,15 @@ import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
-import java.net.URI;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
@@ -119,16 +119,25 @@ public class IntegrationResourceService {
                 integration.getProviderConnectionId());
         java.util.Set<String> selectedRepositoryIds = repositories.stream()
                 .map(GithubAppClient.Repository::id)
-                .collect(java.util.stream.Collectors.toCollection(HashSet::new));
-        integrationResourceRepository.findAllByProjectIntegrationIdOrderByIdAsc(integration.getId()).stream()
+                .collect(Collectors.toSet());
+        List<IntegrationResource> existingResources = integrationResourceRepository
+                .findAllByProjectIntegrationIdOrderByIdAsc(integration.getId());
+        existingResources.stream()
                 .filter(resource -> resource.getResourceType() == IntegrationResourceType.GITHUB_REPOSITORY)
                 .filter(resource -> !selectedRepositoryIds.contains(resource.getProviderResourceId()))
                 .forEach(IntegrationResource::disable);
+        Map<String, IntegrationResource> existingResourceByProviderId = existingResources.stream()
+                .collect(Collectors.toMap(
+                        IntegrationResource::getProviderResourceId,
+                        Function.identity(),
+                        (existing, ignored) -> existing
+                ));
         for (GithubAppClient.Repository repository : repositories) {
-            IntegrationResource existing = integrationResourceRepository.findByProjectIntegrationIdAndProviderResourceId(
-                    integration.getId(), repository.id()).orElse(null);
+            IntegrationResource existing = existingResourceByProviderId.get(repository.id());
             if (existing != null) {
-                existing.activate();
+                existing.updateProviderMetadata(
+                        connectedBy, repository.fullName(), repository.htmlUrl(), repository.payload(),
+                        repository.lastModifiedAt());
                 continue;
             }
             saveResource(integration, connectedBy, new ValidatedResource(
@@ -199,12 +208,12 @@ public class IntegrationResourceService {
         IntegrationResourceType resourceType = request.resourceType() == NotionResourceType.PAGE
                 ? IntegrationResourceType.NOTION_PAGE
                 : IntegrationResourceType.NOTION_DATA_SOURCE;
-        String path = resourceType == IntegrationResourceType.NOTION_PAGE
-                ? "/v1/pages/" + request.providerResourceId()
-                : "/v1/data_sources/" + request.providerResourceId();
+        String uriTemplate = resourceType == IntegrationResourceType.NOTION_PAGE
+                ? "https://api.notion.com/v1/pages/{resourceId}"
+                : "https://api.notion.com/v1/data_sources/{resourceId}";
         try {
             JsonNode body = restClient.get()
-                    .uri("https://api.notion.com" + path)
+                    .uri(uriTemplate, request.providerResourceId())
                     .header("Notion-Version", NOTION_VERSION)
                     .headers(headers -> headers.setBearerAuth(projectIntegrationService.decryptAccessToken(integration)))
                     .retrieve()
@@ -267,7 +276,7 @@ public class IntegrationResourceService {
         String fileKey = parseFigmaFileKey(request.fileUrl());
         try {
             JsonNode body = restClient.get()
-                    .uri(URI.create("https://api.figma.com/v1/files/" + fileKey + "?depth=1"))
+                    .uri("https://api.figma.com/v1/files/{fileKey}?depth=1", fileKey)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + projectIntegrationService.decryptAccessToken(integration))
                     .retrieve()
                     .body(JsonNode.class);
@@ -357,7 +366,7 @@ public class IntegrationResourceService {
     private String parseFigmaFileKey(String resourceUrl) {
         Matcher matcher = FIGMA_FILE_KEY.matcher(resourceUrl);
         if (!matcher.find()) {
-            throw new ApiException(IntegrationErrorCode.EXTERNAL_RESOURCE_NOT_FOUND);
+            throw new ApiException(IntegrationErrorCode.INVALID_EXTERNAL_RESOURCE_URL);
         }
         return matcher.group(1);
     }

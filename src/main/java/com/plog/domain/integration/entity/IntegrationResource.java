@@ -102,6 +102,21 @@ public class IntegrationResource extends BaseEntity {
         this.resourceStatus = IntegrationResourceStatus.ACTIVE;
     }
 
+    public void updateProviderMetadata(
+            ProjectMember selectedByProjectMember,
+            String resourceName,
+            String resourceUrl,
+            String providerMetadata,
+            Instant lastModifiedAt
+    ) {
+        this.selectedByProjectMember = selectedByProjectMember;
+        this.resourceName = resourceName;
+        this.resourceUrl = resourceUrl;
+        this.providerMetadata = providerMetadata;
+        this.lastModifiedAt = lastModifiedAt;
+        this.resourceStatus = IntegrationResourceStatus.ACTIVE;
+    }
+
     public void requireReauthorization() {
         this.resourceStatus = IntegrationResourceStatus.REAUTH_REQUIRED;
     }

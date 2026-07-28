@@ -43,6 +43,7 @@ public class GithubIntegrationService {
         return new IntegrationAuthorizationResponse(LinkType.GITHUB, authorizationUrl, state.expiresAt());
     }
 
+    @Transactional
     public IntegrationConnectionResponse completeCallback(String state, String installationId) {
         IntegrationAuthorizationState authorizationState = authorizationStateService.consume(state, LinkType.GITHUB);
         Long projectId = authorizationState.getProjectMember().getProject().getId();

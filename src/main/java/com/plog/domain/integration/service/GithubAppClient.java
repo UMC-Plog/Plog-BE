@@ -18,6 +18,7 @@ import org.springframework.web.client.RestClientException;
 @RequiredArgsConstructor
 public class GithubAppClient {
     private static final String API_BASE_URL = "https://api.github.com";
+    private static final int MAX_REPOSITORY_PAGE_COUNT = 50;
 
     private final GithubAppJwtFactory appJwtFactory;
     private final RestClient restClient = ProviderRestClientFactory.create(API_BASE_URL);
@@ -56,7 +57,7 @@ public class GithubAppClient {
         String accessToken = createInstallationAccessToken(installationId);
         try {
             List<Repository> repositories = new ArrayList<>();
-            for (int page = 1; ; page++) {
+            for (int page = 1; page <= MAX_REPOSITORY_PAGE_COUNT; page++) {
                 JsonNode body = restClient.get()
                         .uri("/installation/repositories?per_page=100&page={page}", page)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
@@ -83,8 +84,15 @@ public class GithubAppClient {
                     return repositories;
                 }
             }
+            return repositories;
+        } catch (RestClientResponseException exception) {
+            int status = exception.getStatusCode().value();
+            if (status == 401 || status == 403) {
+                throw new ApiException(IntegrationErrorCode.PROVIDER_RESOURCE_ACCESS_DENIED, exception);
+            }
+            throw new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE, exception);
         } catch (RestClientException exception) {
-            throw new ApiException(IntegrationErrorCode.PROVIDER_RESOURCE_ACCESS_DENIED, exception);
+            throw new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE, exception);
         }
     }
 
