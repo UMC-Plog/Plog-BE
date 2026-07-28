@@ -1,12 +1,19 @@
 package com.plog.domain.integration.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.plog.domain.integration.entity.IntegrationActivityType;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.IntegrationResourceType;
 import com.plog.domain.integration.entity.LinkType;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -102,7 +109,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
                         : null;
                 JsonNode knownUser = actor == null ? null : actor.path("user").path("knownUser");
                 activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY,
-                        "drive-activity:" + Integer.toUnsignedString(activity.toString().hashCode()),
+                        "drive-activity:" + sha256(canonicalJson(activity)),
                         knownUser == null ? null : knownUser.path("personName").asText(null), null, null,
                         parseInstant(activity.path("timestamp")
                                 .asText(activity.path("timeRange").path("endTime").asText(null))),
@@ -171,6 +178,46 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             throw new ProviderResourceAccessException(503, null);
         }
         return nextPageToken;
+    }
+
+    private String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 algorithm is not available", exception);
+        }
+    }
+
+    private String canonicalJson(JsonNode node) {
+        if (node.isObject()) {
+            ArrayList<String> fieldNames = new ArrayList<>();
+            node.fieldNames().forEachRemaining(fieldNames::add);
+            Collections.sort(fieldNames);
+            StringBuilder builder = new StringBuilder("{");
+            for (int index = 0; index < fieldNames.size(); index++) {
+                if (index > 0) {
+                    builder.append(',');
+                }
+                String fieldName = fieldNames.get(index);
+                builder.append(JsonNodeFactory.instance.textNode(fieldName))
+                        .append(':')
+                        .append(canonicalJson(node.get(fieldName)));
+            }
+            return builder.append('}').toString();
+        }
+        if (node.isArray()) {
+            StringBuilder builder = new StringBuilder("[");
+            for (int index = 0; index < node.size(); index++) {
+                if (index > 0) {
+                    builder.append(',');
+                }
+                builder.append(canonicalJson(node.get(index)));
+            }
+            return builder.append(']').toString();
+        }
+        return node.toString();
     }
 
     private JsonNode get(String uri, String token) {
