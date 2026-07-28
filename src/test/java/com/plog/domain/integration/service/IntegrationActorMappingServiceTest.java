@@ -31,6 +31,12 @@ class IntegrationActorMappingServiceTest {
     private IntegrationActorMappingService integrationActorMappingService;
 
     @Test
+    void treatsIdPrefixedStoredValueAsRawProviderId() {
+        assertThat(ProviderActorKey.fromStored("id:provider-user"))
+                .isEqualTo(ProviderActorKey.providerId("id:provider-user"));
+    }
+
+    @Test
     void resolvesAnExplicitProviderActorIdMappingFirst() {
         ProjectMember member = ProjectMember.builder().id(10L).build();
         ProjectIntegration integration = ProjectIntegration.builder()

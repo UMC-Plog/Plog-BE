@@ -8,6 +8,9 @@ import com.plog.domain.integration.entity.ExternalConnection;
 import com.plog.domain.integration.entity.ExternalResource;
 import com.plog.domain.integration.entity.IntegrationActivity;
 import com.plog.domain.integration.entity.IntegrationActivityType;
+import com.plog.domain.integration.entity.IntegrationAuthorizationState;
+import com.plog.domain.integration.entity.IntegrationCollectionRun;
+import com.plog.domain.integration.entity.IntegrationCollectionRunStatus;
 import com.plog.domain.integration.entity.IntegrationCredentialType;
 import com.plog.domain.integration.entity.IntegrationIdentityAliasType;
 import com.plog.domain.integration.entity.IntegrationResource;
@@ -117,6 +120,30 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
     }
 
     @Test
+    void actorObservationsNormalizeEmailAndLoginBeforeGrouping() {
+        Project project = entityManager.persist(project());
+        ProjectMember member = entityManager.persist(member(
+                project,
+                User.createLocal("normalize@example.com", "encoded", "정규화", "normalize"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration integration = entityManager.persist(integration(project, member));
+        IntegrationResource resource = entityManager.persist(resource(integration, member));
+        entityManager.persist(activity(resource, null, "event-upper", null, "Actor@Example.com"));
+        entityManager.persist(activity(resource, null, "event-lower", null, "actor@example.com"));
+        entityManager.flush();
+        entityManager.clear();
+
+        var observations = activityRepository.findActorObservations(integration.getId());
+
+        assertThat(observations).singleElement().satisfies(observation -> {
+            assertThat(observation.getActorLogin()).isEqualTo("actor@example.com");
+            assertThat(observation.getActorEmail()).isEqualTo("actor@example.com");
+            assertThat(observation.getActivityCount()).isEqualTo(2L);
+        });
+    }
+
+    @Test
     void projectPurgeDeletesLegacyAndCurrentIntegrationRowsBeforeMembers() {
         Project project = entityManager.persist(project());
         ProjectMember member = entityManager.persist(member(
@@ -160,6 +187,18 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
                 .aliasType(IntegrationIdentityAliasType.LOGIN)
                 .aliasValue("current-login")
                 .build());
+        entityManager.persist(IntegrationAuthorizationState.builder()
+                .project(project)
+                .projectMember(member)
+                .linkType(LinkType.GITHUB)
+                .stateHash("a".repeat(64))
+                .expiresAt(Instant.parse("2026-07-29T00:00:00Z"))
+                .build());
+        entityManager.persist(IntegrationCollectionRun.builder()
+                .project(project)
+                .status(IntegrationCollectionRunStatus.PENDING)
+                .attemptCount(0)
+                .build());
         entityManager.flush();
 
         projectPurgeService.purge(project.getId());
@@ -173,6 +212,8 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
         assertThat(tableCount("project_member_integration_identity_aliases")).isZero();
         assertThat(tableCount("project_member_integration_identities")).isZero();
         assertThat(tableCount("integration_resources")).isZero();
+        assertThat(tableCount("integration_authorization_states")).isZero();
+        assertThat(tableCount("integration_collection_runs")).isZero();
         assertThat(tableCount("project_integrations")).isZero();
         assertThat(tableCount("project_members")).isZero();
     }

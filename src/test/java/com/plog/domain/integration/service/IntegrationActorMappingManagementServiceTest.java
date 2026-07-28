@@ -11,9 +11,11 @@ import static org.mockito.Mockito.verify;
 import com.plog.domain.integration.dto.request.IntegrationActorMappingRequest;
 import com.plog.domain.integration.dto.response.IntegrationActorMappingListResponse;
 import com.plog.domain.integration.dto.response.IntegrationActorMappingResponse;
+import com.plog.domain.integration.entity.IntegrationIdentityAliasType;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.entity.ProjectMemberIntegrationIdentity;
+import com.plog.domain.integration.entity.ProjectMemberIntegrationIdentityAlias;
 import com.plog.domain.integration.repository.IntegrationActivityRepository;
 import com.plog.domain.integration.repository.IntegrationActorObservation;
 import com.plog.domain.integration.repository.ProjectIntegrationRepository;
@@ -28,11 +30,13 @@ import com.plog.global.api.exception.ApiException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class IntegrationActorMappingManagementServiceTest {
@@ -219,6 +223,96 @@ class IntegrationActorMappingManagementServiceTest {
     }
 
     @Test
+    void rejectsActorAliasMappedToMultipleProjectMembersAsAmbiguous() {
+        IntegrationActorObservation observation = observation(
+                null, null, "shared@example.com", 4L);
+        ProjectMember firstMember = ProjectMember.builder().id(4L).build();
+        ProjectMember secondMember = ProjectMember.builder().id(5L).build();
+        ProjectMemberIntegrationIdentity firstIdentity = ProjectMemberIntegrationIdentity.builder()
+                .id(21L)
+                .projectIntegration(integration)
+                .projectMember(firstMember)
+                .providerActorId("first-provider-id")
+                .build();
+        ProjectMemberIntegrationIdentity secondIdentity = ProjectMemberIntegrationIdentity.builder()
+                .id(22L)
+                .projectIntegration(integration)
+                .projectMember(secondMember)
+                .providerActorId("second-provider-id")
+                .build();
+        ProjectMemberIntegrationIdentityAlias firstAlias = ProjectMemberIntegrationIdentityAlias.builder()
+                .id(31L)
+                .identity(firstIdentity)
+                .projectIntegration(integration)
+                .aliasType(IntegrationIdentityAliasType.EMAIL)
+                .aliasValue("shared@example.com")
+                .build();
+        ProjectMemberIntegrationIdentityAlias secondAlias = ProjectMemberIntegrationIdentityAlias.builder()
+                .id(32L)
+                .identity(secondIdentity)
+                .projectIntegration(integration)
+                .aliasType(IntegrationIdentityAliasType.EMAIL)
+                .aliasValue("shared@example.com")
+                .build();
+        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GITHUB))
+                .willReturn(Optional.of(integration));
+        given(activityRepository.findActorObservations(5L)).willReturn(List.of(observation));
+        given(identityRepository.findAllByProjectIntegrationId(5L))
+                .willReturn(List.of(firstIdentity, secondIdentity));
+        given(aliasRepository.findAllByProjectIntegrationId(5L))
+                .willReturn(List.of(firstAlias, secondAlias));
+
+        assertThatThrownBy(() -> service.saveMyMapping(
+                1L,
+                10L,
+                LinkType.GITHUB,
+                new IntegrationActorMappingRequest(
+                        ProviderActorKey.email("shared@example.com").selectionKey())
+        )).isInstanceOfSatisfying(ApiException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(
+                        IntegrationErrorCode.ACTOR_MAPPING_AMBIGUOUS));
+
+        verify(identityRepository, never()).saveAndFlush(any(ProjectMemberIntegrationIdentity.class));
+        verify(activityRepository, never()).assignProjectMemberByEmail(any(), any(), any());
+    }
+
+    @Test
+    void mapsExpectedActorUniqueConstraintToConflict() {
+        prepareUnclaimedActorSave();
+        DataIntegrityViolationException duplicateActor = constraintViolation(
+                ProjectMemberIntegrationIdentity.UNIQUE_ACTOR_CONSTRAINT);
+        given(identityRepository.saveAndFlush(any(ProjectMemberIntegrationIdentity.class)))
+                .willThrow(duplicateActor);
+
+        assertThatThrownBy(() -> service.saveMyMapping(
+                1L,
+                10L,
+                LinkType.GITHUB,
+                new IntegrationActorMappingRequest(
+                        ProviderActorKey.providerId("123").selectionKey())
+        )).isInstanceOfSatisfying(ApiException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(
+                        IntegrationErrorCode.ACTOR_ALREADY_MAPPED));
+    }
+
+    @Test
+    void propagatesUnexpectedIntegrityViolation() {
+        prepareUnclaimedActorSave();
+        DataIntegrityViolationException unexpected = constraintViolation(
+                "fk_project_member_integration_identity");
+        given(identityRepository.saveAndFlush(any(ProjectMemberIntegrationIdentity.class)))
+                .willThrow(unexpected);
+
+        assertThatThrownBy(() -> service.saveMyMapping(
+                1L,
+                10L,
+                LinkType.GITHUB,
+                new IntegrationActorMappingRequest(
+                        ProviderActorKey.providerId("123").selectionKey())
+        )).isSameAs(unexpected);
+    }
+
+    @Test
     void rejectsActorKeyThatWasNotObservedInCollectedActivities() {
         given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GITHUB))
                 .willReturn(Optional.of(integration));
@@ -275,5 +369,23 @@ class IntegrationActorMappingManagementServiceTest {
         given(observation.getFirstOccurredAt()).willReturn(Instant.parse("2026-07-01T00:00:00Z"));
         given(observation.getLastOccurredAt()).willReturn(Instant.parse("2026-07-20T00:00:00Z"));
         return observation;
+    }
+
+    private void prepareUnclaimedActorSave() {
+        IntegrationActorObservation observation = observation("123", "wantkdd", null, 1L);
+        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GITHUB))
+                .willReturn(Optional.of(integration));
+        given(activityRepository.findActorObservations(5L))
+                .willReturn(List.of(observation));
+        given(identityRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of());
+        given(aliasRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of());
+        given(identityRepository.findByProjectIntegrationIdAndProjectMemberId(5L, 3L))
+                .willReturn(Optional.empty());
+    }
+
+    private DataIntegrityViolationException constraintViolation(String constraintName) {
+        ConstraintViolationException cause = mock(ConstraintViolationException.class);
+        given(cause.getConstraintName()).willReturn(constraintName);
+        return new DataIntegrityViolationException("constraint violation", cause);
     }
 }
