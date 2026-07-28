@@ -27,6 +27,7 @@ public class GithubIntegrationService {
     private final IntegrationAuthorizationStateService authorizationStateService;
     private final ProjectIntegrationService projectIntegrationService;
     private final GithubAppClient githubAppClient;
+    private final IntegrationResourceService integrationResourceService;
 
     @Transactional
     public IntegrationAuthorizationResponse issueAuthorizationUrl(Long projectId, Long userId) {
@@ -42,6 +43,7 @@ public class GithubIntegrationService {
         return new IntegrationAuthorizationResponse(LinkType.GITHUB, authorizationUrl, state.expiresAt());
     }
 
+    @Transactional
     public IntegrationConnectionResponse completeCallback(String state, String installationId) {
         IntegrationAuthorizationState authorizationState = authorizationStateService.consume(state, LinkType.GITHUB);
         Long projectId = authorizationState.getProjectMember().getProject().getId();
@@ -61,6 +63,7 @@ public class GithubIntegrationService {
                 null,
                 null
         );
+        integrationResourceService.registerGithubInstallationRepositories(integration);
         return new IntegrationConnectionResponse(
                 integration.getProject().getId(),
                 integration.getLinkType(),

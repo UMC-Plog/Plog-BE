@@ -3,6 +3,10 @@ package com.plog.domain.integration.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.exception.ApiException;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.RestClientResponseException;
@@ -14,6 +18,7 @@ import org.springframework.web.client.RestClientException;
 @RequiredArgsConstructor
 public class GithubAppClient {
     private static final String API_BASE_URL = "https://api.github.com";
+    private static final int MAX_REPOSITORY_PAGE_COUNT = 50;
 
     private final GithubAppJwtFactory appJwtFactory;
     private final RestClient restClient = ProviderRestClientFactory.create(API_BASE_URL);
@@ -48,6 +53,49 @@ public class GithubAppClient {
         }
     }
 
+    public RepositoryListing listInstallationRepositories(String installationId) {
+        String accessToken = createInstallationAccessToken(installationId);
+        try {
+            List<Repository> repositories = new ArrayList<>();
+            for (int page = 1; page <= MAX_REPOSITORY_PAGE_COUNT; page++) {
+                JsonNode body = restClient.get()
+                        .uri("/installation/repositories?per_page=100&page={page}", page)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                        .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
+                        .retrieve()
+                        .body(JsonNode.class);
+                if (body == null || !body.path("repositories").isArray() || body.path("repositories").isEmpty()) {
+                    return new RepositoryListing(repositories, true);
+                }
+                for (JsonNode repository : body.path("repositories")) {
+                    String id = repository.path("id").asText();
+                    if (id.isBlank()) {
+                        continue;
+                    }
+                    repositories.add(new Repository(
+                            id,
+                            repository.path("full_name").asText(repository.path("name").asText(id)),
+                            repository.path("html_url").asText(null),
+                            repository.toString(),
+                            parseInstant(repository.path("updated_at").asText(null))
+                    ));
+                }
+                if (body.path("repositories").size() < 100) {
+                    return new RepositoryListing(repositories, true);
+                }
+            }
+            return new RepositoryListing(repositories, false);
+        } catch (RestClientResponseException exception) {
+            int status = exception.getStatusCode().value();
+            if (status == 401 || status == 403) {
+                throw new ApiException(IntegrationErrorCode.PROVIDER_RESOURCE_ACCESS_DENIED, exception);
+            }
+            throw new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE, exception);
+        } catch (RestClientException exception) {
+            throw new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE, exception);
+        }
+    }
+
     public IntegrationVerificationStatus verifyInstallation(String installationId) {
         if (installationId == null || installationId.isBlank()) {
             return IntegrationVerificationStatus.DISCONNECTED;
@@ -71,6 +119,17 @@ public class GithubAppClient {
         }
     }
 
+    private Instant parseInstant(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException exception) {
+            return null;
+        }
+    }
+
     private JsonNode getWithAppJwt(String uriTemplate, Object... uriVariables) {
         try {
             return restClient.get()
@@ -85,4 +144,8 @@ public class GithubAppClient {
     }
 
     public record Installation(String id, String accountId, String accountLogin) {}
+
+    public record RepositoryListing(List<Repository> repositories, boolean complete) {}
+
+    public record Repository(String id, String fullName, String htmlUrl, String payload, Instant lastModifiedAt) {}
 }
