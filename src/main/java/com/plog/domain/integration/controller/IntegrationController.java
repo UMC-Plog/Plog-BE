@@ -158,6 +158,7 @@ public class IntegrationController implements IntegrationControllerDoc {
                 .body(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_RESOURCE_REGISTERED, response));
     }
 
+    @Override
     @PostMapping("/projects/{projectId}/integrations/collect")
     public ResponseEntity<ApiResponse<IntegrationCollectionResponse>> collectIntegrationData(
             @PathVariable Long projectId,

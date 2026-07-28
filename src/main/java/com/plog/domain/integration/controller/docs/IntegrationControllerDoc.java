@@ -4,6 +4,7 @@ import com.plog.domain.integration.dto.request.FigmaResourceRegisterRequest;
 import com.plog.domain.integration.dto.request.GoogleResourceRegisterRequest;
 import com.plog.domain.integration.dto.request.NotionResourceRegisterRequest;
 import com.plog.domain.integration.dto.response.IntegrationAuthorizationResponse;
+import com.plog.domain.integration.dto.response.IntegrationCollectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationDisconnectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceCandidateResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceListResponse;
@@ -294,6 +295,40 @@ public interface IntegrationControllerDoc {
     ResponseEntity<ApiResponse<IntegrationResourceResponse>> registerFigmaResource(
             @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
             FigmaResourceRegisterRequest request,
+            Long userId
+    );
+
+    @Operation(
+            summary = "외부 연동 데이터 수동 수집",
+            description = """
+                    프로젝트에 ACTIVE 상태로 등록된 GitHub, Notion, Google, Figma 리소스의 활동 원문을 수집합니다.
+                    프로젝트가 진행 중이어도 ACTIVE 멤버가 실행할 수 있으며 프로젝트 상태는 변경하지 않습니다.
+                    일부 리소스 수집에 실패해도 가능한 리소스는 계속 수집하고 failures에 resourceId, linkType, resourceName과 원인을 반환합니다.
+                    requestedResourceCount는 시도한 리소스 수, collectedResourceCount는 성공한 리소스 수입니다.
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
+                    description = "수집 실행 완료. 부분 실패 정보는 failures에 포함"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
+                    description = "인증이 없거나 유효하지 않은 사용자",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403",
+                    description = "ACTIVE 프로젝트 멤버가 아님",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "프로젝트 없음",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503",
+                    description = "GitHub 리소스 동기화 또는 provider 일시 장애",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class)))
+    })
+    ResponseEntity<ApiResponse<IntegrationCollectionResponse>> collectIntegrationData(
+            @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
             Long userId
     );
 
