@@ -27,6 +27,9 @@ import lombok.NoArgsConstructor;
 @Table(name = "project_member_integration_identities", uniqueConstraints = {
         @UniqueConstraint(name = "uk_member_integration_identity", columnNames = {
                 "project_integration_id", "provider_actor_id"
+        }),
+        @UniqueConstraint(name = "uk_member_integration_identity_owner", columnNames = {
+                "project_integration_id", "project_member_id"
         })
 })
 public class ProjectMemberIntegrationIdentity extends BaseEntity {
@@ -52,4 +55,10 @@ public class ProjectMemberIntegrationIdentity extends BaseEntity {
 
     @Column(name = "provider_email")
     private String providerEmail;
+
+    public void updateActor(String providerActorId, String providerLogin, String providerEmail) {
+        this.providerActorId = providerActorId;
+        this.providerLogin = providerLogin;
+        this.providerEmail = providerEmail;
+    }
 }
