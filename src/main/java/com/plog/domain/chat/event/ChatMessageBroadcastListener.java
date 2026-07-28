@@ -1,14 +1,11 @@
 package com.plog.domain.chat.event;
 
 import com.plog.domain.chat.dto.response.ChatMessageResponse;
-import com.plog.domain.chat.entity.ChatAttachment;
 import com.plog.domain.chat.entity.ChatMessage;
 import com.plog.domain.chat.repository.ChatAttachmentRepository;
 import com.plog.domain.chat.repository.ChatMessageRepository;
+import com.plog.domain.chat.service.ChatAttachmentResponseMapper;
 import com.plog.global.util.TimeUtil;
-import com.plog.infrastructure.s3.AttachmentUsage;
-import com.plog.infrastructure.s3.FileStorageService;
-import com.plog.infrastructure.s3.UploadedFile;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.MessagingException;
@@ -31,7 +28,7 @@ public class ChatMessageBroadcastListener {
 
     private final ChatMessageRepository chatMessageRepository;
     private final ChatAttachmentRepository chatAttachmentRepository;
-    private final FileStorageService fileStorageService;
+    private final ChatAttachmentResponseMapper chatAttachmentResponseMapper;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Async
@@ -75,10 +72,9 @@ public class ChatMessageBroadcastListener {
     private ChatMessageResponse toResponse(ChatMessage chatMessage) {
         var sender = chatMessage.getProjectMember();
         List<ChatMessageResponse.ChatMessageAttachmentResponse> attachmentResponses =
-                chatAttachmentRepository.findAllByChatMessageIdOrderByIdAsc(chatMessage.getId())
-                        .stream()
-                        .map(this::toAttachmentResponse)
-                        .toList();
+                chatAttachmentResponseMapper.toResponses(
+                        chatAttachmentRepository.findAllByChatMessageIdOrderByIdAsc(
+                                chatMessage.getId()));
         return new ChatMessageResponse(
                 chatMessage.getId(),
                 chatMessage.getChatRoom().getId(),
@@ -90,14 +86,5 @@ public class ChatMessageBroadcastListener {
                 attachmentResponses,
                 TimeUtil.toInstant(chatMessage.getCreatedAt())
         );
-    }
-
-    private ChatMessageResponse.ChatMessageAttachmentResponse toAttachmentResponse(ChatAttachment attachment) {
-        UploadedFile file = attachment.getUploadedFile();
-        // AttachmentUsage.CHAT.forcesDownload() == false → 인라인 표시용 URL
-        String fileUrl = fileStorageService.createDownloadUrl(
-                AttachmentUsage.CHAT, file.getFileKey(), file.getOriginalFilename());
-        return new ChatMessageResponse.ChatMessageAttachmentResponse(
-                attachment.getId(), file.getOriginalFilename(), file.getSize(), fileUrl);
     }
 }

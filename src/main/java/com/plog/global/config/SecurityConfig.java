@@ -5,6 +5,7 @@ import static org.springframework.security.config.Customizer.withDefaults;
 import com.plog.global.security.jwt.JwtAccessDeniedHandler;
 import com.plog.global.security.jwt.JwtAuthenticationEntryPoint;
 import com.plog.global.security.jwt.JwtAuthenticationFilter;
+import com.plog.global.security.jwt.MediaCookieAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -50,13 +51,16 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
+    private final MediaCookieAuthenticationFilter mediaCookieAuthenticationFilter;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
                           JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
-                          JwtAccessDeniedHandler jwtAccessDeniedHandler) {
+                          JwtAccessDeniedHandler jwtAccessDeniedHandler,
+                          MediaCookieAuthenticationFilter mediaCookieAuthenticationFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
         this.jwtAccessDeniedHandler = jwtAccessDeniedHandler;
+        this.mediaCookieAuthenticationFilter = mediaCookieAuthenticationFilter;
     }
 
     @Bean
@@ -66,8 +70,8 @@ public class SecurityConfig {
 
     /**
      * .cors(withDefaults())가 참조하는 소스 빈. 이게 없으면 CORS 헤더가 안 붙어 크로스 오리진 요청이 전부 막힌다.
-     * 토큰을 쿠키가 아니라 Authorization 헤더/JSON 바디로만 주고받으므로 allowCredentials는 불필요.
-     * SockJS의 크로스 오리진 HTTP 요청이 credentials 모드로 전송되므로 허용된 Origin에 한해 credentials를 허용한다.
+     * 채팅 첨부 프록시가 plog_media 쿠키(SameSite=None)를 쓰고 SockJS 도 credentials 모드로
+     * 요청하므로, 허용된 Origin 에 한해 credentials 를 허용해야 한다.
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource(CorsProperties corsProperties) {
@@ -99,6 +103,7 @@ public class SecurityConfig {
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint)
                         .accessDeniedHandler(jwtAccessDeniedHandler))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(mediaCookieAuthenticationFilter, JwtAuthenticationFilter.class)
                 .build();
     }
 }

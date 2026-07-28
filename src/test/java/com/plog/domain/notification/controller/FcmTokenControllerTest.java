@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.plog.domain.notification.dto.FcmTokenDto;
 import com.plog.domain.notification.service.FcmTokenService;
 import com.plog.global.security.jwt.JwtProvider;
+import com.plog.global.security.jwt.MediaTokenProvider;
 import java.time.Instant;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +36,8 @@ class FcmTokenControllerTest {
     private FcmTokenService fcmTokenService;
     @MockitoBean
     private JwtProvider jwtProvider;
+    @MockitoBean
+    private MediaTokenProvider mediaTokenProvider;
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;
 

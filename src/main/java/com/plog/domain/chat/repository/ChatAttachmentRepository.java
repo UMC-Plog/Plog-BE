@@ -4,6 +4,7 @@ import com.plog.domain.chat.entity.ChatAttachment;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -25,4 +26,17 @@ public interface ChatAttachmentRepository extends JpaRepository<ChatAttachment, 
             + "where a.chatMessage.id in :chatMessageIds order by a.id asc")
     List<ChatAttachment> findAllByChatMessageIdInOrderByIdAsc(
             @Param("chatMessageIds") Collection<Long> chatMessageIds);
+
+    /*
+     * 프록시 전달용 단건 조회. uploadedFile(파일 키·Content-Type)과 chatRoom(권한 검사용
+     * 방 ID)을 함께 쓰므로 둘 다 fetch join 한다. 지연 로딩으로 두면 요청마다 쿼리가
+     * 세 번 나간다.
+     */
+    @Query("select a from ChatAttachment a "
+            + "join fetch a.uploadedFile "
+            + "join fetch a.chatMessage m "
+            + "join fetch m.chatRoom "
+            + "where a.id = :chatAttachmentId")
+    Optional<ChatAttachment> findWithFileAndRoomById(
+            @Param("chatAttachmentId") Long chatAttachmentId);
 }

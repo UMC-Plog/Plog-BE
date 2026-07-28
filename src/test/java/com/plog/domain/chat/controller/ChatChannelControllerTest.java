@@ -16,6 +16,7 @@ import com.plog.global.api.error.ChatErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.SliceResponse;
 import com.plog.global.security.jwt.JwtProvider;
+import com.plog.global.security.jwt.MediaTokenProvider;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -46,6 +47,8 @@ class ChatChannelControllerTest {
 
     @MockitoBean
     private JwtProvider jwtProvider;
+    @MockitoBean
+    private MediaTokenProvider mediaTokenProvider;
 
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;

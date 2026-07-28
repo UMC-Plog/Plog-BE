@@ -39,6 +39,9 @@ app:
     secret: ${JWT_SECRET}
     access-token-ttl: 30m
     refresh-token-ttl: 14d
+    # 이미지 표시용 미디어 쿠키 수명. refresh 와 같은 값이어야 "로그인 세션이 살아 있으면
+    # 미디어 쿠키도 살아 있다"가 불변식으로 성립한다.
+    media-token-ttl: 14d
   # 이메일 인증 코드 정책 (하드코딩 금지 → @ConfigurationProperties 바인딩)
   email-verification:
     code-length: 6
@@ -51,6 +54,10 @@ app:
   # 소셜 가입 티켓 수명. 약관 동의 → 프로필 설정을 마치기에 충분해야 한다.
   social-signup:
     ticket-ttl: 30m
+  # 채팅 첨부 프록시. base-url 은 프록시 URL을 절대 경로로 조립할 때 쓴다.
+  media:
+    base-url: http://localhost:8080
+    cookie-same-site: None
   # CORS 허용 오리진. 환경별로 다르므로 프로퍼티로 관리 (배포 도메인은 확정 후 추가)
   cors:
     allowed-origins:

@@ -11,9 +11,6 @@ import com.plog.domain.project.entity.MemberStatus;
 import com.plog.global.api.error.ChatErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
-import com.plog.infrastructure.s3.AttachmentUsage;
-import com.plog.infrastructure.s3.FileStorageService;
-import com.plog.infrastructure.s3.UploadedFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -34,7 +31,7 @@ public class ChatMessageQueryService {
     private final ChatRoomRepository chatRoomRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatAttachmentRepository chatAttachmentRepository;
-    private final FileStorageService fileStorageService;
+    private final ChatAttachmentResponseMapper chatAttachmentResponseMapper;
 
     @Transactional(readOnly = true)
     public ChatMessageListResponse getMessages(Long roomId, Long userId, Long before, Integer size) {
@@ -78,9 +75,8 @@ public class ChatMessageQueryService {
 
     private ChatMessageResponse toResponse(ChatMessage chatMessage, List<ChatAttachment> attachments) {
         var sender = chatMessage.getProjectMember();
-        List<ChatMessageResponse.ChatMessageAttachmentResponse> attachmentResponses = attachments.stream()
-                .map(this::toAttachmentResponse)
-                .toList();
+        List<ChatMessageResponse.ChatMessageAttachmentResponse> attachmentResponses =
+                chatAttachmentResponseMapper.toResponses(attachments);
         return new ChatMessageResponse(
                 chatMessage.getId(),
                 chatMessage.getChatRoom().getId(),
@@ -92,14 +88,5 @@ public class ChatMessageQueryService {
                 attachmentResponses,
                 TimeUtil.toInstant(chatMessage.getCreatedAt())
         );
-    }
-
-    private ChatMessageResponse.ChatMessageAttachmentResponse toAttachmentResponse(ChatAttachment attachment) {
-        UploadedFile file = attachment.getUploadedFile();
-        // AttachmentUsage.CHAT.forcesDownload() == false → 인라인 표시용 URL
-        String fileUrl = fileStorageService.createDownloadUrl(
-                AttachmentUsage.CHAT, file.getFileKey(), file.getOriginalFilename());
-        return new ChatMessageResponse.ChatMessageAttachmentResponse(
-                attachment.getId(), file.getOriginalFilename(), file.getSize(), fileUrl);
     }
 }

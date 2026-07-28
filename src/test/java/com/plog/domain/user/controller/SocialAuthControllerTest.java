@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,7 +16,10 @@ import com.plog.domain.user.service.SocialSignupService;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.security.jwt.JwtProvider;
+import com.plog.global.security.jwt.MediaCookieFactory;
+import com.plog.global.security.jwt.MediaTokenProvider;
 import org.junit.jupiter.api.DisplayName;
+import org.springframework.http.ResponseCookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -38,6 +42,11 @@ class SocialAuthControllerTest {
     // JwtAuthenticationFilter 가 Filter 라 슬라이스에 포함되고 JwtProvider 를 요구한다.
     @MockitoBean
     private JwtProvider jwtProvider;
+    @MockitoBean
+    private MediaTokenProvider mediaTokenProvider;
+    // 토큰을 내려주는 응답(LOGIN, 가입 완료)에 미디어 쿠키가 함께 실린다.
+    @MockitoBean
+    private MediaCookieFactory mediaCookieFactory;
     // PlogApplication 의 @EnableJpaAuditing 이 슬라이스에서도 매핑 컨텍스트를 찾는다.
     @MockitoBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;
@@ -47,6 +56,7 @@ class SocialAuthControllerTest {
     void loginReturnsTokens() throws Exception {
         given(socialLoginService.login(eq(ProviderType.KAKAO), eq("code")))
                 .willReturn(SocialLoginResponse.login(new TokenResponse("access", "refresh")));
+        given(mediaCookieFactory.issue("access")).willReturn(mediaCookie());
 
         mockMvc.perform(post("/api/auth/oauth/kakao")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -54,7 +64,11 @@ class SocialAuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("AUTH011"))
                 .andExpect(jsonPath("$.result.status").value("LOGIN"))
-                .andExpect(jsonPath("$.result.accessToken").value("access"));
+                .andExpect(jsonPath("$.result.accessToken").value("access"))
+                // 토큰을 내려주는 응답에는 미디어 쿠키가 반드시 실려야 한다. 빠지면 이 경로로
+                // 로그인한 사용자만 채팅 이미지가 깨진다.
+                .andExpect(header().string("Set-Cookie",
+                        org.hamcrest.Matchers.containsString("plog_media=")));
     }
 
     @Test
@@ -69,7 +83,9 @@ class SocialAuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("AUTH012"))
                 .andExpect(jsonPath("$.result.ticket").value("raw-ticket"))
-                .andExpect(jsonPath("$.result.accessToken").doesNotExist());
+                .andExpect(jsonPath("$.result.accessToken").doesNotExist())
+                // SIGNUP_REQUIRED 에는 토큰이 없으므로 쿠키도 심지 않는다.
+                .andExpect(header().doesNotExist("Set-Cookie"));
     }
 
     @Test
@@ -95,6 +111,7 @@ class SocialAuthControllerTest {
     @DisplayName("가입 완료는 201 AUTH013")
     void signupReturnsCreated() throws Exception {
         given(socialSignupService.signup(any())).willReturn(new TokenResponse("access", "refresh"));
+        given(mediaCookieFactory.issue("access")).willReturn(mediaCookie());
 
         String body = """
                 {"ticket":"raw-ticket","name":"홍길동","nickname":"조이","profilePreset":"OTTER",
@@ -108,7 +125,9 @@ class SocialAuthControllerTest {
                         .content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("AUTH013"))
-                .andExpect(jsonPath("$.result.accessToken").value("access"));
+                .andExpect(jsonPath("$.result.accessToken").value("access"))
+                .andExpect(header().string("Set-Cookie",
+                        org.hamcrest.Matchers.containsString("plog_media=")));
     }
 
     @Test
@@ -127,5 +146,10 @@ class SocialAuthControllerTest {
                         .content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("AUTH023"));
+    }
+
+    private ResponseCookie mediaCookie() {
+        return ResponseCookie.from("plog_media", "media-token")
+                .path("/api/chat-attachments").build();
     }
 }

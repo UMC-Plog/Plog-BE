@@ -12,7 +12,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record JwtProperties(
         String secret,
         Duration accessTokenTtl,
-        Duration refreshTokenTtl
+        Duration refreshTokenTtl,
+        Duration mediaTokenTtl
 ) {
     private static final int MIN_SECRET_BYTES = 32; // 256 bit
 
@@ -23,6 +24,9 @@ public record JwtProperties(
         }
         if (accessTokenTtl == null || refreshTokenTtl == null) {
             throw new IllegalStateException("app.jwt.access-token-ttl / refresh-token-ttl 이 필요합니다.");
+        }
+        if (mediaTokenTtl == null) {
+            throw new IllegalStateException("app.jwt.media-token-ttl 이 필요합니다.");
         }
     }
 }
