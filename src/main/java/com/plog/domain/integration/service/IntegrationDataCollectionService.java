@@ -19,8 +19,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /** 등록된 외부 연동 리소스의 provider 활동 원문을 수동으로 수집한다. */
 @Service
@@ -36,6 +38,8 @@ public class IntegrationDataCollectionService {
     private final Map<LinkType, IntegrationResourceCollector> collectorByProvider;
     private final IntegrationActivityStoreService integrationActivityStoreService;
     private final IntegrationVerificationService integrationVerificationService;
+    private final IntegrationResourceCollectionStateService resourceCollectionStateService;
+    private final ConcurrentMap<Long, ReentrantLock> projectCollectionLocks = new ConcurrentHashMap<>();
 
     public IntegrationDataCollectionService(
             IntegrationResourceRepository integrationResourceRepository,
@@ -45,7 +49,8 @@ public class IntegrationDataCollectionService {
             IntegrationResourceService integrationResourceService,
             List<IntegrationResourceCollector> collectors,
             IntegrationActivityStoreService integrationActivityStoreService,
-            IntegrationVerificationService integrationVerificationService
+            IntegrationVerificationService integrationVerificationService,
+            IntegrationResourceCollectionStateService resourceCollectionStateService
     ) {
         this.integrationResourceRepository = integrationResourceRepository;
         this.projectRepository = projectRepository;
@@ -55,29 +60,36 @@ public class IntegrationDataCollectionService {
         this.collectorByProvider = collectorMap(collectors);
         this.integrationActivityStoreService = integrationActivityStoreService;
         this.integrationVerificationService = integrationVerificationService;
+        this.resourceCollectionStateService = resourceCollectionStateService;
     }
 
     /** 진행 중 프로젝트도 수집할 수 있으며 프로젝트 상태는 변경하지 않는다. */
-    @Transactional
     public IntegrationCollectionResponse collectNow(Long projectId, Long userId) {
-        projectRepository.findByIdForUpdate(projectId)
-                .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
+        if (!projectRepository.existsById(projectId)) {
+            throw new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND);
+        }
         projectAccessService.requireActiveMember(projectId, userId);
-        synchronizeGithubRepositories(projectId);
-
-        CollectionOutcome outcome = collectResources(projectId);
-        return new IntegrationCollectionResponse(
-                projectId,
-                outcome.requestedResourceCount(),
-                outcome.collectedResourceCount(),
-                outcome.failures().stream()
-                        .map(failure -> new IntegrationCollectionFailureResponse(
-                                failure.resource().getId(),
-                                failure.resource().getProjectIntegration().getLinkType(),
-                                failure.resource().getResourceName(),
-                                failure.reason()))
-                        .toList()
-        );
+        ReentrantLock collectionLock = projectCollectionLocks.computeIfAbsent(
+                projectId, ignored -> new ReentrantLock());
+        collectionLock.lock();
+        try {
+            synchronizeGithubRepositories(projectId);
+            CollectionOutcome outcome = collectResources(projectId);
+            return new IntegrationCollectionResponse(
+                    projectId,
+                    outcome.requestedResourceCount(),
+                    outcome.collectedResourceCount(),
+                    outcome.failures().stream()
+                            .map(failure -> new IntegrationCollectionFailureResponse(
+                                    failure.resource().getId(),
+                                    failure.resource().getProjectIntegration().getLinkType(),
+                                    failure.resource().getResourceName(),
+                                    failure.reason()))
+                            .toList()
+            );
+        } finally {
+            collectionLock.unlock();
+        }
     }
 
     private CollectionOutcome collectResources(Long projectId) {
@@ -132,7 +144,7 @@ public class IntegrationDataCollectionService {
                 integrationActivityStoreService.beginResourceCollection();
                 verifyIntegrationIfNeeded(resource, verifiedIntegrationIds);
                 collector.collect(resource);
-                resource.markCollected(Instant.now());
+                resourceCollectionStateService.markCollected(resource.getId(), Instant.now());
                 return true;
             } catch (ProviderResourceAccessException exception) {
                 if (handleProviderFailure(resource, failures, exception, attempt)) {
@@ -167,7 +179,7 @@ public class IntegrationDataCollectionService {
             int attempt
     ) {
         if (exception.statusCode() == 401 || exception.statusCode() == 403) {
-            resource.requireReauthorization();
+            resourceCollectionStateService.requireReauthorization(resource.getId());
             failures.add(new CollectionFailure(
                     resource,
                     exception.statusCode() == 401
@@ -177,7 +189,7 @@ public class IntegrationDataCollectionService {
             return true;
         }
         if (exception.statusCode() == 404) {
-            resource.disable();
+            resourceCollectionStateService.disable(resource.getId());
             failures.add(new CollectionFailure(resource, "provider resource not found"));
             return true;
         }
