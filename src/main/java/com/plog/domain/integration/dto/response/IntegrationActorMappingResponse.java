@@ -13,7 +13,9 @@ public record IntegrationActorMappingResponse(
         String memberName,
         @Schema(description = "프로젝트 멤버 닉네임", example = "바나")
         String memberNickname,
-        @Schema(description = "프로젝트 멤버 프로필 프리셋. 선택하지 않았으면 null", example = "OTTER")
+        @Schema(description = "프로젝트 멤버 프로필 프리셋. 선택하지 않았으면 null. 값: OTTER, PENGUIN, FROG, KOALA, PANDA, SMILEY, GHOST, TIGER",
+                example = "OTTER",
+                allowableValues = {"OTTER", "PENGUIN", "FROG", "KOALA", "PANDA", "SMILEY", "GHOST", "TIGER"})
         ProfilePreset profilePreset,
         @Schema(description = "현재 매핑된 provider 계정의 불투명 식별키",
                 example = "actor:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
