@@ -17,8 +17,9 @@ public record TaskAttachmentAddRequest(
         @PositiveOrZero(message = "파일 크기는 0 이상이어야 합니다.")
         Long fileSize,
 
+        // LINK 타입 전용 외부 URL. 조회 응답의 linkUrl 과 같은 값이다.
         @Size(max = 512, message = "URL 길이는 512자를 초과할 수 없습니다.")
-        String fileUrl,
+        String linkUrl,
 
         @Size(max = 512, message = "파일 키 길이는 512자를 초과할 수 없습니다.")
         String fileKey

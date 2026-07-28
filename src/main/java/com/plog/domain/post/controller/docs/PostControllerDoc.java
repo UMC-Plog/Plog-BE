@@ -23,7 +23,8 @@ public interface PostControllerDoc {
                     ### 첨부 (최대 10개)
                     - `FILE` — 먼저 `POST /files/presigned-upload-url`로 발급받아 S3에 업로드한 뒤
                       받은 `fileKey`를 보냅니다. `fileName`·`fileSize`는 발급 때와 같아야 합니다.
-                    - `LINK` — `fileUrl`에 외부 링크. **https만 허용**하며 사설망·localhost는 거부합니다.
+                    - `LINK` — `linkUrl`에 외부 링크. **https만 허용**하며 사설망·localhost는 거부합니다.
+                      조회 응답에서도 같은 이름(`linkUrl`)으로 돌아옵니다.
 
                     한 파일은 한 곳에만 첨부할 수 있어, 이미 쓰인 `fileKey`를 보내면 409입니다.
                     """
@@ -76,9 +77,15 @@ public interface PostControllerDoc {
             description = """
                     첨부·좋아요 수·댓글 수·본인 좋아요 여부를 함께 반환합니다.
 
-                    첨부의 `fileUrl`은 **10분간 유효한 임시 다운로드 URL**입니다. 오래 보관하지 말고
-                    필요할 때 다시 조회하세요. `FILE` 첨부에는 `fileId`가 함께 오며, 수정 요청에서
-                    그 첨부를 유지할 때 이 값을 씁니다.
+                    첨부 URL은 타입에 따라 필드가 갈립니다.
+                    - `LINK` — `linkUrl`에 외부 링크가 그대로 옵니다. 바로 이동하세요.
+                    - `FILE` — `downloadUrlApi`에 **다운로드 URL 발급 API 주소**가 옵니다.
+                      첨부를 클릭할 때 그 주소를 `GET`하면 5분짜리 presigned URL이 오고, 그리로
+                      이동하면 내려받아집니다. **`downloadUrlApi`를 `<a href>`에 직접 걸면 JSON이 보입니다.**
+                      presigned를 응답에 미리 담지 않는 이유는, 조회 시점에 발급하면 사용자가
+                      클릭할 때쯤 만료돼 다운로드가 실패하기 때문입니다.
+
+                    `FILE` 첨부에는 `fileId`가 함께 오며, 수정 요청에서 그 첨부를 유지할 때 이 값을 씁니다.
                     """
     )
     @ApiResponses({

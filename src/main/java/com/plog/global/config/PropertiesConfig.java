@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Configuration;
         WithdrawalProperties.class,
         CorsProperties.class,
         MediaProperties.class,
+        ApiProperties.class,
         GithubIntegrationProperties.class,
         FigmaIntegrationProperties.class,
         NotionIntegrationProperties.class,

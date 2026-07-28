@@ -82,7 +82,7 @@ public class TaskCommandService {
 
         List<TaskCreateResponse.AttachmentResponse> attachmentResponses = attachments.stream()
                 .map(attachment -> TaskCreateResponse.AttachmentResponse.of(
-                        attachment, urlResolver.resolve(attachment)))
+                        attachment, urlResolver.resolveDownloadUrlApi(projectId, attachment)))
                 .toList();
         return TaskCreateResponse.from(task, attachmentResponses);
     }
@@ -126,7 +126,7 @@ public class TaskCommandService {
         List<TaskUpdateResponse.AttachmentResponse> attachments = taskAttachmentRepository
                 .findAllByTaskId(taskId).stream()
                 .map(attachment -> TaskUpdateResponse.AttachmentResponse.of(
-                        attachment, urlResolver.resolve(attachment)))
+                        attachment, urlResolver.resolveDownloadUrlApi(projectId, attachment)))
                 .toList();
 
         return TaskUpdateResponse.from(task, attachments);
@@ -176,13 +176,13 @@ public class TaskCommandService {
             attachment = TaskAttachment.create(task, AttachmentType.FILE, request.fileSize(),
                     file, null, null);
         } else {
-            attachmentPolicy.validateLink(request.fileUrl(), TaskErrorCode.INVALID_LINK_URL);
+            attachmentPolicy.validateLink(request.linkUrl(), TaskErrorCode.INVALID_LINK_URL);
             attachment = TaskAttachment.create(task, AttachmentType.LINK, request.fileSize(),
-                    null, request.fileUrl(), request.fileName());
+                    null, request.linkUrl(), request.fileName());
         }
         taskAttachmentRepository.save(attachment);
 
-        return TaskAttachmentAddResponse.of(attachment, urlResolver.resolve(attachment));
+        return TaskAttachmentAddResponse.of(attachment, urlResolver.resolveDownloadUrlApi(projectId, attachment));
     }
 
     // 첨부파일 삭제
@@ -218,9 +218,9 @@ public class TaskCommandService {
         attachmentPolicy.validateCount(requests.size(), TaskErrorCode.TASK_ATTACHMENT_LIMIT_EXCEEDED);
         List<TaskAttachment> attachments = requests.stream().map(request -> {
             if (request.attachmentType() != AttachmentType.FILE) {
-                attachmentPolicy.validateLink(request.fileUrl(), TaskErrorCode.INVALID_LINK_URL);
+                attachmentPolicy.validateLink(request.linkUrl(), TaskErrorCode.INVALID_LINK_URL);
                 return TaskAttachment.create(task, AttachmentType.LINK, request.fileSize(),
-                        null, request.fileUrl(), request.fileName());
+                        null, request.linkUrl(), request.fileName());
             }
             UploadedFile file = attachmentPolicy.confirmFileAttachment(AttachmentUsage.TASK,
                     userId, request.fileName(), request.fileSize(), request.fileKey(),

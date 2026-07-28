@@ -15,8 +15,7 @@ class MediaCookieFactoryTest {
             SECRET, Duration.ofMinutes(30), Duration.ofDays(14), Duration.ofDays(14));
     private final JwtProvider jwtProvider = new JwtProvider(jwtProperties);
     private final MediaTokenProvider mediaTokenProvider = new MediaTokenProvider(jwtProperties);
-    private final MediaProperties mediaProperties =
-            new MediaProperties("https://api.umc-plog.site", "None");
+    private final MediaProperties mediaProperties = new MediaProperties("None");
     private final MediaCookieFactory factory =
             new MediaCookieFactory(jwtProvider, mediaTokenProvider, mediaProperties);
 
@@ -58,8 +57,7 @@ class MediaCookieFactoryTest {
     @Test
     void SameSite는_설정값을_따른다() {
         MediaCookieFactory laxFactory = new MediaCookieFactory(
-                jwtProvider, mediaTokenProvider,
-                new MediaProperties("http://localhost:8080", "Lax"));
+                jwtProvider, mediaTokenProvider, new MediaProperties("Lax"));
 
         assertThat(laxFactory.clear().getSameSite()).isEqualTo("Lax");
     }

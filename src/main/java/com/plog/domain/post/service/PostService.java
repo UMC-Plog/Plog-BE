@@ -19,9 +19,9 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
+import com.plog.global.common.AttachmentDownloadUrlFactory;
 import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.AttachmentUsage;
-import com.plog.infrastructure.s3.FileStorageService;
 import com.plog.infrastructure.s3.UploadedFile;
 import com.plog.infrastructure.s3.UploadedFileService;
 import java.time.Instant;
@@ -50,7 +50,7 @@ public class PostService {
     private final PostLikeRepository postLikeRepository;
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
-    private final FileStorageService fileStorageService;
+    private final AttachmentDownloadUrlFactory downloadUrlFactory;
     private final AttachmentPolicy attachmentPolicy;
     private final UploadedFileService uploadedFileService;
 
@@ -280,14 +280,19 @@ public class PostService {
 
     private PostDto.AttachmentResponse toAttachmentResponse(PostAttachment attachment) {
         UploadedFile file = attachment.getUploadedFile();
-        String url = file != null
-                ? fileStorageService.createDownloadUrl(
-                        AttachmentUsage.POST, file.getFileKey(), file.getOriginalFilename())
-                : attachment.getLinkUrl();
         String name = file != null ? file.getOriginalFilename() : attachment.getLinkName();
         Long fileId = file != null ? file.getId() : null;
+        // FILE 은 presigned 를 담지 않는다. 조회 시점에 발급하면 사용자가 클릭할 때쯤
+        // 만료돼 다운로드가 실패한다. 발급 API 주소만 알려주고 클릭 시점에 받아가게 한다.
+        // 판정은 uploadedFile 유무가 아니라 attachmentType 으로 한다 — 다운로드 서비스가
+        // "FILE 인데 파일이 없음"을 404 로 방어하므로 기준을 맞춘다(task 쪽도 동일).
+        String downloadUrlApi = attachment.getAttachmentType() == AttachmentType.FILE
+                ? downloadUrlFactory.forPost(
+                        attachment.getPost().getProjectMember().getProject().getId(),
+                        attachment.getId())
+                : null;
         return new PostDto.AttachmentResponse(attachment.getId(), attachment.getAttachmentType(),
-                fileId, name, attachment.getFileSize(), url);
+                fileId, name, attachment.getFileSize(), attachment.getLinkUrl(), downloadUrlApi);
     }
 
     private CommentDto.Response toCommentResponse(Comment comment) {
@@ -311,7 +316,7 @@ public class PostService {
                             .post(post)
                             .attachmentType(request.attachmentType())
                             .uploadedFile(file)
-                            .linkUrl(file == null ? request.fileUrl() : null)
+                            .linkUrl(file == null ? request.linkUrl() : null)
                             .linkName(file == null ? request.fileName() : null)
                             .fileSize(request.fileSize())
                             .build();
@@ -338,7 +343,7 @@ public class PostService {
                 throw new ApiException(PostErrorCode.VALIDATION_ERROR);
             }
             if (request.attachmentType() != AttachmentType.FILE) {
-                attachmentPolicy.validateLink(request.fileUrl(), PostErrorCode.INVALID_LINK_URL);
+                attachmentPolicy.validateLink(request.linkUrl(), PostErrorCode.INVALID_LINK_URL);
                 resolved.add(null);
                 continue;
             }
