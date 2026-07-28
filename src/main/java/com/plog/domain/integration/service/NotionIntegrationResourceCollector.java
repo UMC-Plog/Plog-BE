@@ -49,7 +49,9 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
             String cursor = null;
             do {
                 JsonNode page = post("/v1/data_sources/" + resource.getProviderResourceId() + "/query", token,
-                        cursor == null ? Map.of("page_size", 100) : Map.of("page_size", 100, "start_cursor", cursor));
+                        cursor == null
+                                ? Map.of("page_size", 100, "result_type", "page")
+                                : Map.of("page_size", 100, "result_type", "page", "start_cursor", cursor));
                 for (JsonNode result : page.path("results")) {
                     String pageId = result.path("id").asText();
                     if (!pageId.isBlank()) {
@@ -92,6 +94,9 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
                         editedBy.path("id").asText(createdBy.path("id").asText(null)), null, null,
                         parseInstant(block.path("last_edited_time").asText(block.path("created_time").asText(null))),
                         resource.getResourceUrl(), block.toString());
+                if (!id.isBlank()) {
+                    collectComments(resource, id, token);
+                }
                 if (block.path("has_children").asBoolean(false) && !id.isBlank()) {
                     collectBlocks(resource, id, token, visitedBlocks);
                 }
