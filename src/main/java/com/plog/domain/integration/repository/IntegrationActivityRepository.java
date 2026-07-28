@@ -36,14 +36,14 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
     );
 
     @Query("select activity.actorProviderId as actorProviderId, "
-            + "activity.actorLogin as actorLogin, activity.actorEmail as actorEmail, "
+            + "lower(activity.actorLogin) as actorLogin, lower(activity.actorEmail) as actorEmail, "
             + "count(activity.id) as activityCount, "
             + "min(activity.occurredAt) as firstOccurredAt, max(activity.occurredAt) as lastOccurredAt "
             + "from IntegrationActivity activity "
             + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "
             + "and (activity.actorProviderId is not null or activity.actorLogin is not null "
             + "or activity.actorEmail is not null) "
-            + "group by activity.actorProviderId, activity.actorLogin, activity.actorEmail")
+            + "group by activity.actorProviderId, lower(activity.actorLogin), lower(activity.actorEmail)")
     List<IntegrationActorObservation> findActorObservations(
             @Param("projectIntegrationId") Long projectIntegrationId
     );
