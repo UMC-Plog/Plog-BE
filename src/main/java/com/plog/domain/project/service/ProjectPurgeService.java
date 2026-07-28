@@ -26,9 +26,28 @@ public class ProjectPurgeService {
         delete("delete from ChatRoomReadCursor cursor where cursor.chatRoom.project.id = :projectId", projectId);
         delete("delete from ChatMessage message where message.chatRoom.project.id = :projectId", projectId);
         delete("delete from ChatRoom room where room.project.id = :projectId", projectId);
-        delete("delete from ActivityLog activity where activity.resource.project.id = :projectId", projectId);
-        delete("delete from ExternalResource resource where resource.project.id = :projectId", projectId);
-        delete("delete from ExternalConnection connection where connection.projectMember.project.id = :projectId", projectId);
+        // ddl-auto:update는 레거시 integration 테이블을 제거하지 않는다.
+        // 명시적 DB migration 전까지 기존 FK 행도 함께 정리한다.
+        delete("delete from ActivityLog activity "
+                + "where activity.resource.connection.projectMember.project.id = :projectId", projectId);
+        delete("delete from ExternalResource resource "
+                + "where resource.connection.projectMember.project.id = :projectId", projectId);
+        delete("delete from ExternalConnection connection "
+                + "where connection.projectMember.project.id = :projectId", projectId);
+        delete("delete from IntegrationActivity activity "
+                + "where activity.integrationResource.projectIntegration.project.id = :projectId", projectId);
+        delete("delete from ProjectMemberIntegrationIdentityAlias alias "
+                + "where alias.projectIntegration.project.id = :projectId", projectId);
+        delete("delete from ProjectMemberIntegrationIdentity identity "
+                + "where identity.projectIntegration.project.id = :projectId", projectId);
+        delete("delete from IntegrationResource resource "
+                + "where resource.projectIntegration.project.id = :projectId", projectId);
+        delete("delete from IntegrationAuthorizationState authorizationState "
+                + "where authorizationState.project.id = :projectId", projectId);
+        delete("delete from IntegrationCollectionRun collectionRun "
+                + "where collectionRun.project.id = :projectId", projectId);
+        delete("delete from ProjectIntegration integration "
+                + "where integration.project.id = :projectId", projectId);
         delete("delete from TaskAttachment attachment where attachment.task.projectMember.project.id = :projectId", projectId);
         delete("delete from Task task where task.projectMember.project.id = :projectId", projectId);
         delete("delete from PostLike postLike where postLike.post.projectMember.project.id = :projectId", projectId);
