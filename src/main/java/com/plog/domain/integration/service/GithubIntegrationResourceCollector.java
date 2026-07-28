@@ -76,15 +76,14 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
 
     private void collectIssues(IntegrationResource resource, String repositoryPath, String token) {
         for (JsonNode issue : getPages("/repos/" + repositoryPath + "/issues?state=all&per_page=100", token)) {
-            if (issue.has("pull_request")) {
-                continue;
-            }
-            JsonNode author = issue.path("user");
             String number = issue.path("number").asText();
-            activityStoreService.store(resource, IntegrationActivityType.GITHUB_ISSUE,
-                    "issue:" + number, author.path("id").asText(null), author.path("login").asText(null), null,
-                    parseInstant(issue.path("created_at").asText(null)), issue.path("html_url").asText(resource.getResourceUrl()),
-                    issue.toString());
+            if (!issue.has("pull_request")) {
+                JsonNode author = issue.path("user");
+                activityStoreService.store(resource, IntegrationActivityType.GITHUB_ISSUE,
+                        "issue:" + number, author.path("id").asText(null), author.path("login").asText(null), null,
+                        parseInstant(issue.path("created_at").asText(null)), issue.path("html_url").asText(resource.getResourceUrl()),
+                        issue.toString());
+            }
             for (JsonNode comment : getPages("/repos/" + repositoryPath + "/issues/" + number + "/comments?per_page=100", token)) {
                 JsonNode commenter = comment.path("user");
                 activityStoreService.store(resource, IntegrationActivityType.GITHUB_ISSUE_COMMENT,
@@ -113,7 +112,7 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
                 return results;
             }
         }
-        return results;
+        throw new ProviderResourceAccessException(503, null);
     }
 
     private JsonNode get(String path, String token) {
