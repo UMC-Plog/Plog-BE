@@ -52,7 +52,7 @@ class FileStorageControllerTest {
     }
 
     @Test
-    void createsSinglePresignedUrlWithoutApiVersionPrefix() throws Exception {
+    void createsSinglePresignedUrlWithApiPrefixWithoutVersion() throws Exception {
         given(uploadedFileService.issue(eq(7L), any(FileStorageDto.PresignedUploadRequest.class)))
                 .willReturn(new FileStorageDto.PresignedUploadResponse(
                         "https://storage.example/upload",
@@ -61,7 +61,7 @@ class FileStorageControllerTest {
                         Map.of("x-amz-tagging", List.of("state=pending&ownerId=7")),
                         Instant.parse("2026-07-21T01:10:00Z")));
 
-        mockMvc.perform(post("/files/presigned-upload-url")
+        mockMvc.perform(post("/api/files/presigned-upload-url")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"fileName":"document.pdf","contentType":"application/pdf","fileSize":1024,"usage":"POST"}
@@ -77,7 +77,7 @@ class FileStorageControllerTest {
 
     @Test
     void invalidFileSizeUsesValidationContract() throws Exception {
-        mockMvc.perform(post("/files/presigned-upload-url")
+        mockMvc.perform(post("/api/files/presigned-upload-url")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"fileName":"document.pdf","contentType":"application/pdf","fileSize":0}

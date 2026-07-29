@@ -23,7 +23,7 @@ public interface FileStorageControllerDoc {
                     ### 파일 첨부는 3단계입니다
                     **1단계만 하고 끝내면 파일은 자동 삭제됩니다.**
 
-                    1. `POST /files/presigned-upload-url` — 이 API. `uploadUrl` / `fileKey` / `fileId`를 받습니다.
+                    1. `POST /api/files/presigned-upload-url` — 이 API. `uploadUrl` / `fileKey` / `fileId`를 받습니다.
                     2. `PUT {uploadUrl}` — 프론트가 S3로 **직접** 업로드. 응답의 `signedHeaders`를 그대로 실어야 합니다.
                     3. 도메인 API에 `fileKey` 전달 — 게시글/업무카드 생성, 채팅 메시지 전송 등.
 

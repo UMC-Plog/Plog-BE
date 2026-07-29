@@ -18,7 +18,7 @@ import org.springframework.http.ResponseEntity;
 class ProjectSettingsControllerE2eTest extends E2eTestBase {
 
     @Nested
-    @DisplayName("GET /projects/{projectId}/settings")
+    @DisplayName("GET /api/projects/{projectId}/settings")
     class GetProjectSettings {
 
         @Test
@@ -86,7 +86,7 @@ class ProjectSettingsControllerE2eTest extends E2eTestBase {
     }
 
     @Nested
-    @DisplayName("PATCH /projects/{projectId}/settings")
+    @DisplayName("PATCH /api/projects/{projectId}/settings")
     class PatchProjectSettings {
 
         @Test
@@ -146,6 +146,6 @@ class ProjectSettingsControllerE2eTest extends E2eTestBase {
     }
 
     private String settings(Long projectId) {
-        return "/projects/" + projectId + "/settings";
+        return "/api/projects/" + projectId + "/settings";
     }
 }
