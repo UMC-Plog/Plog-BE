@@ -1,5 +1,8 @@
 package com.plog.domain.project.service;
 
+import com.plog.domain.integration.entity.ProjectIntegration;
+import com.plog.domain.integration.repository.ProjectIntegrationRepository;
+import com.plog.domain.integration.repository.ProjectMemberIntegrationIdentityRepository;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
 import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
 import com.plog.domain.project.dto.ProjectStatusDto;
@@ -28,6 +31,8 @@ public class ProjectStatusService {
     private final PeerEvaluationRepository peerEvaluationRepository;
     private final SelfFeedbackRepository selfFeedbackRepository;
     private final ProjectAccessService projectAccessService;
+    private final ProjectIntegrationRepository projectIntegrationRepository;
+    private final ProjectMemberIntegrationIdentityRepository identityRepository;
 
     @Transactional
     public ProjectStatusDto.Response checkAndUpdateStatus(
@@ -47,7 +52,11 @@ public class ProjectStatusService {
         }
 
         long activeMemberCount = projectMemberRepository.countByProjectIdAndStatus(projectId, MemberStatus.ACTIVE);
-        boolean allSubmitted = isAllEvaluationSubmitted(projectId, activeMemberCount);
+        boolean allEvaluationsSubmitted = isAllEvaluationSubmitted(projectId, activeMemberCount);
+        if (allEvaluationsSubmitted && !hasAllActorMappings(projectId, activeMemberCount)) {
+            throw new ApiException(ProjectErrorCode.ACTOR_MAPPING_REQUIRED);
+        }
+        boolean allSubmitted = allEvaluationsSubmitted;
         boolean timeoutApplied = !allSubmitted && isTimeoutReached(project.getEndDay());
 
         if (allSubmitted || timeoutApplied) {
@@ -72,6 +81,14 @@ public class ProjectStatusService {
 
         return submittedPeerEvaluationCount >= requiredPeerEvaluationCount
                 && submittedSelfFeedbackCount >= activeMemberCount;
+    }
+
+    private boolean hasAllActorMappings(Long projectId, long activeMemberCount) {
+        return projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId).stream()
+                .filter(ProjectIntegration::isConnected)
+                .allMatch(integration -> identityRepository
+                        .countByProjectIntegrationIdAndProjectMemberStatus(
+                                integration.getId(), MemberStatus.ACTIVE) >= activeMemberCount);
     }
 
     private boolean isTimeoutReached(LocalDate endDay) {
