@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.plog.domain.integration.entity.ProjectIntegration;
+import com.plog.domain.integration.repository.ProjectIntegrationRepository;
+import com.plog.domain.integration.repository.ProjectMemberIntegrationIdentityRepository;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
 import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
 import com.plog.domain.project.dto.ProjectStatusDto;
@@ -14,6 +17,7 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -44,6 +48,12 @@ class ProjectStatusServiceTest {
 
     @Mock
     private ProjectAccessService projectAccessService;
+
+    @Mock
+    private ProjectIntegrationRepository projectIntegrationRepository;
+
+    @Mock
+    private ProjectMemberIntegrationIdentityRepository identityRepository;
 
     @InjectMocks
     private ProjectStatusService projectStatusService;
@@ -97,6 +107,32 @@ class ProjectStatusServiceTest {
         assertThat(response.currentStatus()).isEqualTo(ProjectStatus.IN_PROGRESS);
         assertThat(response.isPublished()).isFalse();
         assertThat(response.isTimeoutApplied()).isFalse();
+    }
+
+    @Test
+    void checkAndUpdateStatusRejectsCompletionWhenActorMappingIsMissing() {
+        Project project = projectEndedDaysAgo(1);
+        mockProject(project);
+        when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
+        when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
+        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(3L);
+
+        ProjectIntegration integration = org.mockito.Mockito.mock(ProjectIntegration.class);
+        when(integration.isConnected()).thenReturn(true);
+        when(integration.getId()).thenReturn(20L);
+        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(PROJECT_ID))
+                .thenReturn(java.util.List.of(integration));
+        when(identityRepository.countByProjectIntegrationIdAndProjectMemberStatus(20L, MemberStatus.ACTIVE))
+                .thenReturn(2L);
+
+        assertThatThrownBy(() -> projectStatusService.checkAndUpdateStatus(
+                PROJECT_ID,
+                USER_ID,
+                new ProjectStatusDto.Request(ProjectStatus.COMPLETED)
+        ))
+                .isInstanceOf(ApiException.class)
+                .extracting(exception -> ((ApiException) exception).getErrorCode())
+                .isEqualTo(ProjectErrorCode.ACTOR_MAPPING_REQUIRED);
     }
 
     @Test
