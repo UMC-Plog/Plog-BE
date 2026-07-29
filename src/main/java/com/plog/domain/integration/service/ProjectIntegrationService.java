@@ -5,7 +5,10 @@ import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.entity.Project;
+import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.error.IntegrationErrorCode;
+import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -18,9 +21,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProjectIntegrationService {
     private final ProjectIntegrationRepository projectIntegrationRepository;
     private final IntegrationCredentialCipher credentialCipher;
+    private final ProjectRepository projectRepository;
 
     @Transactional(readOnly = true)
     public void requireNotConnected(Long projectId, LinkType linkType) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
+        if (project.isCompleted()) {
+            throw new ApiException(IntegrationErrorCode.WORKSPACE_INTEGRATION_LOCKED);
+        }
         projectIntegrationRepository.findByProjectIdAndLinkType(projectId, linkType)
                 .ifPresent(integration -> {
                     throw new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_ALREADY_CONNECTED);
