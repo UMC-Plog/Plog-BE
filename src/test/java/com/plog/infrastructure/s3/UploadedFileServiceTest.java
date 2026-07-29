@@ -11,11 +11,12 @@ import com.plog.global.api.exception.ApiException;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class UploadedFileServiceTest {
@@ -24,7 +25,19 @@ class UploadedFileServiceTest {
 
     @Mock private UploadedFileRepository repository;
     @Mock private FileStorageService fileStorageService;
-    @InjectMocks private UploadedFileService service;
+    @Mock private ApplicationEventPublisher eventPublisher;
+
+    private UploadedFileService service;
+
+    /**
+     * ThumbnailProperties 는 record 라 @InjectMocks 로는 못 채운다. 썸네일 판정 자체는
+     * UploadedFileServiceThumbnailTest 가 다루므로 여기서는 꺼 둔다.
+     */
+    @BeforeEach
+    void setUp() {
+        service = new UploadedFileService(repository, fileStorageService, eventPublisher,
+                new ThumbnailProperties(false, "plog-thumbnail", 640));
+    }
 
     private UploadedFile pendingFile() {
         return UploadedFile.issue(FILE_KEY, 7L, AttachmentUsage.CHAT,

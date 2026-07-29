@@ -27,7 +27,8 @@ import lombok.NoArgsConstructor;
 @Table(name = "uploaded_file", indexes = {
         @Index(name = "idx_uploaded_file_tagging", columnList = "status, tagged_at"),
         @Index(name = "idx_uploaded_file_issued", columnList = "status, issued_at"),
-        @Index(name = "idx_uploaded_file_released", columnList = "status, released_at")
+        @Index(name = "idx_uploaded_file_released", columnList = "status, released_at"),
+        @Index(name = "idx_uploaded_file_thumbnail", columnList = "thumbnail_status, thumbnail_at")
 })
 public class UploadedFile extends BaseEntity {
 
@@ -78,6 +79,36 @@ public class UploadedFile extends BaseEntity {
     @Column(name = "tagged_at")
     private LocalDateTime taggedAt;
 
+    /**
+     * 썸네일 생성 상태. 필드 초기화는 issue() 가 이 값을 안 건드리기 때문이다 —
+     * 채팅 이미지인지는 첨부가 확정될 때(confirmNew) 판정한다.
+     * <p>
+     * columnDefinition 으로 DB 기본값을 <b>반드시</b> 함께 준다. 필드 초기화는 DDL 에
+     * 실리지 않으므로, 이게 없으면 Hibernate 가 만드는 스키마에는 DEFAULT 가 없어
+     * JPA 를 거치지 않는 INSERT(테스트 픽스처의 raw SQL, 수동 데이터 이관)가 NOT NULL
+     * 위반으로 깨진다. 운영은 수동 DDL 로 DEFAULT 를 넣었으므로 스키마가 갈리는 것도 막는다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "thumbnail_status", nullable = false, length = 16,
+            columnDefinition = "varchar(16) default 'NONE'")
+    private ThumbnailStatus thumbnailStatus = ThumbnailStatus.NONE;
+
+    /**
+     * 키는 원본에서 결정론적으로 유도되지만 저장한다. 규칙을 나중에 바꿔도 이미 만들어진
+     * 썸네일이 안 깨지고, 조회할 때마다 규칙을 재계산하지 않는다.
+     */
+    @Column(name = "thumbnail_key", length = 512)
+    private String thumbnailKey;
+
+    /** 마지막 Lambda Invoke 시각. null 이면 아직 요청 전 = 스케줄러의 안전망 대상. */
+    @Column(name = "thumbnail_at")
+    private LocalDateTime thumbnailAt;
+
+    /** 운영 DDL 과 타입·기본값을 맞춘다(thumbnailStatus 의 columnDefinition 주석 참조). */
+    @Column(name = "thumbnail_attempts", nullable = false,
+            columnDefinition = "smallint default 0")
+    private int thumbnailAttempts;
+
     public static UploadedFile issue(String fileKey, Long ownerId, AttachmentUsage purpose,
                                      String originalFilename, String contentType, Long size,
                                      LocalDateTime issuedAt) {
@@ -115,5 +146,24 @@ public class UploadedFile extends BaseEntity {
 
     public void markTagged(LocalDateTime taggedAt) {
         this.taggedAt = taggedAt;
+    }
+
+    /**
+     * 썸네일 생성 대상으로 표시한다. 실제 Invoke 는 커밋 후에 일어난다.
+     * <p>
+     * thumbnailAt 을 반드시 비운다. 남겨 두면 ThumbnailScheduler.requestPending() 의
+     * "at IS NULL" 조건에 안 걸려, Invoke 가 유실됐을 때 아무도 재요청하지 않는다.
+     */
+    public void markThumbnailPending() {
+        this.thumbnailStatus = ThumbnailStatus.PENDING;
+        this.thumbnailAt = null;
+    }
+
+    public boolean isThumbnailPending() {
+        return thumbnailStatus == ThumbnailStatus.PENDING;
+    }
+
+    public boolean isThumbnailReady() {
+        return thumbnailStatus == ThumbnailStatus.READY;
     }
 }

@@ -18,6 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Limit;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class UploadedFileTagSchedulerTest {
@@ -95,5 +96,62 @@ class UploadedFileTagSchedulerTest {
         scheduler.purgeReleasedRows();
 
         verify(repository).deleteAll(List.of(file));
+    }
+
+    /**
+     * 썸네일에 state 태그가 안 붙으면 원본이 ORPHANED 로 지워질 때 Lifecycle 이
+     * 썸네일을 못 찾아 버킷에 영구히 남는다. Lifecycle 규칙이 접두사 없이 태그만 보므로
+     * 태그만 붙으면 원본과 같은 시점에 함께 만료된다.
+     */
+    @Test
+    void 썸네일_키가_있으면_같은_상태를_썸네일에도_반영한다() {
+        UploadedFile file = orphanedFileWithThumbnail();
+        given(repository.findByTaggedAtIsNull(any(Limit.class))).willReturn(List.of(file));
+        given(fileStorageService.applyState(anyString(), any(), anyLong())).willReturn(true);
+
+        scheduler.retryTagging();
+
+        verify(fileStorageService).applyState(
+                "chats/users/7/uuid/a.png", UploadedFileStatus.ORPHANED, 7L);
+        verify(fileStorageService).applyState(
+                "thumbs/chats/users/7/uuid/a.png.webp", UploadedFileStatus.ORPHANED, 7L);
+    }
+
+    /**
+     * 썸네일 태깅 실패가 원본 태깅을 막으면 그 행이 taggedAt=null 로 남아 큐를 영구히
+     * 점유한다. 최악의 경우 수십 KB 가 남을 뿐이므로 로그만 남기고 넘어간다.
+     */
+    @Test
+    void 썸네일_태깅이_실패해도_원본은_태깅_완료로_기록한다() {
+        UploadedFile file = orphanedFileWithThumbnail();
+        given(repository.findByTaggedAtIsNull(any(Limit.class))).willReturn(List.of(file));
+        given(fileStorageService.applyState(
+                eq("chats/users/7/uuid/a.png"), any(), anyLong())).willReturn(true);
+        given(fileStorageService.applyState(
+                eq("thumbs/chats/users/7/uuid/a.png.webp"), any(), anyLong()))
+                .willThrow(new IllegalStateException("AccessDenied"));
+
+        scheduler.retryTagging();
+
+        verify(repository).markTagged(eq(file.getId()), any());
+    }
+
+    /** 썸네일이 없는 파일(비이미지 등)에 불필요한 S3 호출을 하지 않는다. */
+    @Test
+    void 썸네일_키가_없으면_원본만_태깅한다() {
+        UploadedFile file = orphanedFile();
+        given(repository.findByTaggedAtIsNull(any(Limit.class))).willReturn(List.of(file));
+        given(fileStorageService.applyState(anyString(), any(), anyLong())).willReturn(true);
+
+        scheduler.retryTagging();
+
+        verify(fileStorageService, times(1)).applyState(anyString(), any(), anyLong());
+    }
+
+    private UploadedFile orphanedFileWithThumbnail() {
+        UploadedFile file = orphanedFile();
+        ReflectionTestUtils.setField(file, "thumbnailKey",
+                "thumbs/chats/users/7/uuid/a.png.webp");
+        return file;
     }
 }

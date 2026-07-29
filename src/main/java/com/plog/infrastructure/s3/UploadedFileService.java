@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +26,8 @@ public class UploadedFileService {
 
     private final UploadedFileRepository uploadedFileRepository;
     private final FileStorageService fileStorageService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final ThumbnailProperties thumbnailProperties;
 
     @Transactional
     public FileStorageDto.PresignedUploadResponse issue(
@@ -69,7 +72,26 @@ public class UploadedFileService {
             throw new ApiException(FileStorageErrorCode.FILE_ALREADY_ATTACHED);
         }
         file.confirm(now);
+        markThumbnailTargetIfNeeded(usage, file);
         return file;
+    }
+
+    /**
+     * 썸네일 대상이면 상태만 찍고 이벤트를 던진다. <b>여기서 Lambda 를 부르지 않는다</b> —
+     * 이 메서드는 트랜잭션 안이라 커밋 전에 Invoke 가 나가고, 롤백되면 고아 썸네일이 남는다.
+     * <p>
+     * 판정 조건 셋이 각각 다른 것을 막는다. enabled: 꺼진 환경에 큐가 쌓이는 것 /
+     * CHAT: 이번 범위 밖 도메인 / isImageContentType: pdf·zip 이 Lambda 를 깨우는 것.
+     * POST·TASK 로 넓힐 때 바뀌는 것은 가운데 조건 하나뿐이다.
+     */
+    private void markThumbnailTargetIfNeeded(AttachmentUsage usage, UploadedFile file) {
+        if (!thumbnailProperties.enabled()
+                || usage != AttachmentUsage.CHAT
+                || !FileStorageService.isImageContentType(file.getContentType())) {
+            return;
+        }
+        file.markThumbnailPending();
+        eventPublisher.publishEvent(new ThumbnailRequestedEvent(file.getId()));
     }
 
     /**

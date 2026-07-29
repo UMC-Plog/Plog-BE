@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -55,6 +56,13 @@ public class FileStorageService {
             Map.entry("webp", Set.of("image/webp")),
             Map.entry("gif", Set.of("image/gif"))
     );
+    /**
+     * 썸네일 대상 Content-Type. 위 두 상수에서 유도한다 — 허용 목록을 고칠 때
+     * 여기를 같이 고치는 것을 잊으면 조용히 어긋난다.
+     */
+    private static final Set<String> IMAGE_CONTENT_TYPES = IMAGE_EXTENSIONS.stream()
+            .flatMap(extension -> ALLOWED_CONTENT_TYPES.get(extension).stream())
+            .collect(Collectors.toUnmodifiableSet());
 
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
@@ -64,6 +72,14 @@ public class FileStorageService {
 
     @Value("${plog.s3.bucket:}")
     private String bucket;
+
+    /**
+     * 썸네일 대상 판정. <b>프리픽스가 아니라 Content-Type 으로 한다</b> — 채팅 첨부는
+     * 이미지 전용이 아니라 pdf·zip·docx·pptx·fig 가 섞여 있다.
+     */
+    public static boolean isImageContentType(String contentType) {
+        return contentType != null && IMAGE_CONTENT_TYPES.contains(contentType);
+    }
 
     /** 키는 생성 후 이동하지 않는다. 상태는 태그가 들고 있다. */
     public String buildKey(AttachmentUsage usage, Long userId, String fileName) {
@@ -101,6 +117,25 @@ public class FileStorageService {
                     HeadObjectRequest.builder().bucket(bucket).key(fileKey).build());
             return head.contentLength() == expectedSize
                     && expectedContentType.equals(head.contentType());
+        } catch (NoSuchKeyException exception) {
+            return false;
+        } catch (S3Exception exception) {
+            if (exception.statusCode() == 404) {
+                return false;
+            }
+            throw new ApiException(FileStorageErrorCode.FILE_STORAGE_ERROR, exception);
+        }
+    }
+
+    /**
+     * 객체 존재 여부만 본다. 썸네일 생성 완료 판정용이라 크기·타입을 대조하지 않는다 —
+     * 그 값들은 Lambda 가 정하므로 백엔드가 기대값을 갖고 있지 않다.
+     */
+    public boolean exists(String fileKey) {
+        ensureEnabled();
+        try {
+            s3Client.headObject(HeadObjectRequest.builder().bucket(bucket).key(fileKey).build());
+            return true;
         } catch (NoSuchKeyException exception) {
             return false;
         } catch (S3Exception exception) {

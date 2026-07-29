@@ -8,6 +8,7 @@ import com.plog.domain.integration.config.NotionIntegrationProperties;
 import com.plog.domain.user.config.GoogleOAuthProperties;
 import com.plog.domain.user.config.KakaoOAuthProperties;
 import com.plog.global.security.jwt.JwtProperties;
+import com.plog.infrastructure.s3.ThumbnailProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
@@ -27,7 +28,8 @@ import org.springframework.context.annotation.Configuration;
         IntegrationRedirectProperties.class,
         KakaoOAuthProperties.class,
         GoogleOAuthProperties.class,
-        SocialSignupProperties.class
+        SocialSignupProperties.class,
+        ThumbnailProperties.class
 })
 public class PropertiesConfig {
 }

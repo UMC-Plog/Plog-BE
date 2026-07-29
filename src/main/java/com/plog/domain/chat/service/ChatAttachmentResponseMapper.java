@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 public class ChatAttachmentResponseMapper {
 
     private static final String PATH_PREFIX = "/api/chat-attachments/";
+    private static final String THUMB_SUFFIX = "/thumb";
 
     private final String baseUrl;
 
@@ -38,7 +39,18 @@ public class ChatAttachmentResponseMapper {
                 file.getOriginalFilename(),
                 file.getSize(),
                 baseUrl + PATH_PREFIX + attachment.getId(),
-                // 썸네일 파이프라인은 아직 없다. 계약만 고정한다.
-                null);
+                thumbnailUrl(attachment),
+                file.isThumbnailPending());
+    }
+
+    /**
+     * READY 가 아니면 null 이다. 썸네일 준비 push(ChatThumbnailReadyListener)도 이 메서드를
+     * 쓴다 — URL 조립이 두 곳에 있으면 한쪽만 고쳐져 "목록은 되는데 push 는 안 되는"
+     * 상태가 된다.
+     */
+    public String thumbnailUrl(ChatAttachment attachment) {
+        return attachment.getUploadedFile().isThumbnailReady()
+                ? baseUrl + PATH_PREFIX + attachment.getId() + THUMB_SUFFIX
+                : null;
     }
 }

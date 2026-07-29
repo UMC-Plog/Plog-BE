@@ -57,6 +57,11 @@ jobs:
             # S3 자격증명은 EC2 인스턴스 역할에서 오므로 키를 .env 에 두지 않는다.
             # S3_REGION 은 코드 기본값(ap-northeast-2), S3_ENDPOINT 는 MinIO 등 로컬 전용이라 생략.
             #
+            # 썸네일(THUMBNAIL_*)도 비밀값이 아니라 S3_* 처럼 여기 하드코딩한다.
+            # Lambda 호출 권한 역시 EC2 인스턴스 역할(lambda:InvokeFunction)에서 온다.
+            # 끄려면 THUMBNAIL_ENABLED=false 로 바꿔 재배포한다 — EC2 의 .env 를 직접 고치면
+            # 다음 배포에 이 블록이 덮어써서 되돌아온다.
+            #
             # 소셜 로그인(카카오/구글) 값들:
             #  - GOOGLE_* 는 프로젝트 연동(Drive)용이고 SOCIAL_GOOGLE_* 는 로그인용이다. 서로 다른
             #    OAuth 클라이언트라 이름을 분리했다 — 한쪽 값을 다른 쪽에 넣으면 조용히 인증만 실패한다.
@@ -82,6 +87,8 @@ jobs:
             INVITE_BASE_URL=${{ secrets.INVITE_BASE_URL }}
             S3_ENABLED=true
             S3_BUCKET=umc-plog-prod
+            THUMBNAIL_ENABLED=true
+            THUMBNAIL_FUNCTION_NAME=plog-thumbnail
             INTEGRATION_CREDENTIAL_ENCRYPTION_KEY_BASE64=${{ secrets.INTEGRATION_CREDENTIAL_ENCRYPTION_KEY_BASE64 }}
             INTEGRATION_SUCCESS_REDIRECT_URL=${{ secrets.INTEGRATION_SUCCESS_REDIRECT_URL || 'http://localhost:5173/integrations/callback' }}
             INTEGRATION_FAILURE_REDIRECT_URL=${{ secrets.INTEGRATION_FAILURE_REDIRECT_URL || 'http://localhost:5173/integrations/callback' }}
