@@ -75,7 +75,7 @@ public class PostService {
         return toCreateResponse(post, member, savedAttachments);
     }
 
-    public PostDto.Response getPost(Long projectId, Long postId, Long userId) {
+    public PostDto.PostResponse getPost(Long projectId, Long postId, Long userId) {
         requireProject(projectId);
         ProjectMember member = requireActiveMember(projectId, userId);
         Post post = requirePost(projectId, postId);
@@ -102,11 +102,11 @@ public class PostService {
                 ? Map.of()
                 : attachmentRepository.findAllByPostIdInOrderByIdAsc(postIds).stream()
                         .collect(Collectors.groupingBy(attachment -> attachment.getPost().getId()));
-        List<PostDto.Response> posts = page.stream()
+        List<PostDto.PostResponse> posts = page.stream()
                 .map(post -> toResponse(post, member, attachmentsByPostId.getOrDefault(post.getId(), List.of())))
                 .toList();
         String nextCursor = hasNext && !page.isEmpty() ? encodeCursor(page.get(page.size() - 1)) : null;
-        PostDto.Response notice = postRepository.findFirstByProjectMemberProjectIdAndIsNoticeTrue(projectId)
+        PostDto.PostResponse notice = postRepository.findFirstByProjectMemberProjectIdAndIsNoticeTrue(projectId)
                 .map(post -> toResponse(post, member, attachmentRepository.findAllByPostIdOrderByIdAsc(post.getId())))
                 .orElse(null);
         return new PostDto.FeedResponse(notice, posts, nextCursor, hasNext);
@@ -240,9 +240,9 @@ public class PostService {
         return new PostDto.LikeResponse(postId, false, postLikeRepository.countByPostId(postId));
     }
 
-    private PostDto.Response toResponse(Post post, ProjectMember viewer, List<PostAttachment> attachments) {
+    private PostDto.PostResponse toResponse(Post post, ProjectMember viewer, List<PostAttachment> attachments) {
         List<PostDto.AttachmentResponse> attachmentResponses = attachments.stream().map(this::toAttachmentResponse).toList();
-        return new PostDto.Response(
+        return new PostDto.PostResponse(
                 post.getId(), post.getProjectMember().getProject().getId(), post.getProjectMember().getId(),
                 post.getProjectMember().getAnNickname(), post.getContent(), post.isNotice(),
                 postLikeRepository.countByPostId(post.getId()), commentRepository.countByPostId(post.getId()),

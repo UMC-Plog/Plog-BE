@@ -54,7 +54,7 @@ public class PostController implements PostControllerDoc {
 
     @Override
     @GetMapping("/{postId}")
-    public ApiResponse<PostDto.Response> getPost(
+    public ApiResponse<PostDto.PostResponse> getPost(
             @PathVariable Long projectId,
             @PathVariable Long postId,
             @AuthenticationPrincipal Long userId
