@@ -17,7 +17,7 @@ import org.springframework.http.ResponseEntity;
 class PostControllerE2eTest extends E2eTestBase {
 
     @Nested
-    @DisplayName("POST /projects/{projectId}/posts")
+    @DisplayName("POST /api/projects/{projectId}/posts")
     class CreatePost {
 
         @Test
@@ -71,7 +71,7 @@ class PostControllerE2eTest extends E2eTestBase {
     }
 
     @Nested
-    @DisplayName("GET /projects/{projectId}/posts")
+    @DisplayName("GET /api/projects/{projectId}/posts")
     class GetFeed {
 
         @Test
@@ -108,7 +108,7 @@ class PostControllerE2eTest extends E2eTestBase {
     }
 
     @Nested
-    @DisplayName("GET /projects/{projectId}/posts/{postId}")
+    @DisplayName("GET /api/projects/{projectId}/posts/{postId}")
     class GetPost {
 
         @Test
@@ -144,7 +144,7 @@ class PostControllerE2eTest extends E2eTestBase {
     }
 
     @Nested
-    @DisplayName("PATCH /projects/{projectId}/posts/{postId}")
+    @DisplayName("PATCH /api/projects/{projectId}/posts/{postId}")
     class UpdatePost {
 
         @Test
@@ -189,7 +189,7 @@ class PostControllerE2eTest extends E2eTestBase {
     }
 
     @Nested
-    @DisplayName("DELETE /projects/{projectId}/posts/{postId}")
+    @DisplayName("DELETE /api/projects/{projectId}/posts/{postId}")
     class DeletePost {
 
         @Test
@@ -222,7 +222,7 @@ class PostControllerE2eTest extends E2eTestBase {
     }
 
     @Nested
-    @DisplayName("PATCH /projects/{projectId}/posts/{postId}/notice")
+    @DisplayName("PATCH /api/projects/{projectId}/posts/{postId}/notice")
     class ChangeNotice {
 
         @Test
@@ -267,7 +267,7 @@ class PostControllerE2eTest extends E2eTestBase {
     }
 
     @Nested
-    @DisplayName("POST /projects/{projectId}/posts/{postId}/comments")
+    @DisplayName("POST /api/projects/{projectId}/posts/{postId}/comments")
     class CreateComment {
 
         @Test
@@ -290,7 +290,7 @@ class PostControllerE2eTest extends E2eTestBase {
     }
 
     @Nested
-    @DisplayName("GET /projects/{projectId}/posts/{postId}/comments")
+    @DisplayName("GET /api/projects/{projectId}/posts/{postId}/comments")
     class GetComments {
 
         @Test
@@ -313,7 +313,7 @@ class PostControllerE2eTest extends E2eTestBase {
     }
 
     @Nested
-    @DisplayName("DELETE /projects/{projectId}/posts/{postId}/comments/{commentId}")
+    @DisplayName("DELETE /api/projects/{projectId}/posts/{postId}/comments/{commentId}")
     class DeleteComment {
 
         @Test
@@ -340,7 +340,7 @@ class PostControllerE2eTest extends E2eTestBase {
     }
 
     @Nested
-    @DisplayName("PUT /projects/{projectId}/posts/{postId}/like")
+    @DisplayName("PUT /api/projects/{projectId}/posts/{postId}/like")
     class LikePost {
 
         @Test
@@ -361,7 +361,7 @@ class PostControllerE2eTest extends E2eTestBase {
     }
 
     @Nested
-    @DisplayName("DELETE /projects/{projectId}/posts/{postId}/like")
+    @DisplayName("DELETE /api/projects/{projectId}/posts/{postId}/like")
     class UnlikePost {
 
         @Test
@@ -391,7 +391,7 @@ class PostControllerE2eTest extends E2eTestBase {
     }
 
     private String posts(Long projectId) {
-        return "/projects/" + projectId + "/posts";
+        return "/api/projects/" + projectId + "/posts";
     }
 
     private String post(Long projectId, Long postId) {

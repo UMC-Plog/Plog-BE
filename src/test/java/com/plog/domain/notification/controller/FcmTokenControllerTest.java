@@ -58,7 +58,7 @@ class FcmTokenControllerTest {
                 .willReturn(new FcmTokenDto.Response(
                         3L, 7L, "device-token", Instant.parse("2026-07-21T01:00:00Z")));
 
-        mockMvc.perform(put("/users/me/fcm-token")
+        mockMvc.perform(put("/api/users/me/fcm-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"token\":\"device-token\"}"))
                 .andExpect(status().isOk())
@@ -73,13 +73,13 @@ class FcmTokenControllerTest {
         given(fcmTokenService.delete(eq(7L), eq(new FcmTokenDto.Request("device-token"))))
                 .willReturn(new FcmTokenDto.DeletedResponse(true));
 
-        mockMvc.perform(delete("/users/me/fcm-token")
+        mockMvc.perform(delete("/api/users/me/fcm-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"token\":\"device-token\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.deleted").value(true));
 
-        mockMvc.perform(post("/users/me/fcm-token")
+        mockMvc.perform(post("/api/users/me/fcm-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"token\":\"device-token\"}"))
                 .andExpect(status().isMethodNotAllowed());
@@ -87,7 +87,7 @@ class FcmTokenControllerTest {
 
     @Test
     void invalidTokenReturnsContractValidationCode() throws Exception {
-        mockMvc.perform(put("/users/me/fcm-token")
+        mockMvc.perform(put("/api/users/me/fcm-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"token\":\"   \"}"))
                 .andExpect(status().isBadRequest())

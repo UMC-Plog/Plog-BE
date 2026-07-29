@@ -22,10 +22,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-// 경로에 /api 를 붙이지 않는다. AssignedApiExceptionHandler 가 지목한 "담당 API" 4개
-// (Post, ProjectSettings, FcmToken, FileStorage)가 공유하는 표식이고,
+// 버전 경로 없이 /api 공통 접두사를 사용한다. AssignedApiExceptionHandler 가 지목한 "담당 API" 4개
+// (Post, ProjectSettings, FcmToken, FileStorage)가 공유하는 경로 정책이고,
 // JwtAuthenticationEntryPoint.isAssignedApi 가 이 경로로 401 계약(UNAUTHORIZED)을 맞춘다.
-@RequestMapping("/projects/{projectId}/posts")
+@RequestMapping("/api/projects/{projectId}/posts")
 @RequiredArgsConstructor
 public class PostController implements PostControllerDoc {
     private final PostService postService;

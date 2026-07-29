@@ -21,7 +21,7 @@ public interface PostControllerDoc {
                     새 공지를 올리면 기존 공지는 자동으로 해제됩니다.
 
                     ### 첨부 (최대 10개)
-                    - `FILE` — 먼저 `POST /files/presigned-upload-url`로 발급받아 S3에 업로드한 뒤
+                    - `FILE` — 먼저 `POST /api/files/presigned-upload-url`로 발급받아 S3에 업로드한 뒤
                       받은 `fileKey`를 보냅니다. `fileName`·`fileSize`는 발급 때와 같아야 합니다.
                     - `LINK` — `linkUrl`에 외부 링크. **https만 허용**하며 사설망·localhost는 거부합니다.
                       조회 응답에서도 같은 이름(`linkUrl`)으로 돌아옵니다.

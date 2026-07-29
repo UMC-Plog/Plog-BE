@@ -21,7 +21,7 @@ import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 class FileStorageControllerE2eTest extends E2eTestBase {
 
     @Nested
-    @DisplayName("POST /files/presigned-upload-url")
+    @DisplayName("POST /api/files/presigned-upload-url")
     class CreatePresignedUploadUrl {
 
         @Test
@@ -122,7 +122,7 @@ class FileStorageControllerE2eTest extends E2eTestBase {
 
             ResponseEntity<JsonNode> response = request(
                     HttpMethod.POST,
-                    "/projects/" + projectId + "/posts",
+                    "/api/projects/" + projectId + "/posts",
                     userId,
                     Map.of(
                             "content", "파일을 공유합니다.",
@@ -185,7 +185,7 @@ class FileStorageControllerE2eTest extends E2eTestBase {
 
             ResponseEntity<JsonNode> response = request(
                     HttpMethod.DELETE,
-                    "/projects/" + projectId + "/posts/" + postId,
+                    "/api/projects/" + projectId + "/posts/" + postId,
                     userId,
                     null
             );
@@ -196,7 +196,7 @@ class FileStorageControllerE2eTest extends E2eTestBase {
         }
 
         private ResponseEntity<JsonNode> createPostWith(Long projectId, Long userId, String fileKey) {
-            return request(HttpMethod.POST, "/projects/" + projectId + "/posts", userId,
+            return request(HttpMethod.POST, "/api/projects/" + projectId + "/posts", userId,
                     Map.of(
                             "content", "파일을 공유합니다.",
                             "isNotice", false,
@@ -227,6 +227,6 @@ class FileStorageControllerE2eTest extends E2eTestBase {
     }
 
     private String uploadPath() {
-        return "/files/presigned-upload-url";
+        return "/api/files/presigned-upload-url";
     }
 }
