@@ -97,7 +97,7 @@ public interface PostControllerDoc {
                     responseCode = "404", description = "프로젝트 또는 게시글 없음 "
                             + "(PROJECT_NOT_FOUND / POST_NOT_FOUND)")
     })
-    ApiResponse<PostDto.Response> getPost(Long projectId, Long postId, Long userId);
+    ApiResponse<PostDto.PostResponse> getPost(Long projectId, Long postId, Long userId);
 
     @Operation(
             summary = "게시글 수정",
