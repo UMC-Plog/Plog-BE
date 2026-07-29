@@ -120,8 +120,9 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
     @Query("select member from ProjectMember member "
             + "where member.project.id = :projectId and member.status = :status "
             + "and member.id <> :excludeMemberId "
-            + "and lower(coalesce(member.anNickname, member.user.nickname)) like lower(concat('%', :keyword, '%')) "
-            + "order by coalesce(member.anNickname, member.user.nickname) asc")
+            + "and lower(coalesce(nullif(trim(member.anNickname), ''), member.user.nickname)) "
+            + "like lower(concat('%', :keyword, '%')) "
+            + "order by coalesce(nullif(trim(member.anNickname), ''), member.user.nickname) asc")
     List<ProjectMember> findMentionableMembers(
             @Param("projectId") Long projectId,
             @Param("status") MemberStatus status,
