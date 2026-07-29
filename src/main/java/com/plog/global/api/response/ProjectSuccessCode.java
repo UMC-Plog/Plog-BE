@@ -17,6 +17,8 @@ public enum ProjectSuccessCode implements BaseCode {
     PROJECT_INVITE_REISSUED(HttpStatus.OK, "PROJECT006", "프로젝트 초대 링크를 재발급했습니다."),
     PROJECT_LIST_RETRIEVED(HttpStatus.OK, "PROJECT007", "내 프로젝트 목록을 조회했습니다."),
     PROJECT_INVITATION_PREVIEW_RETRIEVED(HttpStatus.OK, "PROJECT008", "프로젝트 초대 정보를 조회했습니다."),
+    PROJECT_MEMBER_LIST_RETRIEVED(HttpStatus.OK, "PROJECT009", "프로젝트 멤버 목록을 조회했습니다."
+    ),
 
     PROJECT_STATUS_UPDATED(HttpStatus.OK, "PROJ200_1", "프로젝트 상태를 성공적으로 확인/갱신했습니다."),
     PROJECT_SETTING_UPDATED(HttpStatus.OK, "PROJ200_2", "프로젝트 설정이 변경되었습니다."),
