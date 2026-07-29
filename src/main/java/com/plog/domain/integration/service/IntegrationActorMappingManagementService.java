@@ -15,6 +15,7 @@ import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.integration.repository.ProjectMemberIntegrationIdentityAliasRepository;
 import com.plog.domain.integration.repository.ProjectMemberIntegrationIdentityRepository;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.global.api.error.IntegrationErrorCode;
@@ -88,6 +89,7 @@ public class IntegrationActorMappingManagementService {
             IntegrationActorMappingRequest request
     ) {
         ProjectMember currentMember = requireActiveMember(projectId, userId);
+        requireMappingEditable(projectId);
         ProjectIntegration integration = requireConnectedIntegrationForUpdate(projectId, linkType);
         ProviderActor providerActor = providerActors(integration.getId()).stream()
                 .filter(item -> item.actorKey().equals(request.actorKey()))
@@ -158,6 +160,7 @@ public class IntegrationActorMappingManagementService {
     @Transactional
     public IntegrationActorMappingResponse removeMyMapping(Long projectId, Long userId, LinkType linkType) {
         ProjectMember currentMember = requireActiveMember(projectId, userId);
+        requireMappingEditable(projectId);
         ProjectIntegration integration = requireConnectedIntegrationForUpdate(projectId, linkType);
         ProjectMemberIntegrationIdentity identity = identityRepository
                 .findByProjectIntegrationIdAndProjectMemberId(integration.getId(), currentMember.getId())
@@ -177,6 +180,14 @@ public class IntegrationActorMappingManagementService {
             throw new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND);
         }
         return projectAccessService.requireActiveMember(projectId, userId);
+    }
+
+    private void requireMappingEditable(Long projectId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
+        if (project.isCompleted()) {
+            throw new ApiException(IntegrationErrorCode.ACTOR_MAPPING_LOCKED);
+        }
     }
 
     private ProjectIntegration requireConnectedIntegration(Long projectId, LinkType linkType) {
