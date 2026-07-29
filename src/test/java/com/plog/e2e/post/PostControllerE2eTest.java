@@ -75,6 +75,24 @@ class PostControllerE2eTest extends E2eTestBase {
     class GetFeed {
 
         @Test
+        @DisplayName("OpenAPI 피드 응답이 게시글 스키마를 참조한다")
+        void openApiUsesPostResponseSchema() {
+            ResponseEntity<JsonNode> response = request(HttpMethod.GET, "/v3/api-docs", null, null);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            JsonNode schemas = response.getBody().path("components").path("schemas");
+            JsonNode postResponse = schemas.path("PostResponse");
+            assertThat(postResponse.path("properties").has("postId")).isTrue();
+            assertThat(postResponse.path("properties").has("content")).isTrue();
+            assertThat(postResponse.path("properties").has("attachments")).isTrue();
+            assertThat(schemas.path("FeedResponse").path("properties").path("notice").path("$ref").asText())
+                    .endsWith("/PostResponse");
+            assertThat(schemas.path("FeedResponse").path("properties").path("posts")
+                    .path("items").path("$ref").asText())
+                    .endsWith("/PostResponse");
+        }
+
+        @Test
         @DisplayName("공지와 일반 게시글을 분리하고 불투명 커서로 페이지를 조회한다")
         void noticeAndCursorPagination() {
             Long userId = saveUser("feed-reader");

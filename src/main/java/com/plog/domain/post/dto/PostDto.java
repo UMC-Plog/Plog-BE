@@ -56,7 +56,7 @@ public final class PostDto {
             String downloadUrlApi
     ) {}
 
-    public record Response(
+    public record PostResponse(
             Long postId,
             Long projectId,
             Long projectMemberId,
@@ -97,7 +97,12 @@ public final class PostDto {
             Instant updatedAt
     ) {}
 
-    public record FeedResponse(Response notice, List<Response> posts, String nextCursor, boolean hasNext) {}
+    public record FeedResponse(
+            PostResponse notice,
+            List<PostResponse> posts,
+            String nextCursor,
+            boolean hasNext
+    ) {}
 
     public record NoticeResponse(Long postId, Long projectId, boolean isNotice, Instant updatedAt) {}
 
