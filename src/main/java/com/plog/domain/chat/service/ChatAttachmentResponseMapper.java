@@ -2,7 +2,7 @@ package com.plog.domain.chat.service;
 
 import com.plog.domain.chat.dto.response.ChatMessageResponse;
 import com.plog.domain.chat.entity.ChatAttachment;
-import com.plog.global.config.MediaProperties;
+import com.plog.global.config.ApiProperties;
 import com.plog.infrastructure.s3.UploadedFile;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -19,8 +19,8 @@ public class ChatAttachmentResponseMapper {
 
     private final String baseUrl;
 
-    public ChatAttachmentResponseMapper(MediaProperties mediaProperties) {
-        String configured = mediaProperties.baseUrl();
+    public ChatAttachmentResponseMapper(ApiProperties apiProperties) {
+        String configured = apiProperties.baseUrl();
         this.baseUrl = configured.endsWith("/")
                 ? configured.substring(0, configured.length() - 1)
                 : configured;

@@ -32,7 +32,7 @@ class PostControllerE2eTest extends E2eTestBase {
                     "isNotice", false,
                     "attachments", List.of(Map.of(
                             "attachmentType", "LINK",
-                            "fileUrl", "https://docs.example.com/output"
+                            "linkUrl", "https://docs.example.com/output"
                     ))
             ));
 

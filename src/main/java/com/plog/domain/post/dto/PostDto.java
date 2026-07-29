@@ -22,8 +22,9 @@ public final class PostDto {
             @Schema(description = "기존 첨부를 유지할 때 보내는 uploaded_file ID. "
                     + "fileKey 와 동시에 보낼 수 없다.")
             Long fileId,
-            @Schema(description = "LINK 첨부의 외부 URL. FILE 첨부에는 쓰지 않는다.")
-            String fileUrl
+            @Schema(description = "LINK 첨부의 외부 URL. FILE 첨부에는 쓰지 않는다. "
+                    + "조회 응답의 linkUrl 과 같은 값이다.")
+            String linkUrl
     ) {}
 
     public record CreateRequest(
@@ -47,7 +48,12 @@ public final class PostDto {
             Long fileId,
             String fileName,
             Long fileSize,
-            String fileUrl
+            @Schema(description = "LINK 첨부의 외부 링크. FILE 이면 null")
+            String linkUrl,
+            @Schema(description = "FILE 첨부의 다운로드 URL 발급 API 주소. 클릭 시 이 주소를 "
+                    + "호출해 presigned 를 받는다. LINK 면 null. "
+                    + "이 주소를 <a href> 에 걸면 JSON 이 보인다")
+            String downloadUrlApi
     ) {}
 
     public record Response(

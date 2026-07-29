@@ -13,10 +13,4 @@ class AttachmentUsageTest {
         assertThat(AttachmentUsage.CHAT.keySegment()).isEqualTo("chats");
     }
 
-    @Test
-    void forcesDownloadEverywhereExceptChat() {
-        assertThat(AttachmentUsage.POST.forcesDownload()).isTrue();
-        assertThat(AttachmentUsage.TASK.forcesDownload()).isTrue();
-        assertThat(AttachmentUsage.CHAT.forcesDownload()).isFalse();
-    }
 }

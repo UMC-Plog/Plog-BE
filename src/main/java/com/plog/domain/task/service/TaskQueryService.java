@@ -65,7 +65,7 @@ public class TaskQueryService {
         List<TaskDetailResponse.AttachmentResponse> attachments = taskAttachmentRepository
                 .findAllByTaskId(taskId).stream()
                 .map(attachment -> TaskDetailResponse.AttachmentResponse.of(
-                        attachment, urlResolver.resolve(attachment)))
+                        attachment, urlResolver.resolveDownloadUrlApi(projectId, attachment)))
                 .toList();
 
         return TaskDetailResponse.from(task, attachments);
