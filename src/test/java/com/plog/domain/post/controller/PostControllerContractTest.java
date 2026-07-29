@@ -54,36 +54,36 @@ class PostControllerContractTest {
     }
 
     @Test
-    void exposesAllElevenFeedEndpointsWithoutApiVersionPrefix() throws Exception {
-        mockMvc.perform(post("/projects/1/posts")
+    void exposesAllElevenFeedEndpointsWithApiPrefixWithoutVersion() throws Exception {
+        mockMvc.perform(post("/api/projects/1/posts")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"post\",\"isNotice\":false,\"attachments\":[]}"))
                 .andExpect(status().isCreated());
-        mockMvc.perform(get("/projects/1/posts"))
+        mockMvc.perform(get("/api/projects/1/posts"))
                 .andExpect(status().isOk());
-        mockMvc.perform(get("/projects/1/posts/2"))
+        mockMvc.perform(get("/api/projects/1/posts/2"))
                 .andExpect(status().isOk());
-        mockMvc.perform(patch("/projects/1/posts/2")
+        mockMvc.perform(patch("/api/projects/1/posts/2")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"updated\"}"))
                 .andExpect(status().isOk());
-        mockMvc.perform(delete("/projects/1/posts/2"))
+        mockMvc.perform(delete("/api/projects/1/posts/2"))
                 .andExpect(status().isOk());
-        mockMvc.perform(patch("/projects/1/posts/2/notice")
+        mockMvc.perform(patch("/api/projects/1/posts/2/notice")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"isNotice\":true}"))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/projects/1/posts/2/comments")
+        mockMvc.perform(post("/api/projects/1/posts/2/comments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"comment\"}"))
                 .andExpect(status().isCreated());
-        mockMvc.perform(get("/projects/1/posts/2/comments"))
+        mockMvc.perform(get("/api/projects/1/posts/2/comments"))
                 .andExpect(status().isOk());
-        mockMvc.perform(delete("/projects/1/posts/2/comments/3"))
+        mockMvc.perform(delete("/api/projects/1/posts/2/comments/3"))
                 .andExpect(status().isOk());
-        mockMvc.perform(put("/projects/1/posts/2/like"))
+        mockMvc.perform(put("/api/projects/1/posts/2/like"))
                 .andExpect(status().isOk());
-        mockMvc.perform(delete("/projects/1/posts/2/like"))
+        mockMvc.perform(delete("/api/projects/1/posts/2/like"))
                 .andExpect(status().isOk());
 
         verify(postService).getFeed(1L, 7L, null, 20);
@@ -92,7 +92,7 @@ class PostControllerContractTest {
 
     @Test
     void missingNoticeValueReturnsValidationError() throws Exception {
-        mockMvc.perform(patch("/projects/1/posts/2/notice")
+        mockMvc.perform(patch("/api/projects/1/posts/2/notice")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())

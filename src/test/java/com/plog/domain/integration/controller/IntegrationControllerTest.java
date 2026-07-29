@@ -5,8 +5,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -17,6 +19,9 @@ import com.plog.domain.integration.dto.request.GoogleResourceRegisterRequest;
 import com.plog.domain.integration.dto.request.NotionResourceRegisterRequest;
 import com.plog.domain.integration.dto.response.IntegrationCollectionFailureResponse;
 import com.plog.domain.integration.dto.response.IntegrationCollectionResponse;
+import com.plog.domain.integration.dto.response.IntegrationActorMappingListResponse;
+import com.plog.domain.integration.dto.response.IntegrationActorMappingResponse;
+import com.plog.domain.integration.dto.response.IntegrationProviderActorResponse;
 import com.plog.domain.integration.dto.response.IntegrationItemResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceCandidateResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceListResponse;
@@ -29,6 +34,7 @@ import com.plog.domain.integration.service.FigmaIntegrationService;
 import com.plog.domain.integration.service.GithubIntegrationService;
 import com.plog.domain.integration.service.GoogleIntegrationService;
 import com.plog.domain.integration.service.IntegrationDataCollectionService;
+import com.plog.domain.integration.service.IntegrationActorMappingManagementService;
 import com.plog.domain.integration.service.IntegrationResourceService;
 import com.plog.domain.integration.service.IntegrationService;
 import com.plog.domain.integration.service.NotionIntegrationService;
@@ -61,6 +67,9 @@ class IntegrationControllerTest {
 
     @MockitoBean
     private IntegrationService integrationService;
+
+    @MockitoBean
+    private IntegrationActorMappingManagementService integrationActorMappingManagementService;
 
     @MockitoBean
     private IntegrationResourceService integrationResourceService;
@@ -209,6 +218,143 @@ class IntegrationControllerTest {
                 .andExpect(jsonPath("$.result.resources[0].resourceType").value("FIGMA_FILE"))
                 .andExpect(jsonPath("$.result.resources[0].resourceName").value("Plog Design"))
                 .andExpect(jsonPath("$.result.resources[0].lastModifiedAt").value("2026-07-26T08:20:00Z"));
+    }
+
+    @Test
+    @DisplayName("provider에서 발견된 미매핑 계정과 프로젝트 멤버 매핑을 조회한다")
+    void getActorMappingsReturnsMappingsAndAvailableProviderActors() throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationActorMappingManagementService.getMappings(
+                projectId, userId, LinkType.GITHUB
+        )).willReturn(new IntegrationActorMappingListResponse(
+                projectId,
+                LinkType.GITHUB,
+                100L,
+                List.of(new IntegrationActorMappingResponse(
+                        20L, 101L, "김팀원", "팀원", null,
+                        "actor:mapped-999", null, "teammate", null
+                )),
+                List.of(new IntegrationProviderActorResponse(
+                        "actor:available-123", null, "wantkdd", "v***@example.com",
+                        "wantkdd",
+                        4L,
+                        Instant.parse("2026-07-01T00:00:00Z"),
+                        Instant.parse("2026-07-20T00:00:00Z")
+                ))
+        ));
+
+        mockMvc.perform(get(
+                        "/api/projects/{projectId}/integrations/{provider}/actor-mappings",
+                        projectId,
+                        "github"
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("INTEGRATION019"))
+                .andExpect(jsonPath("$.result.currentProjectMemberId").value(100L))
+                .andExpect(jsonPath("$.result.mappings[0].projectMemberId").value(101L))
+                .andExpect(jsonPath("$.result.availableProviderActors[0].actorKey").value("actor:available-123"))
+                .andExpect(jsonPath("$.result.availableProviderActors[0].providerActorId").isEmpty())
+                .andExpect(jsonPath("$.result.availableProviderActors[0].displayName").value("wantkdd"))
+                .andExpect(jsonPath("$.result.availableProviderActors[0].activityCount").value(4L));
+    }
+
+    @Test
+    @DisplayName("선택한 provider 계정을 현재 프로젝트 멤버에게 저장한다")
+    void saveMyActorMappingReturnsSavedMapping() throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationActorMappingManagementService.saveMyMapping(
+                eq(projectId), eq(userId), eq(LinkType.GITHUB), any()
+        )).willReturn(new IntegrationActorMappingResponse(
+                20L, 100L, "유상완", "바나", null,
+                "actor:available-123", "123", "wantkdd", "v***@example.com"
+        ));
+
+        mockMvc.perform(put(
+                        "/api/projects/{projectId}/integrations/{provider}/actor-mappings/me",
+                        projectId,
+                        "github"
+                )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "actorKey": "actor:available-123"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("INTEGRATION020"))
+                .andExpect(jsonPath("$.result.projectMemberId").value(100L))
+                .andExpect(jsonPath("$.result.actorKey").value("actor:available-123"));
+    }
+
+    @Test
+    @DisplayName("현재 프로젝트 멤버의 actor 매핑을 해제한다")
+    void removeMyActorMappingReturnsRemovedMapping() throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationActorMappingManagementService.removeMyMapping(
+                projectId, userId, LinkType.GITHUB
+        )).willReturn(new IntegrationActorMappingResponse(
+                20L, 100L, "유상완", "바나", null,
+                "actor:available-123", "123", "wantkdd", "v***@example.com"
+        ));
+
+        mockMvc.perform(delete(
+                        "/api/projects/{projectId}/integrations/{provider}/actor-mappings/me",
+                        projectId,
+                        "github"
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("INTEGRATION021"))
+                .andExpect(jsonPath("$.result.mappingId").value(20L));
+    }
+
+    @Test
+    @DisplayName("다른 멤버가 선택한 actor는 409와 INTEGRATION016을 반환한다")
+    void saveMyActorMappingReturnsConflictForClaimedActor() throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationActorMappingManagementService.saveMyMapping(
+                eq(projectId), eq(userId), eq(LinkType.GITHUB), any()
+        )).willThrow(new ApiException(IntegrationErrorCode.ACTOR_ALREADY_MAPPED));
+
+        mockMvc.perform(put(
+                        "/api/projects/{projectId}/integrations/{provider}/actor-mappings/me",
+                        projectId,
+                        "github"
+                )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "actorKey": "actor:available-123"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INTEGRATION016"));
+    }
+
+    @Test
+    @DisplayName("내 actor 매핑이 없으면 해제 요청에 404와 INTEGRATION017을 반환한다")
+    void removeMyActorMappingReturnsNotFound() throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationActorMappingManagementService.removeMyMapping(
+                projectId, userId, LinkType.GITHUB
+        )).willThrow(new ApiException(IntegrationErrorCode.ACTOR_MAPPING_NOT_FOUND));
+
+        mockMvc.perform(delete(
+                        "/api/projects/{projectId}/integrations/{provider}/actor-mappings/me",
+                        projectId,
+                        "github"
+                ))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("INTEGRATION017"));
     }
 
     @Test

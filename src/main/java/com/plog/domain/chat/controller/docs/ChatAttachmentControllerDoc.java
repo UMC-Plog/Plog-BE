@@ -69,4 +69,61 @@ public interface ChatAttachmentControllerDoc {
             @Parameter(hidden = true) WebRequest webRequest,
             @Parameter(hidden = true) HttpServletResponse response
     );
+
+    @Operation(
+            summary = "채팅 첨부 썸네일 조회 (프록시)",
+            description = """
+                    이미지 첨부의 긴 변 640px WebP 썸네일을 반환합니다. 원본과 **별도 URL** 이며
+                    인증·권한 검사는 원본과 동일합니다(`plog_media` 쿠키).
+
+                    **호출 조건**: 메시지 응답의 `thumbnailUrl` 이 null 이 아닐 때만 부릅니다.
+                    직접 URL 을 조립하지 마세요.
+
+                    **`thumbnailPending: true` 인 동안에는 이 URL 도 원본 URL 도 부르지 않고**
+                    스켈레톤을 표시합니다. 썸네일이 준비되면
+                    `/topic/chat-rooms/{roomId}/attachments` 로
+                    `{ chatAttachmentId, thumbnailUrl }` 이 push 되므로 그때 `src` 를 채웁니다.
+                    이 규칙을 지키지 않으면 방을 보고 있는 전원이 원본 풀사이즈를 받아가
+                    썸네일을 만든 의미가 사라집니다.
+
+                    확대·저장은 계속 원본(`fileUrl`)을 씁니다.
+                    응답은 1년 `immutable` 로 캐시되며 ETag 는 원본과 다릅니다.
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "썸네일 바이트 (image/webp)",
+                    content = @Content(mediaType = "image/webp",
+                            schema = @Schema(type = "string", format = "binary"))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "304",
+                    description = "If-None-Match 가 현재 ETag 와 일치 — 본문 없음"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증이 없거나 유효하지 않음 (쿠키 만료 포함)",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403",
+                    description = "채팅방 접근 권한 없음 (CHAT002)",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "존재하지 않는 첨부파일 (CHAT010) 또는 썸네일 미준비 (CHAT011)",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))
+            )
+    })
+    ResponseEntity<Resource> downloadThumbnail(
+            @Parameter(description = "채팅 첨부 ID", example = "3") Long chatAttachmentId,
+            Long userId,
+            @Parameter(hidden = true) WebRequest webRequest,
+            @Parameter(hidden = true) HttpServletResponse response
+    );
 }

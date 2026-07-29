@@ -9,8 +9,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.plog.domain.notification.entity.FcmToken;
+import com.plog.domain.notification.entity.Notification;
+import com.plog.domain.notification.entity.NotificationType;
 import com.plog.domain.notification.event.ChatMentionEvent;
 import com.plog.domain.notification.repository.FcmTokenRepository;
+import com.plog.domain.notification.repository.NotificationRepository;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
@@ -34,6 +37,8 @@ class MentionNotificationServiceTest {
     @Mock
     private FcmTokenRepository fcmTokenRepository;
     @Mock
+    private NotificationRepository notificationRepository;
+    @Mock
     private FcmGateway fcmGateway;
 
     private MentionNotificationService service;
@@ -43,7 +48,8 @@ class MentionNotificationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new MentionNotificationService(projectMemberRepository, fcmTokenRepository, fcmGateway);
+        service = new MentionNotificationService(
+                projectMemberRepository, fcmTokenRepository, notificationRepository, fcmGateway);
         Project project = project(10L, "Plog");
         sender = member(1L, 101L, project, MemberStatus.ACTIVE, "곰곰");
         target = member(2L, 102L, project, MemberStatus.ACTIVE, "포도");
@@ -59,15 +65,28 @@ class MentionNotificationServiceTest {
 
         service.send(new ChatMentionEvent(10L, 20L, 1L, List.of(2L, 2L, 1L, 3L), " 확인 부탁해요 "));
 
-        ArgumentCaptor<FcmMessage> captor = ArgumentCaptor.forClass(FcmMessage.class);
-        verify(fcmGateway).send(captor.capture());
-        FcmMessage message = captor.getValue();
+        // C안: title = 프로젝트명, body = "{프로젝트명}: {닉네임}님이 회원님을 멘션했습니다." (preview 미사용)
+        ArgumentCaptor<FcmMessage> messageCaptor = ArgumentCaptor.forClass(FcmMessage.class);
+        verify(fcmGateway).send(messageCaptor.capture());
+        FcmMessage message = messageCaptor.getValue();
         assertThat(message.token()).isEqualTo("token-102");
-        assertThat(message.title()).isEqualTo("Plog 멘션");
-        assertThat(message.body()).isEqualTo("곰곰님: 확인 부탁해요");
+        assertThat(message.title()).isEqualTo("Plog");
+        assertThat(message.body()).isEqualTo("Plog: 곰곰님이 회원님을 멘션했습니다.");
         assertThat(message.data()).containsEntry("projectId", "10")
                 .containsEntry("chatId", "20")
                 .containsEntry("type", "CHAT_MENTION");
+
+        // 인앱 알림 저장 검증: target만 저장되고, 발신자/탈퇴 멤버는 제외되어야 한다.
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Notification>> notificationCaptor = ArgumentCaptor.forClass(List.class);
+        verify(notificationRepository).saveAll(notificationCaptor.capture());
+        List<Notification> savedNotifications = notificationCaptor.getValue();
+        assertThat(savedNotifications).hasSize(1);
+        Notification saved = savedNotifications.get(0);
+        assertThat(saved.getType()).isEqualTo(NotificationType.CHAT_MENTION);
+        assertThat(saved.getContent()).isEqualTo("Plog: 곰곰님이 회원님을 멘션했습니다.");
+        assertThat(saved.getResourceId()).isEqualTo(20L);
+        assertThat(saved.isRead()).isFalse();
     }
 
     @Test
@@ -82,6 +101,8 @@ class MentionNotificationServiceTest {
 
         verify(fcmTokenRepository).deleteByToken("invalid-token");
         verify(fcmGateway).send(any(FcmMessage.class));
+        // FCM 발송이 실패해도 인앱 알림 저장은 그대로 이루어져야 한다.
+        verify(notificationRepository).saveAll(any(List.class));
     }
 
     private Project project(Long id, String name) {

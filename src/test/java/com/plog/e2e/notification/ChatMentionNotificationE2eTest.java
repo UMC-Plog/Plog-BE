@@ -58,8 +58,9 @@ class ChatMentionNotificationE2eTest extends E2eTestBase {
             verify(fcmGateway, timeout(3_000).times(1)).send(captor.capture());
             FcmMessage message = captor.getValue();
             assertThat(message.token()).isEqualTo("target-token");
-            assertThat(message.title()).isEqualTo("Plog mention 멘션");
-            assertThat(message.body()).isEqualTo("곰곰님: 확인 부탁해요");
+            // C안: title = 프로젝트명, body = "{프로젝트명}: {닉네임}님이 회원님을 멘션했습니다." (preview 미사용)
+            assertThat(message.title()).isEqualTo("Plog mention");
+            assertThat(message.body()).isEqualTo("Plog mention: 곰곰님이 회원님을 멘션했습니다.");
             assertThat(message.data())
                     .containsEntry("projectId", projectId.toString())
                     .containsEntry("chatId", "77")
@@ -112,7 +113,8 @@ class ChatMentionNotificationE2eTest extends E2eTestBase {
     }
 
     private long fcmCount(String token) {
-        return jdbc.queryForObject(
+        Long count = jdbc.queryForObject(
                 "select count(*) from fcm where token = ?", Long.class, token);
+        return count == null ? 0L : count;
     }
 }

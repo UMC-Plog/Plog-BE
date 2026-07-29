@@ -52,9 +52,20 @@ public class ChatSubscriptionInterceptor implements ChannelInterceptor {
         return (Long) userId;
     }
 
+    /**
+     * 접두사 뒤 <b>첫 세그먼트만</b> 방 ID 로 읽는다. 전체를 파싱하면
+     * /topic/chat-rooms/12/attachments 같은 하위 목적지가 NumberFormatException 으로
+     * 막힌다(썸네일 준비 push 가 이 경로를 쓴다).
+     * <p>
+     * 파싱이 느슨해진 대가로 /topic/chat-rooms/12/오타 도 통과한다. 방 멤버십 검사는
+     * 그대로 걸리므로 보안 구멍은 아니지만, 잘못된 목적지 구독이 조용히 성공한다.
+     */
     private Long parseChatRoomId(String destination) {
+        String remainder = destination.substring(CHAT_ROOM_TOPIC_PREFIX.length());
+        int slash = remainder.indexOf('/');
+        String roomId = slash < 0 ? remainder : remainder.substring(0, slash);
         try {
-            return Long.valueOf(destination.substring(CHAT_ROOM_TOPIC_PREFIX.length()));
+            return Long.valueOf(roomId);
         } catch (NumberFormatException exception) {
             throw new ApiException(ChatErrorCode.FORBIDDEN_CHAT_ROOM_ACCESS);
         }

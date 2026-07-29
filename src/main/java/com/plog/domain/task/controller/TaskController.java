@@ -91,7 +91,10 @@ public class TaskController {
                 - 로그인 사용자가 해당 프로젝트의 활성(ACTIVE) 멤버가 아니면 접근할 수 없습니다.
                 - taskId가 존재하지 않거나 URL의 projectId 소속이 아니면 TASK007을 반환합니다.
                 - 담당자 정보(닉네임, 프로필 이미지)를 assignee 객체로 함께 내려줍니다.
-                - 첨부 산출물 전체 목록(파일명, 용량, 다운로드 URL)을 내려줍니다.
+                - 첨부 산출물 전체 목록(파일명, 용량)을 내려줍니다. **다운로드 URL은 담기지 않습니다** —
+                  LINK는 `linkUrl`로 바로 이동하고, FILE은 클릭 시 `downloadUrlApi`를 GET해
+                  5분짜리 presigned를 받아 이동합니다. 조회 시점에 발급하면 사용자가 클릭할 때쯤
+                  만료되기 때문입니다.
                 - dDay: 마감일까지 남은 일수(음수면 지남).
                 - isOverdue: 마감일이 지났고 완료(DONE)가 아닌 경우 true.
                 - isImminent: 완료되지 않았고 마감일까지 D-3 이내(D-3~D-0)인 경우 true. isOverdue와는 배타적입니다.
@@ -188,7 +191,8 @@ public class TaskController {
                     - 프로젝트 활성 멤버라면 누구나 등록할 수 있습니다.
                     - EXTERNAL 타입은 허용되지 않습니다.
                     - 카드당 첨부파일은 최대 10개까지 등록 가능합니다.
-                    - FILE 타입은 fileKey를, LINK 타입은 fileUrl을 사용합니다.
+                    - FILE 타입은 fileKey를, LINK 타입은 linkUrl을 사용합니다.
+                      linkUrl은 조회 응답에서도 같은 이름으로 돌아옵니다.
                     - 인증 필요(Access Token).
                     """
     )

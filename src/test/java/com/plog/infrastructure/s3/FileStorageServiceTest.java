@@ -192,13 +192,13 @@ class FileStorageServiceTest {
     }
 
     @Test
-    void attachesADownloadDispositionForPostAttachments() throws Exception {
+    void 파일명을_넘기면_내려받기_disposition_을_붙인다() throws Exception {
         given(presignedRequest.url()).willReturn(URI.create("https://storage.test/f").toURL());
         given(s3Presigner.presignGetObject(any(GetObjectPresignRequest.class)))
                 .willReturn(presignedRequest);
 
         service.createDownloadUrl(
-                AttachmentUsage.POST, "temporary/post/users/1/a/note.pdf", "note.pdf");
+                "temporary/post/users/1/a/note.pdf", "note.pdf", Duration.ofSeconds(300));
 
         ArgumentCaptor<GetObjectPresignRequest> captor =
                 ArgumentCaptor.forClass(GetObjectPresignRequest.class);
@@ -208,13 +208,13 @@ class FileStorageServiceTest {
     }
 
     @Test
-    void leavesChatAttachmentsInlineSoImagesRender() throws Exception {
+    void 파일명을_안_넘기면_disposition_없이_인라인으로_둔다() throws Exception {
         given(presignedRequest.url()).willReturn(URI.create("https://storage.test/f").toURL());
         given(s3Presigner.presignGetObject(any(GetObjectPresignRequest.class)))
                 .willReturn(presignedRequest);
 
         service.createDownloadUrl(
-                AttachmentUsage.CHAT, "temporary/chat/users/1/a/photo.png", "photo.png");
+                "temporary/chat/users/1/a/photo.png", Duration.ofSeconds(300));
 
         ArgumentCaptor<GetObjectPresignRequest> captor =
                 ArgumentCaptor.forClass(GetObjectPresignRequest.class);
@@ -265,5 +265,54 @@ class FileStorageServiceTest {
         given(s3Client.getObject(any(GetObjectRequest.class))).willReturn(stream);
 
         assertThat(service.openStream("chats/users/1/uuid/a.png")).contains(stream);
+    }
+
+    @Test
+    void fig_파일은_octet_stream_으로_업로드할_수_있다() throws Exception {
+        stubPresignPut();
+
+        FileStorageDto.PresignedUploadResponse response = createUpload(
+                7L, upload("디자인_시안_v3.fig", "application/octet-stream", 3L * 1024 * 1024));
+
+        assertThat(response.fileKey()).endsWith(".fig");
+    }
+
+    @Test
+    void fig_파일에_다른_MIME_을_보내면_거부한다() {
+        assertThatThrownBy(() -> createUpload(
+                7L, upload("디자인_시안_v3.fig", "image/png", 1024L)))
+                .isInstanceOf(ApiException.class)
+                .hasFieldOrPropertyWithValue(
+                        "errorCode", FileStorageErrorCode.UNSUPPORTED_ATTACHMENT_TYPE);
+    }
+
+    @Test
+    void fig_파일은_이미지가_아니라_50MB_까지_허용한다() throws Exception {
+        stubPresignPut();
+
+        FileStorageDto.PresignedUploadResponse response = createUpload(
+                7L, upload("큰파일.fig", "application/octet-stream", 40L * 1024 * 1024));
+
+        assertThat(response.fileKey()).endsWith(".fig");
+    }
+
+    @Test
+    void 이미지_Content_Type만_썸네일_대상이다() {
+        assertThat(FileStorageService.isImageContentType("image/jpeg")).isTrue();
+        assertThat(FileStorageService.isImageContentType("image/png")).isTrue();
+        assertThat(FileStorageService.isImageContentType("image/webp")).isTrue();
+        assertThat(FileStorageService.isImageContentType("image/gif")).isTrue();
+    }
+
+    /**
+     * 채팅 첨부는 이미지 전용이 아니다. 프리픽스(chats/)로 판정하면 이 파일들이
+     * 전부 Lambda 를 깨운다.
+     */
+    @Test
+    void 비이미지_Content_Type은_썸네일_대상이_아니다() {
+        assertThat(FileStorageService.isImageContentType("application/pdf")).isFalse();
+        assertThat(FileStorageService.isImageContentType("application/zip")).isFalse();
+        assertThat(FileStorageService.isImageContentType("application/octet-stream")).isFalse();
+        assertThat(FileStorageService.isImageContentType(null)).isFalse();
     }
 }

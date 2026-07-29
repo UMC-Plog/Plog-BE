@@ -42,9 +42,9 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     }
 
     private boolean isAssignedApi(String path) {
-        return path.startsWith("/projects/")
-                || path.equals("/files/presigned-upload-url")
-                || path.equals("/users/me/fcm-token");
+        return path.matches("^/api/projects/[^/]+/(?:posts(?:/.*)?|settings)$")
+                || path.equals("/api/files/presigned-upload-url")
+                || path.equals("/api/users/me/fcm-token");
     }
 
     private void writeError(HttpServletResponse response, BaseErrorCode errorCode) throws IOException {

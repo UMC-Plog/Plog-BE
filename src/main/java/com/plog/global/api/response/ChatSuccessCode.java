@@ -12,7 +12,9 @@ public enum ChatSuccessCode implements BaseCode {
     CHANNEL_LIST_RETRIEVED(HttpStatus.OK, "CHAT001", "통합 채널 목록을 조회했습니다."),
     CHANNEL_SEARCH_RETRIEVED(HttpStatus.OK, "CHAT002", "채팅방 검색 결과를 조회했습니다."),
     CHAT_ROOM_READ_UPDATED(HttpStatus.OK, "CHAT003", "채팅방 읽음 상태를 갱신했습니다."),
-    MESSAGE_LIST_RETRIEVED(HttpStatus.OK, "CHAT004", "채팅 메시지 목록을 조회했습니다.");
+    MESSAGE_LIST_RETRIEVED(HttpStatus.OK, "CHAT004", "채팅 메시지 목록을 조회했습니다."),
+    MENTIONABLE_MEMBER_LIST_RETRIEVED(HttpStatus.OK, "CHAT005", "멘션 가능한 멤버 목록을 조회했습니다."),
+    MESSAGE_DETAIL_RETRIEVED(HttpStatus.OK, "CHAT006", "채팅 메시지 상세를 조회했습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

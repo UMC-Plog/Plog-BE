@@ -45,7 +45,7 @@ class FcmTokenControllerSecurityTest {
 
     @Test
     void unauthenticatedRequestUsesAssignedApiContract() throws Exception {
-        mockMvc.perform(put("/users/me/fcm-token")
+        mockMvc.perform(put("/api/users/me/fcm-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"token\":\"device-token\"}"))
                 .andExpect(status().isUnauthorized())

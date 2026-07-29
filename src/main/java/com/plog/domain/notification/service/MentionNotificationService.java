@@ -1,9 +1,13 @@
 package com.plog.domain.notification.service;
 
 import com.plog.domain.notification.entity.FcmToken;
+import com.plog.domain.notification.entity.Notification;
+import com.plog.domain.notification.entity.NotificationType;
 import com.plog.domain.notification.event.ChatMentionEvent;
 import com.plog.domain.notification.repository.FcmTokenRepository;
+import com.plog.domain.notification.repository.NotificationRepository;
 import com.plog.domain.project.entity.MemberStatus;
+import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.infrastructure.fcm.FcmDeliveryException;
@@ -19,18 +23,20 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class MentionNotificationService {
     private static final int MAX_RETRIES = 3;
-    private static final int MAX_PREVIEW_LENGTH = 100;
 
     private final ProjectMemberRepository projectMemberRepository;
     private final FcmTokenRepository fcmTokenRepository;
+    private final NotificationRepository notificationRepository;
     private final FcmGateway fcmGateway;
 
+    @Transactional
     public void send(ChatMentionEvent event) {
         if (!isValid(event)) {
             log.warn("fcm_mention_event_rejected projectId={} chatId={} senderMemberId={}",
@@ -61,30 +67,45 @@ public class MentionNotificationService {
                 .map(membersById::get)
                 .filter(member -> isActiveProjectMember(member, event.projectId()))
                 .toList();
-        Set<Long> targetUserIds = targets.stream()
-                .map(member -> member.getUser().getId())
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        if (targetUserIds.isEmpty()) {
+        if (targets.isEmpty()) {
             return;
         }
 
-        String senderNickname = sender.getAnNickname() == null || sender.getAnNickname().isBlank()
-                ? "프로젝트 멤버" : sender.getAnNickname();
-        String title = sender.getProject().getProjectName() + " 멘션";
-        String preview = preview(event.messagePreview());
-        String body = preview.isEmpty()
-                ? senderNickname + "님이 회원님을 멘션했습니다."
-                : senderNickname + "님: " + preview;
+        Project project = sender.getProject();
+        String senderNickname = resolveNickname(sender);
+        String title = project.getProjectName();
+        String body = project.getProjectName() + ": " + senderNickname + "님이 회원님을 멘션했습니다.";
         Map<String, String> data = Map.of(
                 "projectId", event.projectId().toString(),
                 "chatId", event.chatId().toString(),
                 "type", "CHAT_MENTION"
         );
 
+        // 인앱 알림 이력은 FCM 발송 성공 여부와 무관하게 항상 남긴다(알림 센터는 별개 채널이므로).
+        List<Notification> notifications = targets.stream()
+                .map(target -> Notification.create(
+                        target.getUser(), project, NotificationType.CHAT_MENTION, body, event.chatId()))
+                .toList();
+        notificationRepository.saveAll(notifications);
+
+        Set<Long> targetUserIds = targets.stream()
+                .map(member -> member.getUser().getId())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
         List<FcmToken> tokens = new ArrayList<>(fcmTokenRepository.findAllByUserIdIn(targetUserIds));
         for (FcmToken token : tokens) {
             sendWithRetry(token.getToken(), title, body, data);
         }
+    }
+
+    // 표시 닉네임 정책: anNickname 우선, 없으면 user.nickname으로 대체.
+    // 멘션 매칭 조회(ProjectMemberRepository)와 동일한 기준을 써야
+    // "매칭에 쓰인 이름"과 "알림에 보이는 이름"이 어긋나지 않는다.
+    private String resolveNickname(ProjectMember member) {
+        if (member.getAnNickname() != null && !member.getAnNickname().isBlank()) {
+            return member.getAnNickname();
+        }
+        String userNickname = member.getUser().getNickname();
+        return userNickname == null || userNickname.isBlank() ? "프로젝트 멤버" : userNickname;
     }
 
     private void sendWithRetry(String token, String title, String body, Map<String, String> data) {
@@ -126,15 +147,6 @@ public class MentionNotificationService {
     private boolean isActiveProjectMember(ProjectMember member, Long projectId) {
         return member != null && member.getStatus() == MemberStatus.ACTIVE
                 && member.getProject() != null && projectId.equals(member.getProject().getId());
-    }
-
-    private String preview(String value) {
-        if (value == null) {
-            return "";
-        }
-        String normalized = value.trim();
-        return normalized.length() <= MAX_PREVIEW_LENGTH
-                ? normalized : normalized.substring(0, MAX_PREVIEW_LENGTH) + "…";
     }
 
     private void backoff(int attempt) {

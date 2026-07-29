@@ -2,68 +2,39 @@ package com.plog.domain.task.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.mock;
 
 import com.plog.domain.task.entity.AttachmentType;
 import com.plog.domain.task.entity.TaskAttachment;
-import com.plog.infrastructure.s3.AttachmentUsage;
-import com.plog.infrastructure.s3.FileStorageService;
-import com.plog.infrastructure.s3.UploadedFile;
-import java.time.LocalDateTime;
-import org.junit.jupiter.api.BeforeEach;
+import com.plog.global.common.AttachmentDownloadUrlFactory;
+import com.plog.global.config.ApiProperties;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
-@ExtendWith(MockitoExtension.class)
+/**
+ * 예전에는 여기서 presigned 를 직접 발급했다. 지금은 "발급 API 가 어디 있는지"만 만든다.
+ * id 가 URL 에 들어가므로 영속화되지 않은 엔티티(id == null) 대신 mock 을 쓴다.
+ */
 class TaskAttachmentUrlResolverTest {
 
-    private static final String FILE_KEY = "tasks/users/1/abc/spec.docx";
-    private static final String LINK_URL = "https://example.com/doc";
-    private static final String PRESIGNED_URL = "https://s3.example.com/presigned";
+    private final TaskAttachmentUrlResolver resolver = new TaskAttachmentUrlResolver(
+            new AttachmentDownloadUrlFactory(new ApiProperties("https://api.umc-plog.site")));
 
-    @Mock
-    private FileStorageService fileStorageService;
+    @Test
+    void FILE_첨부는_발급_엔드포인트_URL을_돌려준다() {
+        TaskAttachment attachment = mock(TaskAttachment.class);
+        given(attachment.getAttachmentType()).willReturn(AttachmentType.FILE);
+        given(attachment.getId()).willReturn(3L);
 
-    private TaskAttachmentUrlResolver resolver;
-
-    @BeforeEach
-    void setUp() {
-        resolver = new TaskAttachmentUrlResolver(fileStorageService);
-    }
-
-    private TaskAttachment fileAttachment() {
-        UploadedFile file = UploadedFile.issue(FILE_KEY, 1L, AttachmentUsage.TASK,
-                "spec.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                2048L, LocalDateTime.of(2026, 7, 27, 10, 0));
-        return TaskAttachment.create(null, AttachmentType.FILE, 2048L, file, null, null);
-    }
-
-    private TaskAttachment linkAttachment() {
-        return TaskAttachment.create(null, AttachmentType.LINK, null, null, LINK_URL, "설계 노션");
+        assertThat(resolver.resolveDownloadUrlApi(1L, attachment))
+                .isEqualTo("https://api.umc-plog.site"
+                        + "/api/projects/1/tasks/attachments/3/download-url");
     }
 
     @Test
-    void resolvesAPresignedDownloadUrlForFileAttachments() {
-        TaskAttachment attachment = fileAttachment();
-        given(fileStorageService.createDownloadUrl(AttachmentUsage.TASK, FILE_KEY, "spec.docx"))
-                .willReturn(PRESIGNED_URL);
+    void LINK_첨부는_null을_돌려준다() {
+        TaskAttachment attachment = mock(TaskAttachment.class);
+        given(attachment.getAttachmentType()).willReturn(AttachmentType.LINK);
 
-        String result = resolver.resolve(attachment);
-
-        assertThat(result).isEqualTo(PRESIGNED_URL);
-        verify(fileStorageService).createDownloadUrl(AttachmentUsage.TASK, FILE_KEY, "spec.docx");
-    }
-
-    @Test
-    void returnsTheOriginalUrlForLinkAttachmentsWithoutTouchingStorage() {
-        TaskAttachment attachment = linkAttachment();
-
-        String result = resolver.resolve(attachment);
-
-        assertThat(result).isEqualTo(LINK_URL);
-        verifyNoInteractions(fileStorageService);
+        assertThat(resolver.resolveDownloadUrlApi(1L, attachment)).isNull();
     }
 }

@@ -39,9 +39,10 @@ public record TaskCreateRequest(
             @PositiveOrZero(message = "파일 크기는 0 이상이어야 합니다.")
             Long fileSize,
 
-            // FILE 타입은 fileKey 를, LINK 타입은 fileUrl 을 채운다 → 둘 다 필수는 아니다.
+            // FILE 타입은 fileKey 를, LINK 타입은 linkUrl 을 채운다 → 둘 다 필수는 아니다.
+            // linkUrl 은 조회 응답의 linkUrl 과 같은 값이다.
             @Size(max = 512, message = "URL 길이는 512자를 초과할 수 없습니다.")
-            String fileUrl,
+            String linkUrl,
 
             @Size(max = 512, message = "파일 키 길이는 512자를 초과할 수 없습니다.")
             String fileKey

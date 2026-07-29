@@ -3,6 +3,7 @@ package com.plog.e2e.s3;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.plog.e2e.support.E2eTestBase;
@@ -15,13 +16,12 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 @DisplayName("FileStorageController E2E")
 class FileStorageControllerE2eTest extends E2eTestBase {
 
     @Nested
-    @DisplayName("POST /files/presigned-upload-url")
+    @DisplayName("POST /api/files/presigned-upload-url")
     class CreatePresignedUploadUrl {
 
         @Test
@@ -122,7 +122,7 @@ class FileStorageControllerE2eTest extends E2eTestBase {
 
             ResponseEntity<JsonNode> response = request(
                     HttpMethod.POST,
-                    "/projects/" + projectId + "/posts",
+                    "/api/projects/" + projectId + "/posts",
                     userId,
                     Map.of(
                             "content", "파일을 공유합니다.",
@@ -137,10 +137,12 @@ class FileStorageControllerE2eTest extends E2eTestBase {
             );
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-            assertThat(result(response).path("attachments").get(0).path("fileUrl").asText())
-                    .isEqualTo("https://storage.test/download/" + fileKey);
+            // presigned 는 더 이상 생성 응답에 담기지 않는다. 클릭 시점에 발급 API 로 받아간다.
+            assertThat(result(response).path("attachments").get(0).path("downloadUrlApi").asText())
+                    .endsWith("/download-url");
             verify(s3Client).headObject(any(HeadObjectRequest.class));
-            verify(s3Presigner).presignGetObject(any(GetObjectPresignRequest.class));
+            // 생성 시점에 presign 이 일어나지 않는 것이 이 변경의 목적이다.
+            verifyNoInteractions(s3Presigner);
             assertThat(statusOf(fileKey)).isEqualTo("CONFIRMED");
         }
 
@@ -183,7 +185,7 @@ class FileStorageControllerE2eTest extends E2eTestBase {
 
             ResponseEntity<JsonNode> response = request(
                     HttpMethod.DELETE,
-                    "/projects/" + projectId + "/posts/" + postId,
+                    "/api/projects/" + projectId + "/posts/" + postId,
                     userId,
                     null
             );
@@ -194,7 +196,7 @@ class FileStorageControllerE2eTest extends E2eTestBase {
         }
 
         private ResponseEntity<JsonNode> createPostWith(Long projectId, Long userId, String fileKey) {
-            return request(HttpMethod.POST, "/projects/" + projectId + "/posts", userId,
+            return request(HttpMethod.POST, "/api/projects/" + projectId + "/posts", userId,
                     Map.of(
                             "content", "파일을 공유합니다.",
                             "isNotice", false,
@@ -225,6 +227,6 @@ class FileStorageControllerE2eTest extends E2eTestBase {
     }
 
     private String uploadPath() {
-        return "/files/presigned-upload-url";
+        return "/api/files/presigned-upload-url";
     }
 }

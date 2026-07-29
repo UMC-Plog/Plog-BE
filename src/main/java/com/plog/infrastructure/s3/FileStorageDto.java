@@ -17,7 +17,7 @@ public final class FileStorageDto {
             + "여기 보낸 값과 똑같이 보내야 하며, 다르면 첨부가 거부된다.")
     public record PresignedUploadRequest(
             @Schema(description = "원본 파일명(확장자 포함). 허용 확장자: "
-                    + "pdf, pptx, docx, zip, jpg, jpeg, png, webp, gif",
+                    + "pdf, pptx, docx, zip, fig, jpg, jpeg, png, webp, gif",
                     example = "meeting-notes.pdf")
             @NotBlank String fileName,
 
