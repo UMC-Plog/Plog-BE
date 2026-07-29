@@ -23,7 +23,7 @@ public interface FileStorageControllerDoc {
                     ### 파일 첨부는 3단계입니다
                     **1단계만 하고 끝내면 파일은 자동 삭제됩니다.**
 
-                    1. `POST /files/presigned-upload-url` — 이 API. `uploadUrl` / `fileKey` / `fileId`를 받습니다.
+                    1. `POST /api/files/presigned-upload-url` — 이 API. `uploadUrl` / `fileKey` / `fileId`를 받습니다.
                     2. `PUT {uploadUrl}` — 프론트가 S3로 **직접** 업로드. 응답의 `signedHeaders`를 그대로 실어야 합니다.
                     3. 도메인 API에 `fileKey` 전달 — 게시글/업무카드 생성, 채팅 메시지 전송 등.
 
@@ -48,12 +48,14 @@ public interface FileStorageControllerDoc {
 
                     | 값 | 용도 | 다운로드 동작 |
                     |---|---|---|
-                    | `POST` | 게시글 첨부 | 파일로 내려받기 |
-                    | `TASK` | 업무카드 산출물 | 파일로 내려받기 |
-                    | `CHAT` | 채팅 첨부 | 브라우저에서 바로 표시(이미지 인라인) |
+                    | `POST` | 게시글 첨부 | 클릭 시 발급 API 로 presigned 를 받아 내려받기 |
+                    | `TASK` | 업무카드 산출물 | 클릭 시 발급 API 로 presigned 를 받아 내려받기 |
+                    | `CHAT` | 채팅 첨부 | 백엔드 프록시가 바로 서빙(이미지 인라인) |
 
                     ### 허용 파일
-                    - 확장자: `pdf` `pptx` `docx` `zip` `jpg` `jpeg` `png` `webp` `gif`
+                    - 확장자: `pdf` `pptx` `docx` `zip` `fig` `jpg` `jpeg` `png` `webp` `gif`
+                    - `.fig`는 표준 MIME 타입이 없어 `contentType`에 `application/octet-stream`을 보내야 합니다.
+                      (브라우저의 `file.type`이 빈 문자열이므로 프론트가 직접 채워야 합니다)
                     - 크기: 이미지 10MB / 그 외 50MB
                     - `contentType`은 확장자와 일치해야 합니다. (`photo.png` + `image/jpeg` → 거부)
                     - `svg`는 스크립트를 품을 수 있어 허용하지 않습니다.

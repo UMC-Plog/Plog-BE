@@ -7,7 +7,7 @@ import static org.mockito.Mockito.mock;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plog.domain.chat.dto.response.ChatMessageResponse;
 import com.plog.domain.chat.entity.ChatAttachment;
-import com.plog.global.config.MediaProperties;
+import com.plog.global.config.ApiProperties;
 import com.plog.infrastructure.s3.UploadedFile;
 import org.junit.jupiter.api.Test;
 
@@ -15,7 +15,7 @@ class ChatAttachmentResponseMapperTest {
 
     private final ChatAttachmentResponseMapper mapper =
             new ChatAttachmentResponseMapper(
-                    new MediaProperties("https://api.umc-plog.site", "None"));
+                    new ApiProperties("https://api.umc-plog.site"));
 
     @Test
     void 프록시_절대_URL을_만든다() {
@@ -54,7 +54,7 @@ class ChatAttachmentResponseMapperTest {
     @Test
     void baseUrl_끝의_슬래시가_있어도_이중_슬래시가_생기지_않는다() {
         ChatAttachmentResponseMapper trailing = new ChatAttachmentResponseMapper(
-                new MediaProperties("https://api.umc-plog.site/", "None"));
+                new ApiProperties("https://api.umc-plog.site/"));
 
         assertThat(trailing.toResponse(attachment()).fileUrl())
                 .isEqualTo("https://api.umc-plog.site/api/chat-attachments/3");

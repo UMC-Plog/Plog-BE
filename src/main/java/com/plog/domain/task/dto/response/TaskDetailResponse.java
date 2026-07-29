@@ -6,6 +6,7 @@ import com.plog.domain.task.entity.TaskAttachment;
 import com.plog.domain.task.entity.TaskCategory;
 import com.plog.domain.task.entity.TaskStatus;
 import com.plog.domain.user.entity.ProfilePreset;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -48,9 +49,14 @@ public record TaskDetailResponse(
             Long fileId,
             String fileName,
             Long fileSize, // 바이트 단위. "5.2MB" 같은 표시 변환은 프론트 담당
-            String fileUrl
+            @Schema(description = "LINK 첨부의 외부 링크. FILE 이면 null")
+            String linkUrl,
+            @Schema(description = "FILE 첨부의 다운로드 URL 발급 API 주소. 클릭 시 이 주소를 "
+                    + "호출해 presigned 를 받는다. LINK 면 null. "
+                    + "이 주소를 <a href> 에 걸면 JSON 이 보인다")
+            String downloadUrlApi
     ) {
-        public static AttachmentResponse of(TaskAttachment attachment, String resolvedUrl) {
+        public static AttachmentResponse of(TaskAttachment attachment, String downloadUrlApi) {
             return new AttachmentResponse(
                     attachment.getId(),
                     attachment.getAttachmentType(),
@@ -60,7 +66,8 @@ public record TaskDetailResponse(
                     attachment.getAttachmentType() == AttachmentType.FILE
                         ? attachment.getFileSize()
                             : null,
-                    resolvedUrl
+                    attachment.getLinkUrl(),
+                    downloadUrlApi
             );
         }
     }

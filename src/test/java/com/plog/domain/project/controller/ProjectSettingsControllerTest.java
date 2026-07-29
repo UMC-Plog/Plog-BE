@@ -51,10 +51,10 @@ class ProjectSettingsControllerTest {
     }
 
     @Test
-    void exposesSettingsEndpointsWithoutApiVersionPrefix() throws Exception {
-        mockMvc.perform(get("/projects/1/settings"))
+    void exposesSettingsEndpointsWithApiPrefixWithoutVersion() throws Exception {
+        mockMvc.perform(get("/api/projects/1/settings"))
                 .andExpect(status().isOk());
-        mockMvc.perform(patch("/projects/1/settings")
+        mockMvc.perform(patch("/api/projects/1/settings")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"projectName\":\"Plog renewal\",\"projectType\":\"DEVELOP\"}"))
                 .andExpect(status().isOk());
@@ -66,7 +66,7 @@ class ProjectSettingsControllerTest {
 
     @Test
     void malformedProjectTypeUsesValidationContract() throws Exception {
-        mockMvc.perform(patch("/projects/1/settings")
+        mockMvc.perform(patch("/api/projects/1/settings")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"projectType\":\"UNKNOWN\"}"))
                 .andExpect(status().isBadRequest())

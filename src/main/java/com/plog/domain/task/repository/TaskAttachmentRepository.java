@@ -34,6 +34,20 @@ public interface TaskAttachmentRepository extends JpaRepository<TaskAttachment, 
             + "where a.task.id = :taskId and a.uploadedFile is not null")
     List<Long> findFileIdsByTaskId(@Param("taskId") Long taskId);
 
+    /*
+     * 다운로드 URL 발급용 단건 조회. uploadedFile(파일 키·원본 파일명)과
+     * task → projectMember → project(권한 검사용 프로젝트 id)를 함께 쓰므로 fetch join 한다.
+     * LINK 첨부는 uploadedFile 이 null 이라 left join 이어야 한다.
+     */
+    @Query("select a from TaskAttachment a "
+            + "left join fetch a.uploadedFile "
+            + "join fetch a.task t "
+            + "join fetch t.projectMember pm "
+            + "join fetch pm.project "
+            + "where a.id = :taskAttachmentId")
+    Optional<TaskAttachment> findWithFileAndProjectById(
+            @Param("taskAttachmentId") Long taskAttachmentId);
+
     interface TaskAttachmentCount {
         Long getTaskId();
         long getCount();

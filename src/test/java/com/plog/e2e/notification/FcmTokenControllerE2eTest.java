@@ -16,7 +16,7 @@ import org.springframework.http.ResponseEntity;
 class FcmTokenControllerE2eTest extends E2eTestBase {
 
     @Nested
-    @DisplayName("PUT /users/me/fcm-token")
+    @DisplayName("PUT /api/users/me/fcm-token")
     class PutFcmToken {
 
         @Test
@@ -64,7 +64,7 @@ class FcmTokenControllerE2eTest extends E2eTestBase {
     }
 
     @Nested
-    @DisplayName("DELETE /users/me/fcm-token")
+    @DisplayName("DELETE /api/users/me/fcm-token")
     class DeleteFcmToken {
 
         @Test
@@ -90,6 +90,6 @@ class FcmTokenControllerE2eTest extends E2eTestBase {
     }
 
     private String tokenPath() {
-        return "/users/me/fcm-token";
+        return "/api/users/me/fcm-token";
     }
 }

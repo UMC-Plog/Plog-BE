@@ -37,7 +37,7 @@ public class FileStorageService {
     private static final Set<String> IMAGE_EXTENSIONS =
             Set.of("jpg", "jpeg", "png", "webp", "gif");
     private static final Set<String> ALLOWED_EXTENSIONS =
-            Set.of("pdf", "pptx", "docx", "zip", "jpg", "jpeg", "png", "webp", "gif");
+            Set.of("pdf", "pptx", "docx", "zip", "fig", "jpg", "jpeg", "png", "webp", "gif");
     // Map.of 는 최대 10쌍이라 항목이 늘면 컴파일이 깨진다 → ofEntries 로 여유를 둔다.
     private static final Map<String, Set<String>> ALLOWED_CONTENT_TYPES = Map.ofEntries(
             Map.entry("pdf", Set.of("application/pdf")),
@@ -46,6 +46,9 @@ public class FileStorageService {
             Map.entry("docx", Set.of(
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document")),
             Map.entry("zip", Set.of("application/zip", "application/x-zip-compressed")),
+            // .fig 는 IANA 등록 MIME 이 없다. 브라우저의 input[type=file] 도 OS 가 모르는
+            // 확장자엔 빈 문자열을 주므로, 프론트가 octet-stream 을 명시해서 보내야 한다.
+            Map.entry("fig", Set.of("application/octet-stream")),
             Map.entry("jpg", Set.of("image/jpeg")),
             Map.entry("jpeg", Set.of("image/jpeg")),
             Map.entry("png", Set.of("image/png")),
@@ -110,13 +113,6 @@ public class FileStorageService {
 
     public String createDownloadUrl(String fileKey) {
         return createDownloadUrl(fileKey, URL_DURATION).downloadUrl();
-    }
-
-    /** 용도에 맞는 다운로드 URL. POST·TASK 는 내려받기, CHAT 은 인라인 표시. */
-    public String createDownloadUrl(AttachmentUsage usage, String fileKey, String fileName) {
-        return usage.forcesDownload()
-                ? createDownloadUrl(fileKey, fileName, URL_DURATION).downloadUrl()
-                : createDownloadUrl(fileKey, URL_DURATION).downloadUrl();
     }
 
     public FileStorageDto.PresignedDownloadResponse createDownloadUrl(

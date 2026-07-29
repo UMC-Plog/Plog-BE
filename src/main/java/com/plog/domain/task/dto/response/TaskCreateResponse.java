@@ -5,6 +5,7 @@ import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskAttachment;
 import com.plog.domain.task.entity.TaskCategory;
 import com.plog.domain.task.entity.TaskStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -23,17 +24,24 @@ public record TaskCreateResponse(
             AttachmentType attachmentType,
             Long fileId,
             String fileName,
-            String fileUrl
+            @Schema(description = "LINK 첨부의 외부 링크. FILE 이면 null")
+            String linkUrl,
+            @Schema(description = "FILE 첨부의 다운로드 URL 발급 API 주소. 클릭 시 이 주소를 "
+                    + "호출해 presigned 를 받는다. LINK 면 null. "
+                    + "이 주소를 <a href> 에 걸면 JSON 이 보인다")
+            String downloadUrlApi
     ) {
-        // FILE 첨부는 저장값이 S3 키라 그대로 내보낼 수 없다. 서비스가 발급한 URL을 받는다.
-        public static AttachmentResponse of(TaskAttachment attachment, String resolvedUrl) {
+        // FILE 첨부는 저장값이 S3 키라 그대로 내보낼 수 없다. presigned 를 미리 담으면
+        // 조회 시점에 만료 시계가 시작되므로, 발급 API 주소만 주고 클릭 시점에 받아가게 한다.
+        public static AttachmentResponse of(TaskAttachment attachment, String downloadUrlApi) {
             return new AttachmentResponse(
                     attachment.getId(),
                     attachment.getAttachmentType(),
                     attachment.getUploadedFile() == null
                             ? null : attachment.getUploadedFile().getId(),
                     attachment.displayName(),
-                    resolvedUrl
+                    attachment.getLinkUrl(),
+                    downloadUrlApi
             );
         }
     }
