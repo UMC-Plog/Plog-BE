@@ -45,9 +45,38 @@ public class ChatAttachmentController implements ChatAttachmentControllerDoc {
             HttpServletResponse response
     ) {
         ChatAttachmentMeta meta = chatAttachmentDownloadService.resolve(chatAttachmentId, userId);
+        // 이미지는 인라인으로 두되 저장 시 파일명을 살린다. 프록시 URL 의 마지막
+        // 세그먼트가 숫자 id 라, 없으면 pdf·docx·zip 이 "3" 으로 저장된다.
+        return stream(meta, webRequest, response, inlineDisposition(meta.originalFilename()));
+    }
 
-        // 304 판정을 S3 를 열기 '전에' 한다. 순서를 뒤집으면 Spring 이 본문 쓰기를 건너뛰는
-        // 단축 경로에서 아무도 스트림을 닫지 않아 S3 커넥션이 샌다(ChatAttachmentMeta 참조).
+    @Override
+    @GetMapping("/{chatAttachmentId}/thumb")
+    public ResponseEntity<Resource> downloadThumbnail(
+            @PathVariable Long chatAttachmentId,
+            @AuthenticationPrincipal Long userId,
+            WebRequest webRequest,
+            HttpServletResponse response
+    ) {
+        ChatAttachmentMeta meta =
+                chatAttachmentDownloadService.resolveThumbnail(chatAttachmentId, userId);
+        // 썸네일은 항상 이미지라 저장 파일명을 살릴 이유가 없다. 원본만 filename 을 붙인다.
+        return stream(meta, webRequest, response, "inline");
+    }
+
+    /**
+     * 304 판정을 S3 를 열기 '전에' 한다. 순서를 뒤집으면 Spring 이 본문 쓰기를 건너뛰는
+     * 단축 경로에서 아무도 스트림을 닫지 않아 S3 커넥션이 샌다(ChatAttachmentMeta 참조).
+     * <p>
+     * 원본과 썸네일이 이 메서드를 공유한다. 복붙하면 캐시 헤더나 304 순서 규칙이 두 곳으로
+     * 갈려 한쪽만 고쳐진다.
+     */
+    private ResponseEntity<Resource> stream(
+            ChatAttachmentMeta meta,
+            WebRequest webRequest,
+            HttpServletResponse response,
+            String contentDisposition
+    ) {
         if (webRequest.checkNotModified(meta.eTag())) {
             response.setHeader(HttpHeaders.CACHE_CONTROL, CACHE_CONTROL);
             return null;
@@ -61,9 +90,7 @@ public class ChatAttachmentController implements ChatAttachmentControllerDoc {
                 .contentLength(download.contentLength())
                 .header(HttpHeaders.CACHE_CONTROL, CACHE_CONTROL)
                 .header(HttpHeaders.ETAG, meta.eTag())
-                // 이미지는 인라인으로 두되 저장 시 파일명을 살린다. 프록시 URL 의 마지막
-                // 세그먼트가 숫자 id 라, 없으면 pdf·docx·zip 이 "3" 으로 저장된다.
-                .header(HttpHeaders.CONTENT_DISPOSITION, inlineDisposition(meta.originalFilename()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
                 // 사용자 업로드물을 API 오리진에서 서빙하므로 MIME 스니핑을 막는다.
                 .header("X-Content-Type-Options", "nosniff")
                 .body(new InputStreamResource(download.stream()));

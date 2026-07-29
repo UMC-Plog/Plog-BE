@@ -27,7 +27,8 @@ import lombok.NoArgsConstructor;
 @Table(name = "uploaded_file", indexes = {
         @Index(name = "idx_uploaded_file_tagging", columnList = "status, tagged_at"),
         @Index(name = "idx_uploaded_file_issued", columnList = "status, issued_at"),
-        @Index(name = "idx_uploaded_file_released", columnList = "status, released_at")
+        @Index(name = "idx_uploaded_file_released", columnList = "status, released_at"),
+        @Index(name = "idx_uploaded_file_thumbnail", columnList = "thumbnail_status, thumbnail_at")
 })
 public class UploadedFile extends BaseEntity {
 
@@ -78,6 +79,28 @@ public class UploadedFile extends BaseEntity {
     @Column(name = "tagged_at")
     private LocalDateTime taggedAt;
 
+    /**
+     * 썸네일 생성 상태. 기본값을 필드 초기화로 두는 이유는 issue() 가 이 값을 안 건드리기
+     * 때문이다 — 채팅 이미지인지는 첨부가 확정될 때(confirmNew) 판정한다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "thumbnail_status", nullable = false, length = 16)
+    private ThumbnailStatus thumbnailStatus = ThumbnailStatus.NONE;
+
+    /**
+     * 키는 원본에서 결정론적으로 유도되지만 저장한다. 규칙을 나중에 바꿔도 이미 만들어진
+     * 썸네일이 안 깨지고, 조회할 때마다 규칙을 재계산하지 않는다.
+     */
+    @Column(name = "thumbnail_key", length = 512)
+    private String thumbnailKey;
+
+    /** 마지막 Lambda Invoke 시각. null 이면 아직 요청 전 = 스케줄러의 안전망 대상. */
+    @Column(name = "thumbnail_at")
+    private LocalDateTime thumbnailAt;
+
+    @Column(name = "thumbnail_attempts", nullable = false)
+    private int thumbnailAttempts;
+
     public static UploadedFile issue(String fileKey, Long ownerId, AttachmentUsage purpose,
                                      String originalFilename, String contentType, Long size,
                                      LocalDateTime issuedAt) {
@@ -115,5 +138,24 @@ public class UploadedFile extends BaseEntity {
 
     public void markTagged(LocalDateTime taggedAt) {
         this.taggedAt = taggedAt;
+    }
+
+    /**
+     * 썸네일 생성 대상으로 표시한다. 실제 Invoke 는 커밋 후에 일어난다.
+     * <p>
+     * thumbnailAt 을 반드시 비운다. 남겨 두면 ThumbnailScheduler.requestPending() 의
+     * "at IS NULL" 조건에 안 걸려, Invoke 가 유실됐을 때 아무도 재요청하지 않는다.
+     */
+    public void markThumbnailPending() {
+        this.thumbnailStatus = ThumbnailStatus.PENDING;
+        this.thumbnailAt = null;
+    }
+
+    public boolean isThumbnailPending() {
+        return thumbnailStatus == ThumbnailStatus.PENDING;
+    }
+
+    public boolean isThumbnailReady() {
+        return thumbnailStatus == ThumbnailStatus.READY;
     }
 }

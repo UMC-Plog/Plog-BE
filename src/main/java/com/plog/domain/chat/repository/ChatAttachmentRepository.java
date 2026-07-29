@@ -39,4 +39,20 @@ public interface ChatAttachmentRepository extends JpaRepository<ChatAttachment, 
             + "where a.id = :chatAttachmentId")
     Optional<ChatAttachment> findWithFileAndRoomById(
             @Param("chatAttachmentId") Long chatAttachmentId);
+
+    /*
+     * 썸네일 준비 push 용. 방 ID(목적지)와 uploadedFile(URL 판정)이 둘 다 필요하고,
+     * 리스너는 트랜잭션 밖의 스케줄러 스레드에서 도는 데다 OSIV 도 꺼져 있어
+     * 지연 로딩을 건드리면 LazyInitializationException 으로 조용히 죽는다.
+     *
+     * chat_attachments 의 uk_chat_attachment_file 이 file_id 를 UNIQUE 로 잡아
+     * 첨부:파일이 1:1이므로 단건 조회가 성립한다.
+     */
+    @Query("select a from ChatAttachment a "
+            + "join fetch a.uploadedFile f "
+            + "join fetch a.chatMessage m "
+            + "join fetch m.chatRoom "
+            + "where f.id = :uploadedFileId")
+    Optional<ChatAttachment> findWithFileAndRoomByUploadedFileId(
+            @Param("uploadedFileId") Long uploadedFileId);
 }

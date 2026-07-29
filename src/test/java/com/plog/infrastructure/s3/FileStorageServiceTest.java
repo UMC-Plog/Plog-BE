@@ -295,4 +295,24 @@ class FileStorageServiceTest {
 
         assertThat(response.fileKey()).endsWith(".fig");
     }
+
+    @Test
+    void 이미지_Content_Type만_썸네일_대상이다() {
+        assertThat(FileStorageService.isImageContentType("image/jpeg")).isTrue();
+        assertThat(FileStorageService.isImageContentType("image/png")).isTrue();
+        assertThat(FileStorageService.isImageContentType("image/webp")).isTrue();
+        assertThat(FileStorageService.isImageContentType("image/gif")).isTrue();
+    }
+
+    /**
+     * 채팅 첨부는 이미지 전용이 아니다. 프리픽스(chats/)로 판정하면 이 파일들이
+     * 전부 Lambda 를 깨운다.
+     */
+    @Test
+    void 비이미지_Content_Type은_썸네일_대상이_아니다() {
+        assertThat(FileStorageService.isImageContentType("application/pdf")).isFalse();
+        assertThat(FileStorageService.isImageContentType("application/zip")).isFalse();
+        assertThat(FileStorageService.isImageContentType("application/octet-stream")).isFalse();
+        assertThat(FileStorageService.isImageContentType(null)).isFalse();
+    }
 }

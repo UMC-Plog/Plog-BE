@@ -52,11 +52,35 @@ public class UploadedFileTagScheduler {
                     log.info("s3_tag_target_missing fileKey={} status={}",
                             file.getFileKey(), file.getStatus());
                 }
+                applyThumbnailState(file);
                 uploadedFileRepository.markTagged(file.getId(), TimeUtil.nowUtc());
             } catch (RuntimeException exception) {
                 log.warn("s3_tag_failed fileKey={} status={}",
                         file.getFileKey(), file.getStatus(), exception);
             }
+        }
+    }
+
+    /**
+     * 썸네일에도 원본과 같은 state 태그를 붙인다. 안 붙이면 원본이 ORPHANED 로 지워질 때
+     * Lifecycle 이 썸네일을 못 찾아 버킷에 영구히 남는다. 썸네일이 READY 가 될 때
+     * taggedAt 을 비우는 것(UploadedFileRepository.markThumbnailReady)이 이 잡을 한 번 더
+     * 태우는 장치다.
+     * <p>
+     * 실패를 삼키는 이유는 원본 태깅과 운명을 분리하기 위해서다. 여기서 예외가 밖으로
+     * 나가면 markTagged 가 실행되지 않아 그 행이 taggedAt=null 로 큐를 영구히 점유한다.
+     * 최악의 경우 수십 KB 짜리 썸네일이 남을 뿐이고, 다음 상태 전이 때 다시 시도된다.
+     */
+    private void applyThumbnailState(UploadedFile file) {
+        if (file.getThumbnailKey() == null) {
+            return;
+        }
+        try {
+            fileStorageService.applyState(
+                    file.getThumbnailKey(), file.getStatus(), file.getOwnerId());
+        } catch (RuntimeException exception) {
+            log.warn("s3_thumbnail_tag_failed thumbnailKey={} status={}",
+                    file.getThumbnailKey(), file.getStatus(), exception);
         }
     }
 
