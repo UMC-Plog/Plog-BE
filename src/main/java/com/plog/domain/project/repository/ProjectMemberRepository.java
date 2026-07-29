@@ -129,4 +129,10 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
             @Param("excludeMemberId") Long excludeMemberId,
             @Param("keyword") String keyword
     );
+
+    @EntityGraph(attributePaths = {"user"})
+    List<ProjectMember> findAllByProjectIdAndStatusOrderByIdAsc(
+            Long projectId,
+            MemberStatus status
+    );
 }
