@@ -14,10 +14,12 @@ import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.global.api.error.ProjectErrorCode;
+import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -100,6 +102,24 @@ class IntegrationServiceTest {
                 );
 
         verify(projectIntegrationRepository, never()).findAllByProjectIdOrderByLinkTypeAsc(anyLong());
+    }
+
+    @Test
+    @DisplayName("완료된 프로젝트는 외부 워크스페이스 연동 해제를 거부한다")
+    void disconnectRejectsCompletedProject() {
+        Long projectId = 1L;
+        Long userId = 10L;
+        Project completedProject = org.mockito.Mockito.mock(Project.class);
+        given(projectRepository.findById(projectId)).willReturn(java.util.Optional.of(completedProject));
+        given(completedProject.isCompleted()).willReturn(true);
+
+        assertThatThrownBy(() -> integrationService.disconnect(projectId, userId, LinkType.GITHUB))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isEqualTo(IntegrationErrorCode.WORKSPACE_INTEGRATION_LOCKED));
+
+        verify(projectAccessService).requireActiveMember(projectId, userId);
+        verify(projectIntegrationRepository, never()).findByProjectIdAndLinkType(projectId, LinkType.GITHUB);
     }
 
     @Test

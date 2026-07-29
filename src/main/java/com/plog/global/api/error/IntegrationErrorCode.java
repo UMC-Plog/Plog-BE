@@ -27,7 +27,8 @@ public enum IntegrationErrorCode implements BaseErrorCode {
     ACTOR_ALREADY_MAPPED(HttpStatus.CONFLICT, "INTEGRATION016", "이미 다른 프로젝트 멤버에게 매핑된 외부 계정입니다."),
     ACTOR_MAPPING_NOT_FOUND(HttpStatus.NOT_FOUND, "INTEGRATION017", "현재 멤버의 외부 계정 매핑을 찾을 수 없습니다."),
     ACTOR_MAPPING_AMBIGUOUS(HttpStatus.CONFLICT, "INTEGRATION018", "외부 계정 식별값이 여러 프로젝트 멤버의 매핑과 충돌합니다."),
-    ACTOR_MAPPING_LOCKED(HttpStatus.BAD_REQUEST, "INTEGRATION019", "최종 제출 후에는 외부 계정 매핑을 변경하거나 해제할 수 없습니다.");
+    ACTOR_MAPPING_LOCKED(HttpStatus.BAD_REQUEST, "INTEGRATION019", "최종 제출 후에는 외부 계정 매핑을 변경하거나 해제할 수 없습니다."),
+    WORKSPACE_INTEGRATION_LOCKED(HttpStatus.BAD_REQUEST, "INTEGRATION020", "프로젝트 완료 후에는 워크스페이스 연동을 변경할 수 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
