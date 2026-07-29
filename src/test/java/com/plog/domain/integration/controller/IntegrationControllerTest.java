@@ -241,7 +241,8 @@ class IntegrationControllerTest {
                         "wantkdd",
                         4L,
                         Instant.parse("2026-07-01T00:00:00Z"),
-                        Instant.parse("2026-07-20T00:00:00Z")
+                        Instant.parse("2026-07-20T00:00:00Z"),
+                        false, null, false
                 ))
         ));
 
@@ -257,7 +258,8 @@ class IntegrationControllerTest {
                 .andExpect(jsonPath("$.result.availableProviderActors[0].actorKey").value("actor:available-123"))
                 .andExpect(jsonPath("$.result.availableProviderActors[0].providerActorId").isEmpty())
                 .andExpect(jsonPath("$.result.availableProviderActors[0].displayName").value("wantkdd"))
-                .andExpect(jsonPath("$.result.availableProviderActors[0].activityCount").value(4L));
+                .andExpect(jsonPath("$.result.availableProviderActors[0].activityCount").value(4L))
+                .andExpect(jsonPath("$.result.availableProviderActors[0].mapped").value(false));
     }
 
     @Test

@@ -104,6 +104,7 @@ class IntegrationActorMappingManagementServiceTest {
         assertThat(response.availableProviderActors().get(0).providerEmail())
                 .isEqualTo("v***@example.com");
         assertThat(response.availableProviderActors().get(0).activityCount()).isEqualTo(4L);
+        assertThat(response.availableProviderActors().get(0).mapped()).isFalse();
     }
 
     @Test
@@ -124,7 +125,9 @@ class IntegrationActorMappingManagementServiceTest {
                 .willReturn(Optional.of(integration));
         given(identityRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of(identity));
         given(aliasRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of());
-        given(activityRepository.findActorObservations(5L)).willReturn(List.of());
+        IntegrationActorObservation actorObservation = observation(
+                "provider-user-4", "teammate@example.com", "teammate@example.com", 2L);
+        given(activityRepository.findActorObservations(5L)).willReturn(List.of(actorObservation));
 
         IntegrationActorMappingListResponse response = service.getMappings(1L, 10L, LinkType.GITHUB);
 
@@ -134,6 +137,10 @@ class IntegrationActorMappingManagementServiceTest {
         assertThat(mapping.providerEmail()).isEqualTo("t***@example.com");
         assertThat(mapping.actorKey())
                 .isEqualTo(ProviderActorKey.providerId("provider-user-4").selectionKey());
+        assertThat(response.availableProviderActors()).hasSize(1);
+        assertThat(response.availableProviderActors().get(0).mapped()).isTrue();
+        assertThat(response.availableProviderActors().get(0).mappedProjectMemberId()).isEqualTo(4L);
+        assertThat(response.availableProviderActors().get(0).mappedByCurrentMember()).isFalse();
     }
 
     @Test
