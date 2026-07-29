@@ -111,7 +111,8 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
                 JsonNode knownUser = actor == null ? null : actor.path("user").path("knownUser");
                 activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY,
                         "drive-activity:" + sha256(canonicalJson(activity)),
-                        knownUser == null ? null : knownUser.path("personName").asText(null), null, null,
+                        text(knownUser, "personName"), firstText(knownUser, "displayName", "name"),
+                        firstText(knownUser, "emailAddress", "email"),
                         parseInstant(activity.path("timestamp")
                                 .asText(activity.path("timeRange").path("endTime").asText(null))),
                         resource.getResourceUrl(), activity.toString());
@@ -179,6 +180,26 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             throw new ProviderResourceAccessException(503, null);
         }
         return nextPageToken;
+    }
+
+    private String firstText(JsonNode node, String... fields) {
+        if (node == null) {
+            return null;
+        }
+        for (String field : fields) {
+            String value = text(node, field);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String text(JsonNode node, String field) {
+        if (node == null || node.isMissingNode() || node.path(field).isMissingNode()) {
+            return null;
+        }
+        return node.path(field).asText(null);
     }
 
     private String sha256(String value) {
