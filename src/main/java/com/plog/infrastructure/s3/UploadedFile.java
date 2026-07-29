@@ -80,11 +80,17 @@ public class UploadedFile extends BaseEntity {
     private LocalDateTime taggedAt;
 
     /**
-     * 썸네일 생성 상태. 기본값을 필드 초기화로 두는 이유는 issue() 가 이 값을 안 건드리기
-     * 때문이다 — 채팅 이미지인지는 첨부가 확정될 때(confirmNew) 판정한다.
+     * 썸네일 생성 상태. 필드 초기화는 issue() 가 이 값을 안 건드리기 때문이다 —
+     * 채팅 이미지인지는 첨부가 확정될 때(confirmNew) 판정한다.
+     * <p>
+     * columnDefinition 으로 DB 기본값을 <b>반드시</b> 함께 준다. 필드 초기화는 DDL 에
+     * 실리지 않으므로, 이게 없으면 Hibernate 가 만드는 스키마에는 DEFAULT 가 없어
+     * JPA 를 거치지 않는 INSERT(테스트 픽스처의 raw SQL, 수동 데이터 이관)가 NOT NULL
+     * 위반으로 깨진다. 운영은 수동 DDL 로 DEFAULT 를 넣었으므로 스키마가 갈리는 것도 막는다.
      */
     @Enumerated(EnumType.STRING)
-    @Column(name = "thumbnail_status", nullable = false, length = 16)
+    @Column(name = "thumbnail_status", nullable = false, length = 16,
+            columnDefinition = "varchar(16) default 'NONE'")
     private ThumbnailStatus thumbnailStatus = ThumbnailStatus.NONE;
 
     /**
@@ -98,7 +104,9 @@ public class UploadedFile extends BaseEntity {
     @Column(name = "thumbnail_at")
     private LocalDateTime thumbnailAt;
 
-    @Column(name = "thumbnail_attempts", nullable = false)
+    /** 운영 DDL 과 타입·기본값을 맞춘다(thumbnailStatus 의 columnDefinition 주석 참조). */
+    @Column(name = "thumbnail_attempts", nullable = false,
+            columnDefinition = "smallint default 0")
     private int thumbnailAttempts;
 
     public static UploadedFile issue(String fileKey, Long ownerId, AttachmentUsage purpose,
