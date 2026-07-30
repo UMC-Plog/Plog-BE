@@ -32,16 +32,17 @@ public class ProjectLeaveService {
 
         long activeMemberCount =
                 projectMemberRepository.countByProjectIdAndStatus(projectId, MemberStatus.ACTIVE);
+
         if (projectMember.getRole() == ProjectRole.OWNER && activeMemberCount > 1) {
             throw new ApiException(ProjectErrorCode.OWNER_MUST_TRANSFER);
         }
 
-        projectMember.leave();
-        projectMemberRepository.saveAndFlush(projectMember);
-
         if (activeMemberCount == 1) {
             projectPurgeService.purge(projectId);
             projectRepository.delete(project);
+        } else {
+            projectMember.leave();
+            projectMemberRepository.saveAndFlush(projectMember);
         }
 
         return new ProjectLeaveResponse(true);
