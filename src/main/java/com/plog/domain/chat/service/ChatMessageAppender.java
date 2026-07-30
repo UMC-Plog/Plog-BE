@@ -182,12 +182,12 @@ public class ChatMessageAppender {
         return chatMessage;
     }
 
+    // 멘션 이벤트는 appendByUser에서 isNewMessage 판정 뒤 한 번만 발행한다.
+    // 여기서도 발행하면 신규 메시지 1건에 대해 이벤트가 2번 나가 알림이 중복된다.
     private ChatMessage createAndSave(ChatRoom room, ProjectMember member, String clientMessageId, String message) {
         long messageSequence = room.issueNextMessageSequence();
-        ChatMessage chatMessage = chatMessageRepository.save(
-                ChatMessage.create(room, member, message, messageSequence, null)
+        return chatMessageRepository.save(
+                ChatMessage.create(room, member, message, messageSequence, clientMessageId)
         );
-        publishMentionEventIfAny(room, member, chatMessage, message);
-        return chatMessage;
     }
 }
