@@ -7,6 +7,7 @@ import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.global.api.error.IntegrationErrorCode;
@@ -60,11 +61,12 @@ public class IntegrationService {
 
     @Transactional
     public IntegrationDisconnectionResponse disconnect(Long projectId, Long userId, LinkType linkType) {
-        if (!projectRepository.existsById(projectId)) {
-            throw new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND);
-        }
-
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
         projectAccessService.requireActiveMember(projectId, userId);
+        if (project.isCompleted()) {
+            throw new ApiException(IntegrationErrorCode.WORKSPACE_INTEGRATION_LOCKED);
+        }
 
         ProjectIntegration integration = projectIntegrationRepository.findByProjectIdAndLinkType(projectId, linkType)
                 .filter(ProjectIntegration::isConnected)

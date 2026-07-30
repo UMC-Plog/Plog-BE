@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.lenient;
 
 import com.plog.domain.integration.dto.request.IntegrationActorMappingRequest;
 import com.plog.domain.integration.dto.response.IntegrationActorMappingListResponse;
@@ -22,6 +23,7 @@ import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.integration.repository.ProjectMemberIntegrationIdentityAliasRepository;
 import com.plog.domain.integration.repository.ProjectMemberIntegrationIdentityRepository;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.domain.user.entity.User;
@@ -57,6 +59,7 @@ class IntegrationActorMappingManagementServiceTest {
     private IntegrationActorMappingManagementService service;
     private ProjectMember currentMember;
     private ProjectIntegration integration;
+    private Project project;
 
     @BeforeEach
     void setUp() {
@@ -70,12 +73,15 @@ class IntegrationActorMappingManagementServiceTest {
         );
         User user = mock(User.class);
         currentMember = ProjectMember.builder().id(3L).user(user).build();
+        project = mock(Project.class);
         integration = ProjectIntegration.builder()
                 .id(5L)
                 .linkType(LinkType.GITHUB)
                 .providerConnectionId("installation-1")
                 .build();
         given(projectRepository.existsById(1L)).willReturn(true);
+        lenient().when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
+        lenient().when(project.isCompleted()).thenReturn(false);
         given(projectAccessService.requireActiveMember(1L, 10L)).willReturn(currentMember);
     }
 
@@ -98,6 +104,7 @@ class IntegrationActorMappingManagementServiceTest {
         assertThat(response.availableProviderActors().get(0).providerEmail())
                 .isEqualTo("v***@example.com");
         assertThat(response.availableProviderActors().get(0).activityCount()).isEqualTo(4L);
+        assertThat(response.availableProviderActors().get(0).mapped()).isFalse();
     }
 
     @Test
@@ -118,7 +125,9 @@ class IntegrationActorMappingManagementServiceTest {
                 .willReturn(Optional.of(integration));
         given(identityRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of(identity));
         given(aliasRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of());
-        given(activityRepository.findActorObservations(5L)).willReturn(List.of());
+        IntegrationActorObservation actorObservation = observation(
+                "provider-user-4", "teammate@example.com", "teammate@example.com", 2L);
+        given(activityRepository.findActorObservations(5L)).willReturn(List.of(actorObservation));
 
         IntegrationActorMappingListResponse response = service.getMappings(1L, 10L, LinkType.GITHUB);
 
@@ -128,6 +137,10 @@ class IntegrationActorMappingManagementServiceTest {
         assertThat(mapping.providerEmail()).isEqualTo("t***@example.com");
         assertThat(mapping.actorKey())
                 .isEqualTo(ProviderActorKey.providerId("provider-user-4").selectionKey());
+        assertThat(response.availableProviderActors()).hasSize(1);
+        assertThat(response.availableProviderActors().get(0).mapped()).isTrue();
+        assertThat(response.availableProviderActors().get(0).mappedProjectMemberId()).isEqualTo(4L);
+        assertThat(response.availableProviderActors().get(0).mappedByCurrentMember()).isFalse();
     }
 
     @Test
@@ -353,6 +366,38 @@ class IntegrationActorMappingManagementServiceTest {
         verify(activityRepository).clearProjectMemberByEmail(
                 5L, currentMember, "vana@example.com");
         verify(activityRepository).clearProjectMemberByLogin(5L, currentMember, "wantkdd");
+    }
+
+    @Test
+    void rejectsSavingMyMappingAfterProjectCompletion() {
+        Project completedProject = mock(Project.class);
+        given(projectRepository.findById(1L)).willReturn(Optional.of(completedProject));
+        given(completedProject.isCompleted()).willReturn(true);
+
+        assertThatThrownBy(() -> service.saveMyMapping(
+                1L,
+                10L,
+                LinkType.GITHUB,
+                new IntegrationActorMappingRequest("actor:123")
+        )).isInstanceOfSatisfying(ApiException.class, exception ->
+                assertThat(exception.getErrorCode()).isEqualTo(IntegrationErrorCode.ACTOR_MAPPING_LOCKED));
+
+        verify(projectIntegrationRepository, never())
+                .findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GITHUB);
+    }
+
+    @Test
+    void rejectsRemovingMyMappingAfterProjectCompletion() {
+        Project completedProject = mock(Project.class);
+        given(projectRepository.findById(1L)).willReturn(Optional.of(completedProject));
+        given(completedProject.isCompleted()).willReturn(true);
+
+        assertThatThrownBy(() -> service.removeMyMapping(1L, 10L, LinkType.GITHUB))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(IntegrationErrorCode.ACTOR_MAPPING_LOCKED));
+
+        verify(projectIntegrationRepository, never())
+                .findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GITHUB);
     }
 
     private IntegrationActorObservation observation(

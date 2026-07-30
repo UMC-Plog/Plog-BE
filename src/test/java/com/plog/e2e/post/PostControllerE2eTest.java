@@ -29,6 +29,7 @@ class PostControllerE2eTest extends E2eTestBase {
 
             ResponseEntity<JsonNode> response = request(HttpMethod.POST, posts(projectId), userId, Map.of(
                     "content", "  회의록을 공유합니다.  ",
+                    "title", "제목",
                     "isNotice", false,
                     "attachments", List.of(Map.of(
                             "attachmentType", "LINK",
@@ -38,6 +39,7 @@ class PostControllerE2eTest extends E2eTestBase {
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
             assertThat(code(response)).isEqualTo("COMMON201");
+            assertThat(result(response).path("title").asText()).isEqualTo("제목");
             assertThat(result(response).path("content").asText()).isEqualTo("회의록을 공유합니다.");
             assertThat(result(response).path("projectMemberId").asLong()).isEqualTo(memberId);
             assertThat(result(response).path("attachments")).hasSize(1);
@@ -54,19 +56,55 @@ class PostControllerE2eTest extends E2eTestBase {
             saveMember(exitedUserId, projectId, "MEMBER", "EXIT", "탈퇴");
 
             ResponseEntity<JsonNode> unauthorized = request(
-                    HttpMethod.POST, posts(projectId), null, Map.of("content", "본문", "isNotice", false));
+                    HttpMethod.POST, posts(projectId), null,
+                    Map.of("title", "제목", "content", "본문", "isNotice", false));
             assertThat(unauthorized.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
             assertThat(code(unauthorized)).isEqualTo("UNAUTHORIZED");
 
             ResponseEntity<JsonNode> exited = request(
-                    HttpMethod.POST, posts(projectId), exitedUserId, Map.of("content", "본문", "isNotice", false));
+                    HttpMethod.POST, posts(projectId), exitedUserId,
+                    Map.of("title", "제목", "content", "본문", "isNotice", false));
             assertThat(exited.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             assertThat(code(exited)).isEqualTo("PROJECT_MEMBER_REQUIRED");
 
             ResponseEntity<JsonNode> invalid = request(
-                    HttpMethod.POST, posts(projectId), activeUserId, Map.of("content", "   ", "isNotice", false));
+                    HttpMethod.POST, posts(projectId), activeUserId,
+                    Map.of("title", "제목", "content", "   ", "isNotice", false));
             assertThat(invalid.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(code(invalid)).isEqualTo("VALIDATION_ERROR");
+        }
+
+        @Test
+        @DisplayName("제목은 trim 후 필수 1~100자다")
+        void titlePolicy() {
+            Long userId = saveUser("create-title-policy");
+            Long projectId = saveProject("create-title-policy");
+            saveMember(userId, projectId, "MEMBER", "ACTIVE", "작성자");
+
+            ResponseEntity<JsonNode> missing = request(
+                    HttpMethod.POST, posts(projectId), userId,
+                    Map.of("content", "본문", "isNotice", false));
+            assertThat(code(missing)).isEqualTo("VALIDATION_ERROR");
+
+            ResponseEntity<JsonNode> blank = request(
+                    HttpMethod.POST, posts(projectId), userId,
+                    Map.of("title", "   ", "content", "본문", "isNotice", false));
+            assertThat(code(blank)).isEqualTo("VALIDATION_ERROR");
+
+            ResponseEntity<JsonNode> tooLong = request(
+                    HttpMethod.POST, posts(projectId), userId,
+                    Map.of("title", "가".repeat(101), "content", "본문", "isNotice", false));
+            assertThat(code(tooLong)).isEqualTo("VALIDATION_ERROR");
+
+            String maxTitle = "가".repeat(100);
+            ResponseEntity<JsonNode> success = request(
+                    HttpMethod.POST, posts(projectId), userId,
+                    Map.of("title", maxTitle, "content", "본문", "isNotice", false));
+            Long postId = result(success).path("postId").asLong();
+            assertThat(result(success).path("title").asText()).isEqualTo(maxTitle);
+            assertThat(jdbc.queryForObject(
+                    "select title from posts where post_id = ?", String.class, postId))
+                    .isEqualTo(maxTitle);
         }
     }
 
@@ -85,9 +123,9 @@ class PostControllerE2eTest extends E2eTestBase {
             assertThat(postResponse.path("properties").has("postId")).isTrue();
             assertThat(postResponse.path("properties").has("content")).isTrue();
             assertThat(postResponse.path("properties").has("attachments")).isTrue();
-            assertThat(schemas.path("FeedResponse").path("properties").path("notice").path("$ref").asText())
+            assertThat(schemas.path("PostFeedResponse").path("properties").path("notice").path("$ref").asText())
                     .endsWith("/PostResponse");
-            assertThat(schemas.path("FeedResponse").path("properties").path("posts")
+            assertThat(schemas.path("PostFeedResponse").path("properties").path("posts")
                     .path("items").path("$ref").asText())
                     .endsWith("/PostResponse");
         }
@@ -111,6 +149,7 @@ class PostControllerE2eTest extends E2eTestBase {
 
             assertThat(firstPage.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(result(firstPage).path("notice").path("postId").asLong()).isEqualTo(noticeId);
+            assertThat(result(firstPage).path("notice").path("title").asText()).isEqualTo("고정 공지");
             assertThat(result(firstPage).path("posts")).hasSize(2);
             assertThat(result(firstPage).path("posts").get(0).path("postId").asLong()).isEqualTo(thirdId);
             assertThat(result(firstPage).path("posts").get(1).path("postId").asLong()).isEqualTo(secondId);
@@ -153,6 +192,7 @@ class PostControllerE2eTest extends E2eTestBase {
                     HttpMethod.GET, post(projectId, postId), viewerId, null);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(result(response).path("title").asText()).isEqualTo("상세 본문");
             assertThat(result(response).path("authorNickname").asText()).isEqualTo("작성자");
             assertThat(result(response).path("likeCount").asLong()).isEqualTo(1L);
             assertThat(result(response).path("commentCount").asLong()).isEqualTo(1L);
@@ -187,6 +227,25 @@ class PostControllerE2eTest extends E2eTestBase {
                     HttpMethod.PATCH, post(projectId, postId), userId, Map.of("attachments", List.of()));
             assertThat(result(replacement).path("attachments")).isEmpty();
             assertThat(count("post_attachments", "post_id", postId)).isZero();
+        }
+
+        @Test
+        @DisplayName("제목을 수정하고 생략하면 기존 제목을 유지한다")
+        void updatesAndKeepsTitle() {
+            Long userId = saveUser("update-title");
+            Long projectId = saveProject("update-title");
+            Long memberId = saveMember(userId, projectId, "MEMBER", "ACTIVE", "작성자");
+            Long postId = savePost(memberId, "기존 제목", false);
+
+            ResponseEntity<JsonNode> updated = request(
+                    HttpMethod.PATCH, post(projectId, postId), userId,
+                    Map.of("title", "  새 제목  "));
+            assertThat(result(updated).path("title").asText()).isEqualTo("새 제목");
+
+            ResponseEntity<JsonNode> contentOnly = request(
+                    HttpMethod.PATCH, post(projectId, postId), userId,
+                    Map.of("content", "수정 본문"));
+            assertThat(result(contentOnly).path("title").asText()).isEqualTo("새 제목");
         }
 
         @Test
@@ -281,6 +340,34 @@ class PostControllerE2eTest extends E2eTestBase {
                     Map.of("isNotice", true)
             );
             assertThat(code(response)).isEqualTo("NOTICE_PERMISSION_DENIED");
+        }
+
+        @Test
+        @DisplayName("공지 이력을 최신순으로 보존하고 최신 공지 삭제 시 직전 공지를 다시 고정한다")
+        void preservesHistoryAndRestoresPreviousNotice() {
+            Long ownerId = saveUser("notice-history-owner");
+            Long projectId = saveProject("notice-history");
+            Long ownerMemberId = saveMember(ownerId, projectId, "OWNER", "ACTIVE", " ");
+            Long previousNoticeId = savePost(ownerMemberId, "이전 공지", true);
+            jdbc.update("update posts set noticed_at = timestamp '2000-01-01 00:00:00' where post_id = ?",
+                    previousNoticeId);
+            Long currentNoticeId = savePost(ownerMemberId, "최신 공지", false);
+
+            request(HttpMethod.PATCH, post(projectId, currentNoticeId) + "/notice",
+                    ownerId, Map.of("isNotice", true));
+
+            ResponseEntity<JsonNode> history = request(
+                    HttpMethod.GET, posts(projectId) + "/notices", ownerId, null);
+            assertThat(result(history).path("notices")).hasSize(2);
+            assertThat(result(history).path("notices").get(0).path("postId").asLong())
+                    .isEqualTo(currentNoticeId);
+
+            request(HttpMethod.DELETE, post(projectId, currentNoticeId), ownerId, null);
+
+            ResponseEntity<JsonNode> feed = request(HttpMethod.GET, posts(projectId), ownerId, null);
+            assertThat(result(feed).path("notice").path("postId").asLong()).isEqualTo(previousNoticeId);
+            assertThat(result(feed).path("notice").path("authorNickname").asText())
+                    .isEqualTo("nick-notice-history-owner");
         }
     }
 

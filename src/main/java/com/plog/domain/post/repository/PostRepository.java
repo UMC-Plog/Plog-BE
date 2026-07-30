@@ -16,10 +16,14 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 
     List<Post> findAllByProjectMemberProjectIdAndIsNoticeTrue(Long projectId);
 
+    List<Post> findAllByProjectMemberProjectIdAndNoticedAtIsNotNullOrderByNoticedAtDescIdDesc(Long projectId);
+
+    Optional<Post> findFirstByProjectMemberProjectIdAndNoticedAtIsNotNullOrderByNoticedAtDescIdDesc(Long projectId);
+
     @Query("""
             select p from Post p
             where p.projectMember.project.id = :projectId
-              and p.isNotice = false
+              and p.noticedAt is null
             order by p.createdAt desc, p.id desc
             """)
     List<Post> findFirstFeedPage(
@@ -30,7 +34,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     @Query("""
             select p from Post p
             where p.projectMember.project.id = :projectId
-              and p.isNotice = false
+              and p.noticedAt is null
               and (p.createdAt < :cursorTime
                    or (p.createdAt = :cursorTime and p.id < :cursorId))
             order by p.createdAt desc, p.id desc

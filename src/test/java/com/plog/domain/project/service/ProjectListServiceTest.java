@@ -57,6 +57,7 @@ class ProjectListServiceTest {
         given(project.getEndDay()).willReturn(LocalDate.now(ZoneOffset.UTC).plusDays(5));
 
         ProjectMember myMembership = member(project, user(1L, "vana"));
+        given(myMembership.getId()).willReturn(42L);
         ProjectMember fourthMember = mock(ProjectMember.class);
         given(fourthMember.getProject()).willReturn(project);
         List<ProjectMember> members = List.of(
@@ -89,6 +90,7 @@ class ProjectListServiceTest {
         );
 
         assertThat(response.content()).hasSize(1);
+        assertThat(response.content().getFirst().myProjectMemberId()).isEqualTo(42L);
         assertThat(response.content().getFirst().remainingDays()).isEqualTo(5);
         assertThat(response.content().getFirst().memberCount()).isEqualTo(4);
         assertThat(response.content().getFirst().memberPreviews()).hasSize(3);

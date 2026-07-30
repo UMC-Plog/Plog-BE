@@ -41,9 +41,10 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
         }
         if (resource.getResourceType() == IntegrationResourceType.NOTION_DATA_SOURCE) {
             JsonNode dataSource = get("/v1/data_sources/" + resource.getProviderResourceId(), token);
+            JsonNode editor = dataSource.path("last_edited_by");
             activityStoreService.store(resource, IntegrationActivityType.NOTION_DATA_SOURCE_SNAPSHOT,
                     "data-source:" + resource.getProviderResourceId() + ":" + dataSource.path("last_edited_time").asText("current"),
-                    dataSource.path("last_edited_by").path("id").asText(null), null, null,
+                    actorId(editor), actorName(editor), actorEmail(editor),
                     parseInstant(dataSource.path("last_edited_time").asText(null)), dataSource.path("url").asText(resource.getResourceUrl()),
                     dataSource.toString());
             String cursor = null;
@@ -67,9 +68,10 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
         JsonNode page = get("/v1/pages/" + pageId, token);
         JsonNode createdBy = page.path("created_by");
         JsonNode editedBy = page.path("last_edited_by");
+        JsonNode actor = preferredActor(editedBy, createdBy);
         activityStoreService.store(resource, IntegrationActivityType.NOTION_PAGE_SNAPSHOT,
                 "page:" + pageId + ":" + page.path("last_edited_time").asText("current"),
-                editedBy.path("id").asText(createdBy.path("id").asText(null)), null, null,
+                actorId(actor), actorName(actor), actorEmail(actor),
                 parseInstant(page.path("last_edited_time").asText(page.path("created_time").asText(null))),
                 page.path("url").asText(resource.getResourceUrl()), page.toString());
         collectBlocks(resource, pageId, token, visitedBlocks);
@@ -89,9 +91,10 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
                 String id = block.path("id").asText();
                 JsonNode createdBy = block.path("created_by");
                 JsonNode editedBy = block.path("last_edited_by");
+                JsonNode actor = preferredActor(editedBy, createdBy);
                 activityStoreService.store(resource, IntegrationActivityType.NOTION_BLOCK_SNAPSHOT,
                         "block:" + id + ":" + block.path("last_edited_time").asText("current"),
-                        editedBy.path("id").asText(createdBy.path("id").asText(null)), null, null,
+                        actorId(actor), actorName(actor), actorEmail(actor),
                         parseInstant(block.path("last_edited_time").asText(block.path("created_time").asText(null))),
                         resource.getResourceUrl(), block.toString());
                 if (!id.isBlank()) {
@@ -114,7 +117,7 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
             for (JsonNode comment : body.path("results")) {
                 JsonNode author = comment.path("created_by");
                 activityStoreService.store(resource, IntegrationActivityType.NOTION_COMMENT,
-                        "comment:" + comment.path("id").asText(), author.path("id").asText(null), null, null,
+                        "comment:" + comment.path("id").asText(), actorId(author), actorName(author), actorEmail(author),
                         parseInstant(comment.path("created_time").asText(null)), resource.getResourceUrl(), comment.toString());
             }
             cursor = body.path("has_more").asBoolean(false) ? body.path("next_cursor").asText(null) : null;
@@ -132,6 +135,23 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
         } catch (RestClientException exception) {
             throw new ProviderResourceAccessException(503, exception);
         }
+    }
+
+    private JsonNode preferredActor(JsonNode preferred, JsonNode fallback) {
+        return preferred.path("id").isMissingNode() || preferred.path("id").asText().isBlank()
+                ? fallback : preferred;
+    }
+
+    private String actorId(JsonNode actor) {
+        return actor.path("id").asText(null);
+    }
+
+    private String actorName(JsonNode actor) {
+        return actor.path("name").asText(null);
+    }
+
+    private String actorEmail(JsonNode actor) {
+        return actor.path("person").path("email").asText(null);
     }
 
     private JsonNode post(String path, String token, Object request) {

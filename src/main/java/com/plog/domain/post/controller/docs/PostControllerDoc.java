@@ -72,6 +72,17 @@ public interface PostControllerDoc {
     })
     ApiResponse<PostDto.FeedResponse> getFeed(Long projectId, Long userId, String cursor, int size);
 
+    @Operation(summary = "공지 이력 목록", description = "프로젝트에서 공지로 지정된 게시글을 공지 지정 최신순으로 반환합니다.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "403", description = "활성 멤버 아님 (PROJECT_MEMBER_REQUIRED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404", description = "프로젝트 없음 (PROJECT_NOT_FOUND)")
+    })
+    ApiResponse<PostDto.NoticeListResponse> getNotices(Long projectId, Long userId);
+
     @Operation(
             summary = "게시글 상세",
             description = """

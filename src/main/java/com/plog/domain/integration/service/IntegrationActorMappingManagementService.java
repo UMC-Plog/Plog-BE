@@ -15,6 +15,7 @@ import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.integration.repository.ProjectMemberIntegrationIdentityAliasRepository;
 import com.plog.domain.integration.repository.ProjectMemberIntegrationIdentityRepository;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.global.api.error.IntegrationErrorCode;
@@ -63,8 +64,8 @@ public class IntegrationActorMappingManagementService {
                 .sorted(Comparator.comparing(IntegrationActorMappingResponse::projectMemberId))
                 .toList();
         List<IntegrationProviderActorResponse> availableProviderActors = providerActors(integration.getId()).stream()
-                .filter(providerActor -> !isMapped(providerActor, identities, aliases))
-                .map(ProviderActor::toResponse)
+                .map(providerActor -> toProviderActorResponse(
+                        providerActor, identities, aliases, currentMember.getId()))
                 .sorted(Comparator
                         .comparing(IntegrationProviderActorResponse::lastOccurredAt,
                                 Comparator.nullsLast(Comparator.reverseOrder()))
@@ -88,6 +89,7 @@ public class IntegrationActorMappingManagementService {
             IntegrationActorMappingRequest request
     ) {
         ProjectMember currentMember = requireActiveMember(projectId, userId);
+        requireMappingEditable(projectId);
         ProjectIntegration integration = requireConnectedIntegrationForUpdate(projectId, linkType);
         ProviderActor providerActor = providerActors(integration.getId()).stream()
                 .filter(item -> item.actorKey().equals(request.actorKey()))
@@ -158,6 +160,7 @@ public class IntegrationActorMappingManagementService {
     @Transactional
     public IntegrationActorMappingResponse removeMyMapping(Long projectId, Long userId, LinkType linkType) {
         ProjectMember currentMember = requireActiveMember(projectId, userId);
+        requireMappingEditable(projectId);
         ProjectIntegration integration = requireConnectedIntegrationForUpdate(projectId, linkType);
         ProjectMemberIntegrationIdentity identity = identityRepository
                 .findByProjectIntegrationIdAndProjectMemberId(integration.getId(), currentMember.getId())
@@ -177,6 +180,14 @@ public class IntegrationActorMappingManagementService {
             throw new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND);
         }
         return projectAccessService.requireActiveMember(projectId, userId);
+    }
+
+    private void requireMappingEditable(Long projectId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
+        if (project.isCompleted()) {
+            throw new ApiException(IntegrationErrorCode.ACTOR_MAPPING_LOCKED);
+        }
     }
 
     private ProjectIntegration requireConnectedIntegration(Long projectId, LinkType linkType) {
@@ -207,14 +218,6 @@ public class IntegrationActorMappingManagementService {
         return providerActors.values().stream().map(MutableProviderActor::toProviderActor).toList();
     }
 
-    private boolean isMapped(
-            ProviderActor providerActor,
-            List<ProjectMemberIntegrationIdentity> identities,
-            List<ProjectMemberIntegrationIdentityAlias> aliases
-    ) {
-        return identities.stream().anyMatch(identity -> matches(identity, providerActor, aliases));
-    }
-
     private boolean matches(
             ProjectMemberIntegrationIdentity identity,
             ProviderActor providerActor,
@@ -237,6 +240,24 @@ public class IntegrationActorMappingManagementService {
                     case LOGIN -> matchesAlias(alias.getAliasValue(),
                             ProviderActorKey.login(providerActor.providerLogin()));
                 });
+    }
+
+    private IntegrationProviderActorResponse toProviderActorResponse(
+            ProviderActor providerActor,
+            List<ProjectMemberIntegrationIdentity> identities,
+            List<ProjectMemberIntegrationIdentityAlias> aliases,
+            Long currentProjectMemberId
+    ) {
+        List<ProjectMemberIntegrationIdentity> matchedIdentities = identities.stream()
+                .filter(identity -> matches(identity, providerActor, aliases))
+                .toList();
+        Long mappedProjectMemberId = matchedIdentities.size() == 1
+                ? matchedIdentities.get(0).getProjectMember().getId()
+                : null;
+        boolean mappedByCurrentMember = matchedIdentities.stream()
+                .anyMatch(identity -> identity.getProjectMember().getId().equals(currentProjectMemberId));
+        return providerActor.toResponse(
+                !matchedIdentities.isEmpty(), mappedProjectMemberId, mappedByCurrentMember);
     }
 
     private void saveAliases(
@@ -408,7 +429,11 @@ public class IntegrationActorMappingManagementService {
             Instant firstOccurredAt,
             Instant lastOccurredAt
     ) {
-        IntegrationProviderActorResponse toResponse() {
+        IntegrationProviderActorResponse toResponse(
+                boolean mapped,
+                Long mappedProjectMemberId,
+                boolean mappedByCurrentMember
+        ) {
             String maskedLogin = maskIfEmail(providerLogin);
             String maskedEmail = maskEmail(providerEmail);
             return new IntegrationProviderActorResponse(
@@ -419,7 +444,10 @@ public class IntegrationActorMappingManagementService {
                     displayName(maskedLogin, maskedEmail, actorKey),
                     activityCount,
                     firstOccurredAt,
-                    lastOccurredAt
+                    lastOccurredAt,
+                    mapped,
+                    mappedProjectMemberId,
+                    mappedByCurrentMember
             );
         }
     }

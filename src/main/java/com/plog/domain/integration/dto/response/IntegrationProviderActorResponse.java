@@ -24,6 +24,13 @@ public record IntegrationProviderActorResponse(
         @Schema(description = "처음 발견된 활동 시각. provider가 시각을 제공하지 않으면 null")
         Instant firstOccurredAt,
         @Schema(description = "마지막으로 발견된 활동 시각. provider가 시각을 제공하지 않으면 null")
-        Instant lastOccurredAt
+        Instant lastOccurredAt,
+        @Schema(description = "이미 프로젝트 멤버에게 매핑된 계정인지 여부", example = "true")
+        boolean mapped,
+        @Schema(description = "매핑한 프로젝트 멤버 ID. 매핑되지 않았거나 식별이 모호하면 null", nullable = true,
+                example = "101")
+        Long mappedProjectMemberId,
+        @Schema(description = "현재 로그인한 멤버가 매핑한 계정인지 여부", example = "false")
+        boolean mappedByCurrentMember
 ) {
 }
