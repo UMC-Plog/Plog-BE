@@ -70,21 +70,7 @@ public class ChatMessageBroadcastListener {
     }
 
     private ChatMessageResponse toResponse(ChatMessage chatMessage) {
-        var sender = chatMessage.getProjectMember();
-        List<ChatMessageResponse.ChatMessageAttachmentResponse> attachmentResponses =
-                chatAttachmentResponseMapper.toResponses(
-                        chatAttachmentRepository.findAllByChatMessageIdOrderByIdAsc(
-                                chatMessage.getId()));
-        return new ChatMessageResponse(
-                chatMessage.getId(),
-                chatMessage.getChatRoom().getId(),
-                chatMessage.getMessageSequence(),
-                sender.getId(),
-                sender.getAnNickname(),
-                sender.getUser().getProfilePreset(),
-                chatMessage.getMessage(),
-                attachmentResponses,
-                TimeUtil.toInstant(chatMessage.getCreatedAt())
-        );
+        return ChatMessageResponse.of(chatMessage, chatAttachmentResponseMapper.toResponses(
+                chatAttachmentRepository.findAllByChatMessageIdOrderByIdAsc(chatMessage.getId())));
     }
 }

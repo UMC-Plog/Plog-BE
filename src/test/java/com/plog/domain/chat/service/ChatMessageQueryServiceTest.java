@@ -91,7 +91,7 @@ class ChatMessageQueryServiceTest {
         lenient().when(senderUser.getProfilePreset()).thenReturn(ProfilePreset.OTTER);
         ProjectMember sender = mock(ProjectMember.class);
         lenient().when(sender.getId()).thenReturn(11L);
-        lenient().when(sender.getAnNickname()).thenReturn("곰곰");
+        lenient().when(sender.getDisplayNickname()).thenReturn("곰곰");
         lenient().when(sender.getUser()).thenReturn(senderUser);
 
         ChatMessage message = mock(ChatMessage.class);
