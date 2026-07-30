@@ -1,6 +1,7 @@
 package com.plog.domain.project.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,6 +14,8 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.global.api.error.ProjectErrorCode;
+import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,19 +45,39 @@ class ProjectLeaveServiceTest {
     }
 
     @Test
-    void ownerCanLeaveWhileOtherMembersRemain() {
+    void ownerMustTransferOwnershipBeforeLeavingWhenOtherMembersRemain() {
         Project project = project();
         ProjectMember owner = owner(project);
         when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project));
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatusForUpdate(1L, 7L, MemberStatus.ACTIVE))
                 .thenReturn(Optional.of(owner));
-        when(projectMemberRepository.countByProjectIdAndStatus(1L, MemberStatus.ACTIVE)).thenReturn(1L);
+        when(projectMemberRepository.countByProjectIdAndStatus(1L, MemberStatus.ACTIVE)).thenReturn(2L);
+
+        assertThatThrownBy(() -> projectLeaveService.leave(1L, 7L))
+                .isInstanceOf(ApiException.class)
+                .extracting(exception -> ((ApiException) exception).getErrorCode())
+                .isEqualTo(ProjectErrorCode.OWNER_MUST_TRANSFER);
+
+        assertThat(owner.getStatus()).isEqualTo(MemberStatus.ACTIVE);
+        verify(projectMemberRepository, never()).saveAndFlush(owner);
+        verify(projectPurgeService, never()).purge(1L);
+        verify(projectRepository, never()).delete(project);
+    }
+
+    @Test
+    void memberCanLeaveWhileOtherMembersRemain() {
+        Project project = project();
+        ProjectMember member = member(project);
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatusForUpdate(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(member));
+        when(projectMemberRepository.countByProjectIdAndStatus(1L, MemberStatus.ACTIVE)).thenReturn(2L);
 
         var response = projectLeaveService.leave(1L, 7L);
 
         assertThat(response.success()).isTrue();
-        assertThat(owner.getStatus()).isEqualTo(MemberStatus.EXIT);
-        verify(projectMemberRepository).saveAndFlush(owner);
+        assertThat(member.getStatus()).isEqualTo(MemberStatus.EXIT);
+        verify(projectMemberRepository).saveAndFlush(member);
         verify(projectPurgeService, never()).purge(1L);
         verify(projectRepository, never()).delete(project);
     }
@@ -66,7 +89,7 @@ class ProjectLeaveServiceTest {
         when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project));
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatusForUpdate(1L, 7L, MemberStatus.ACTIVE))
                 .thenReturn(Optional.of(owner));
-        when(projectMemberRepository.countByProjectIdAndStatus(1L, MemberStatus.ACTIVE)).thenReturn(0L);
+        when(projectMemberRepository.countByProjectIdAndStatus(1L, MemberStatus.ACTIVE)).thenReturn(1L);
 
         projectLeaveService.leave(1L, 7L);
 
@@ -92,6 +115,15 @@ class ProjectLeaveServiceTest {
                 .id(10L)
                 .project(project)
                 .role(ProjectRole.OWNER)
+                .status(MemberStatus.ACTIVE)
+                .build();
+    }
+
+    private ProjectMember member(Project project) {
+        return ProjectMember.builder()
+                .id(11L)
+                .project(project)
+                .role(ProjectRole.MEMBER)
                 .status(MemberStatus.ACTIVE)
                 .build();
     }

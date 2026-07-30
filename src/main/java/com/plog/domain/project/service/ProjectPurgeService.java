@@ -58,6 +58,7 @@ public class ProjectPurgeService {
         delete("delete from SelfFeedback feedback where feedback.projectMember.project.id = :projectId", projectId);
         delete("delete from ReportMemberResult result where result.report.project.id = :projectId", projectId);
         delete("delete from Report report where report.project.id = :projectId", projectId);
+        delete("delete from Notification notification where notification.project.id = :projectId", projectId);
         delete("delete from ProjectMember member where member.project.id = :projectId", projectId);
     }
 
