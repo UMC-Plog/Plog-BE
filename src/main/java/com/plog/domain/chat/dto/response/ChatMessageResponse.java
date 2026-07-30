@@ -19,7 +19,7 @@ public record ChatMessageResponse(
         List<ChatMessageAttachmentResponse> attachments,
         Instant createdAt
 ) {
-    
+
     // 메시지 목록/상세와 실시간 브로드캐스트가 같은 변환을 쓰도록 한 곳에 모으기
     public static ChatMessageResponse of(
             ChatMessage chatMessage,

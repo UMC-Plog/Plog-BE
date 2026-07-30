@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -20,6 +21,7 @@ import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
+import com.plog.domain.notification.event.ChatMentionEvent;
 import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.UploadedFile;
 import jakarta.persistence.EntityManager;
@@ -29,6 +31,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -118,6 +121,59 @@ class ChatMessageAppenderTest {
 
         // 멱등 히트면 확정을 시도하지 않는다 — 이미 CONFIRMED 라 409 가 난다.
         verifyNoInteractions(attachmentPolicy);
+    }
+
+    @Test
+    void 신규_메시지에_clientMessageId가_저장된다() {
+        when(member.getProject()).thenReturn(project);
+
+        when(chatMessageRepository.findByChatRoomIdAndProjectMemberIdAndClientMessageId(ROOM_ID, 200L, "client-6"))
+                .thenReturn(Optional.empty());
+        when(room.issueNextMessageSequence()).thenReturn(1L);
+        ChatMessage savedMessage = mock(ChatMessage.class);
+        when(savedMessage.getId()).thenReturn(502L);
+        when(chatMessageRepository.save(any())).thenReturn(savedMessage);
+
+        chatMessageAppender.appendByUser(ROOM_ID, USER_ID, "client-6", "hi", List.of());
+
+        // clientMessageId가 엔티티에 실리지 않으면 다음 재전송에서 멱등 조회가 영원히 실패한다.
+        ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(chatMessageRepository).save(captor.capture());
+        assertThat(captor.getValue().getClientMessageId()).isEqualTo("client-6");
+    }
+
+    @Test
+    void 신규_메시지의_멘션_이벤트는_한_번만_발행된다() {
+        when(member.getProject()).thenReturn(project);
+
+        when(chatMessageRepository.findByChatRoomIdAndProjectMemberIdAndClientMessageId(ROOM_ID, 200L, "client-4"))
+                .thenReturn(Optional.empty());
+        when(room.issueNextMessageSequence()).thenReturn(1L);
+        ChatMessage savedMessage = mock(ChatMessage.class);
+        when(savedMessage.getId()).thenReturn(501L);
+        when(chatMessageRepository.save(any())).thenReturn(savedMessage);
+
+        ProjectMember mentioned = mock(ProjectMember.class);
+        when(mentioned.getId()).thenReturn(300L);
+        when(projectMemberRepository.findActiveMembersByProjectIdAndNicknameIn(
+                PROJECT_ID, MemberStatus.ACTIVE, java.util.Set.of("지현")))
+                .thenReturn(List.of(mentioned));
+
+        chatMessageAppender.appendByUser(ROOM_ID, USER_ID, "client-4", "@지현 확인 부탁", List.of());
+
+        verify(eventPublisher, times(1)).publishEvent(any(ChatMentionEvent.class));
+    }
+
+    @Test
+    void 멱등_히트면_멘션_이벤트를_발행하지_않는다() {
+        ChatMessage existing = mock(ChatMessage.class);
+        when(existing.getId()).thenReturn(999L);
+        when(chatMessageRepository.findByChatRoomIdAndProjectMemberIdAndClientMessageId(ROOM_ID, 200L, "client-5"))
+                .thenReturn(Optional.of(existing));
+
+        chatMessageAppender.appendByUser(ROOM_ID, USER_ID, "client-5", "@지현 확인 부탁", List.of());
+
+        verify(eventPublisher, never()).publishEvent(any(ChatMentionEvent.class));
     }
 
     @Test
