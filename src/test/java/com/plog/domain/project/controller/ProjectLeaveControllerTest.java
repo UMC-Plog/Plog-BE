@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.plog.domain.project.dto.response.ProjectLeaveResponse;
 import com.plog.domain.project.service.ProjectLeaveService;
+import com.plog.global.api.error.ProjectErrorCode;
+import com.plog.global.api.exception.ApiException;
 import com.plog.global.security.jwt.JwtProvider;
 import com.plog.global.security.jwt.MediaTokenProvider;
 import org.junit.jupiter.api.AfterEach;
@@ -60,5 +62,18 @@ class ProjectLeaveControllerTest {
                 .andExpect(jsonPath("$.result.success").value(true));
 
         verify(projectLeaveService).leave(1L, 7L);
+    }
+
+    @Test
+    void returnsOwnerMustTransferBusinessError() throws Exception {
+        given(projectLeaveService.leave(1L, 7L))
+                .willThrow(new ApiException(ProjectErrorCode.OWNER_MUST_TRANSFER));
+
+        mockMvc.perform(delete("/api/projects/{projectId}/members/me", 1L))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("OWNER_MUST_TRANSFER"))
+                .andExpect(jsonPath("$.message")
+                        .value("프로젝트 생성자는 다른 팀원에게 방장 권한을 이전해야 나갈 수 있습니다."));
     }
 }
