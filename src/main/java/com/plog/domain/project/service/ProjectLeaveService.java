@@ -4,6 +4,7 @@ import com.plog.domain.project.dto.response.ProjectLeaveResponse;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.error.ProjectErrorCode;
@@ -29,10 +30,16 @@ public class ProjectLeaveService {
                 .findByProjectIdAndUserIdAndStatusForUpdate(projectId, userId, MemberStatus.ACTIVE)
                 .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_MEMBER_REQUIRED));
 
+        long activeMemberCount =
+                projectMemberRepository.countByProjectIdAndStatus(projectId, MemberStatus.ACTIVE);
+        if (projectMember.getRole() == ProjectRole.OWNER && activeMemberCount > 1) {
+            throw new ApiException(ProjectErrorCode.OWNER_MUST_TRANSFER);
+        }
+
         projectMember.leave();
         projectMemberRepository.saveAndFlush(projectMember);
 
-        if (projectMemberRepository.countByProjectIdAndStatus(projectId, MemberStatus.ACTIVE) == 0) {
+        if (activeMemberCount == 1) {
             projectPurgeService.purge(projectId);
             projectRepository.delete(project);
         }

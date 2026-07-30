@@ -21,6 +21,8 @@ import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.entity.ProjectMemberIntegrationIdentity;
 import com.plog.domain.integration.entity.ProjectMemberIntegrationIdentityAlias;
 import com.plog.domain.integration.entity.ResourceType;
+import com.plog.domain.notification.entity.Notification;
+import com.plog.domain.notification.entity.NotificationType;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
@@ -146,9 +148,10 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
     @Test
     void projectPurgeDeletesLegacyAndCurrentIntegrationRowsBeforeMembers() {
         Project project = entityManager.persist(project());
+        User user = User.createLocal("purge@example.com", "encoded", "정리", "purge");
         ProjectMember member = entityManager.persist(member(
                 project,
-                User.createLocal("purge@example.com", "encoded", "정리", "purge"),
+                user,
                 ProjectRole.OWNER
         ));
         ExternalConnection legacyConnection = entityManager.persist(ExternalConnection.builder()
@@ -199,6 +202,8 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
                 .status(IntegrationCollectionRunStatus.PENDING)
                 .attemptCount(0)
                 .build());
+        entityManager.persist(Notification.create(
+                user, project, NotificationType.CHAT_MENTION, "프로젝트 알림", null));
         entityManager.flush();
 
         projectPurgeService.purge(project.getId());
@@ -215,6 +220,7 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
         assertThat(tableCount("integration_authorization_states")).isZero();
         assertThat(tableCount("integration_collection_runs")).isZero();
         assertThat(tableCount("project_integrations")).isZero();
+        assertThat(tableCount("notifications")).isZero();
         assertThat(tableCount("project_members")).isZero();
     }
 
