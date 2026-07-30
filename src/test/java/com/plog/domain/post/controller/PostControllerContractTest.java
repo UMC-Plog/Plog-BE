@@ -54,12 +54,14 @@ class PostControllerContractTest {
     }
 
     @Test
-    void exposesAllElevenFeedEndpointsWithApiPrefixWithoutVersion() throws Exception {
+    void exposesAllTwelveFeedEndpointsWithApiPrefixWithoutVersion() throws Exception {
         mockMvc.perform(post("/api/projects/1/posts")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"content\":\"post\",\"isNotice\":false,\"attachments\":[]}"))
+                        .content("{\"title\":\"title\",\"content\":\"post\",\"isNotice\":false,\"attachments\":[]}"))
                 .andExpect(status().isCreated());
         mockMvc.perform(get("/api/projects/1/posts"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/projects/1/posts/notices"))
                 .andExpect(status().isOk());
         mockMvc.perform(get("/api/projects/1/posts/2"))
                 .andExpect(status().isOk());
@@ -87,6 +89,7 @@ class PostControllerContractTest {
                 .andExpect(status().isOk());
 
         verify(postService).getFeed(1L, 7L, null, 20);
+        verify(postService).getNotices(1L, 7L);
         verify(postService).changeNotice(eq(1L), eq(2L), eq(7L), any(PostDto.NoticeRequest.class));
     }
 

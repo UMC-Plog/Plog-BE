@@ -62,6 +62,7 @@ public class PostService {
             throw new ApiException(PostErrorCode.NOTICE_PERMISSION_DENIED);
         }
         String content = requireContent(request.content(), 5000);
+        String title = requireContent(request.title(), 100);
         List<PostDto.AttachmentRequest> attachments = safeAttachments(request.attachments());
         List<UploadedFile> resolvedFiles = validateAttachments(userId, null, attachments);
         if (request.isNotice()) {
@@ -70,7 +71,8 @@ public class PostService {
             clearNotices(projectId, null);
         }
         Post post = postRepository.saveAndFlush(Post.builder()
-                .projectMember(member).content(content).isNotice(request.isNotice()).build());
+                .projectMember(member).title(title).content(content).isNotice(request.isNotice())
+                .noticedAt(request.isNotice() ? LocalDateTime.now(ZoneOffset.UTC) : null).build());
         List<PostAttachment> savedAttachments = saveAttachments(post, attachments, resolvedFiles);
         return toCreateResponse(post, member, savedAttachments);
     }
@@ -112,6 +114,18 @@ public class PostService {
         return new PostDto.FeedResponse(notice, posts, nextCursor, hasNext);
     }
 
+    public PostDto.NoticeListResponse getNotices(Long projectId, Long userId) {
+        requireProject(projectId);
+        ProjectMember member = requireActiveMember(projectId, userId);
+        List<PostDto.PostResponse> notices = postRepository
+                .findAllByProjectMemberProjectIdAndNoticedAtIsNotNullOrderByNoticedAtDescIdDesc(projectId)
+                .stream()
+                .map(post -> toResponse(post, member,
+                        attachmentRepository.findAllByPostIdOrderByIdAsc(post.getId())))
+                .toList();
+        return new PostDto.NoticeListResponse(notices);
+    }
+
     @Transactional
     public PostDto.UpdateResponse updatePost(Long projectId, Long postId, Long userId, PostDto.UpdateRequest request) {
         requireProject(projectId);
@@ -122,6 +136,9 @@ public class PostService {
         }
         if (request.content() != null) {
             post.updateContent(requireContent(request.content(), 5000));
+        }
+        if (request.title() != null) {
+            post.updateTitle(requireContent(request.title(), 100));
         }
         List<PostAttachment> resultingAttachments;
         if (request.attachments() != null) {
@@ -151,13 +168,20 @@ public class PostService {
     public PostDto.DeletedResponse deletePost(Long projectId, Long postId, Long userId) {
         requireProject(projectId);
         ProjectMember member = requireActiveMember(projectId, userId);
+        projectRepository.findByIdForUpdate(projectId)
+                .orElseThrow(() -> new ApiException(ProjectApiErrorCode.PROJECT_NOT_FOUND));
         Post post = requirePost(projectId, postId);
         if (!post.getProjectMember().getId().equals(member.getId()) && member.getRole() != ProjectRole.OWNER) {
             throw new ApiException(PostErrorCode.POST_DELETE_PERMISSION_DENIED);
         }
         List<Long> fileIds = attachmentRepository.findFileIdsByPostId(postId);
+        boolean deletedCurrentNotice = post.isNotice();
         postRepository.delete(post);
         postRepository.flush();
+        if (deletedCurrentNotice) {
+            postRepository.findFirstByProjectMemberProjectIdAndNoticedAtIsNotNullOrderByNoticedAtDescIdDesc(projectId)
+                    .ifPresent(Post::markAsNotice);
+        }
         uploadedFileService.release(fileIds);
         return new PostDto.DeletedResponse(true);
     }
@@ -244,7 +268,9 @@ public class PostService {
         List<PostDto.AttachmentResponse> attachmentResponses = attachments.stream().map(this::toAttachmentResponse).toList();
         return new PostDto.PostResponse(
                 post.getId(), post.getProjectMember().getProject().getId(), post.getProjectMember().getId(),
-                post.getProjectMember().getAnNickname(), post.getContent(), post.isNotice(),
+                post.getProjectMember().getDisplayNickname(),
+                post.getProjectMember().getUser().getProfilePreset(),
+                post.getTitle(), post.getContent(), post.isNotice(),
                 postLikeRepository.countByPostId(post.getId()), commentRepository.countByPostId(post.getId()),
                 postLikeRepository.existsByPostIdAndProjectMemberId(post.getId(), viewer.getId()), attachmentResponses,
                 toInstant(post.getCreatedAt()), toInstant(post.getUpdatedAt()));
@@ -257,7 +283,9 @@ public class PostService {
     ) {
         return new PostDto.CreateResponse(
                 post.getId(), post.getProjectMember().getProject().getId(), post.getProjectMember().getId(),
-                post.getContent(), post.isNotice(), postLikeRepository.countByPostId(post.getId()),
+                post.getProjectMember().getDisplayNickname(),
+                post.getProjectMember().getUser().getProfilePreset(),
+                post.getTitle(), post.getContent(), post.isNotice(), postLikeRepository.countByPostId(post.getId()),
                 commentRepository.countByPostId(post.getId()),
                 postLikeRepository.existsByPostIdAndProjectMemberId(post.getId(), viewer.getId()),
                 attachments.stream().map(this::toAttachmentResponse).toList(),
@@ -271,7 +299,9 @@ public class PostService {
     ) {
         return new PostDto.UpdateResponse(
                 post.getId(), post.getProjectMember().getProject().getId(), post.getProjectMember().getId(),
-                post.getContent(), post.isNotice(), postLikeRepository.countByPostId(post.getId()),
+                post.getProjectMember().getDisplayNickname(),
+                post.getProjectMember().getUser().getProfilePreset(),
+                post.getTitle(), post.getContent(), post.isNotice(), postLikeRepository.countByPostId(post.getId()),
                 commentRepository.countByPostId(post.getId()),
                 postLikeRepository.existsByPostIdAndProjectMemberId(post.getId(), viewer.getId()),
                 attachments.stream().map(this::toAttachmentResponse).toList(),
@@ -299,7 +329,9 @@ public class PostService {
         return new CommentDto.Response(
                 comment.getId(), comment.getPost().getId(),
                 comment.getPost().getProjectMember().getProject().getId(), comment.getProjectMember().getId(),
-                comment.getProjectMember().getAnNickname(), comment.getContent(), toInstant(comment.getCreatedAt()));
+                comment.getProjectMember().getDisplayNickname(),
+                comment.getProjectMember().getUser().getProfilePreset(),
+                comment.getContent(), toInstant(comment.getCreatedAt()));
     }
 
     private List<PostAttachment> saveAttachments(Post post,

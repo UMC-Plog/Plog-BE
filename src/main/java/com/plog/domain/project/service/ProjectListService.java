@@ -79,6 +79,9 @@ public class ProjectListService {
         List<ProjectListResponse> summaries = projects.stream()
                 .map(project -> summary(
                         project,
+                        membershipSlice.getContent().stream()
+                                .filter(member -> member.getProject().getId().equals(project.getId()))
+                                .findFirst().orElseThrow(),
                         membersByProject.getOrDefault(project.getId(), List.of()),
                         progressByProject.get(project.getId()),
                         today
@@ -89,6 +92,7 @@ public class ProjectListService {
 
     private ProjectListResponse summary(
             Project project,
+            ProjectMember myMembership,
             List<ProjectMember> members,
             ProjectTaskProgress progress,
             LocalDate today
@@ -105,6 +109,7 @@ public class ProjectListService {
 
         return new ProjectListResponse(
                 project.getId(),
+                myMembership.getId(),
                 project.getProjectName(),
                 project.getProjectType(),
                 project.getStatus(),

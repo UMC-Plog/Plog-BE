@@ -166,10 +166,12 @@ public abstract class E2eTestBase {
 
     protected Long savePost(Long memberId, String content, boolean notice) {
         return jdbc.queryForObject("""
-                insert into posts (project_member_id, content, is_notice, created_at, updated_at)
-                values (?, ?, ?, now(), now())
+                insert into posts (
+                    project_member_id, title, content, is_notice, noticed_at, created_at, updated_at
+                )
+                values (?, ?, ?, ?, case when ? then now() else null end, now(), now())
                 returning post_id
-                """, Long.class, memberId, content, notice);
+                """, Long.class, memberId, content, content, notice, notice);
     }
 
     protected Long saveComment(Long postId, Long memberId, String content) {

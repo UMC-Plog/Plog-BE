@@ -11,6 +11,8 @@ import java.util.List;
 public record ProjectListResponse(
         @Schema(description = "프로젝트 ID", example = "1")
         Long projectId,
+        @Schema(description = "현재 사용자의 프로젝트 멤버 ID", example = "42")
+        Long myProjectMemberId,
         @Schema(description = "프로젝트 이름", example = "Plog")
         String projectName,
         @Schema(description = "프로젝트 유형", example = "DEVELOP", allowableValues = {"DEVELOP", "GENERAL"})
@@ -30,6 +32,21 @@ public record ProjectListResponse(
         @Schema(description = "프로젝트 진행률 퍼센트", example = "70")
         int progressPercent
 ) {
+    public ProjectListResponse(
+            Long projectId,
+            String projectName,
+            ProjectType projectType,
+            ProjectStatus status,
+            LocalDate endDay,
+            long remainingDays,
+            int memberCount,
+            List<MemberPreview> memberPreviews,
+            int extraMemberCount,
+            int progressPercent
+    ) {
+        this(projectId, null, projectName, projectType, status, endDay, remainingDays,
+                memberCount, memberPreviews, extraMemberCount, progressPercent);
+    }
 
     @Schema(description = "프로젝트 목록 멤버 미리보기")
     public record MemberPreview(

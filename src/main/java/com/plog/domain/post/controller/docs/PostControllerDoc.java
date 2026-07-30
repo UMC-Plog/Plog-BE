@@ -72,6 +72,9 @@ public interface PostControllerDoc {
     })
     ApiResponse<PostDto.FeedResponse> getFeed(Long projectId, Long userId, String cursor, int size);
 
+    @Operation(summary = "공지 이력 목록", description = "프로젝트에서 공지로 지정된 게시글을 공지 지정 최신순으로 반환합니다.")
+    ApiResponse<PostDto.NoticeListResponse> getNotices(Long projectId, Long userId);
+
     @Operation(
             summary = "게시글 상세",
             description = """

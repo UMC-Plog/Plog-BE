@@ -11,6 +11,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -34,6 +36,9 @@ public class Post extends BaseEntity {
     @JoinColumn(name = "project_member_id", nullable = false)
     private ProjectMember projectMember;
 
+    @Column(name = "title", nullable = false, length = 100)
+    private String title;
+
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
 
@@ -41,11 +46,31 @@ public class Post extends BaseEntity {
     @Column(name = "is_notice", nullable = false)
     private boolean isNotice;
 
+    @Column(name = "noticed_at")
+    private LocalDateTime noticedAt;
+
+    public void updateTitle(String title) {
+        this.title = title;
+    }
+
     public void updateContent(String content) {
         this.content = content;
     }
 
     public void changeNotice(boolean notice) {
-        this.isNotice = notice;
+        if (notice) {
+            markAsNotice();
+        } else {
+            unpinNotice();
+        }
+    }
+
+    public void markAsNotice() {
+        this.isNotice = true;
+        this.noticedAt = LocalDateTime.now(ZoneOffset.UTC);
+    }
+
+    public void unpinNotice() {
+        this.isNotice = false;
     }
 }
