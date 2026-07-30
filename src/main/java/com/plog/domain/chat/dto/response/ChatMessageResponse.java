@@ -1,6 +1,9 @@
 package com.plog.domain.chat.dto.response;
 
+import com.plog.domain.chat.entity.ChatMessage;
+import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.user.entity.ProfilePreset;
+import com.plog.global.util.TimeUtil;
 
 import java.time.Instant;
 import java.util.List;
@@ -16,6 +19,26 @@ public record ChatMessageResponse(
         List<ChatMessageAttachmentResponse> attachments,
         Instant createdAt
 ) {
+
+    // 메시지 목록/상세와 실시간 브로드캐스트가 같은 변환을 쓰도록 한 곳에 모으기
+    public static ChatMessageResponse of(
+            ChatMessage chatMessage,
+            List<ChatMessageAttachmentResponse> attachments
+    ) {
+        ProjectMember sender = chatMessage.getProjectMember();
+        return new ChatMessageResponse(
+                chatMessage.getId(),
+                chatMessage.getChatRoom().getId(),
+                chatMessage.getMessageSequence(),
+                sender.getId(),
+                sender.getDisplayNickname(),
+                sender.getUser().getProfilePreset(),
+                chatMessage.getMessage(),
+                attachments,
+                TimeUtil.toInstant(chatMessage.getCreatedAt())
+        );
+    }
+
     /**
      * fileUrl 은 만료 없는 프록시 절대 URL 이다(presigned 아님).
      * <p>

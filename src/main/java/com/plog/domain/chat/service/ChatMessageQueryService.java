@@ -98,19 +98,6 @@ public class ChatMessageQueryService {
     }
 
     private ChatMessageResponse toResponse(ChatMessage chatMessage, List<ChatAttachment> attachments) {
-        var sender = chatMessage.getProjectMember();
-        List<ChatMessageResponse.ChatMessageAttachmentResponse> attachmentResponses =
-                chatAttachmentResponseMapper.toResponses(attachments);
-        return new ChatMessageResponse(
-                chatMessage.getId(),
-                chatMessage.getChatRoom().getId(),
-                chatMessage.getMessageSequence(),
-                sender.getId(),
-                sender.getAnNickname(),
-                sender.getUser().getProfilePreset(),
-                chatMessage.getMessage(),
-                attachmentResponses,
-                TimeUtil.toInstant(chatMessage.getCreatedAt())
-        );
+        return ChatMessageResponse.of(chatMessage, chatAttachmentResponseMapper.toResponses(attachments));
     }
 }
