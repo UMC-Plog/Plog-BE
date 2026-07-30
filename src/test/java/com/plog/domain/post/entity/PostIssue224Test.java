@@ -36,4 +36,21 @@ class PostIssue224Test {
         assertThat(post.isNotice()).isFalse();
         assertThat(post.getNoticedAt()).isEqualTo(noticedAt);
     }
+
+    @Test
+    void 이전_공지를_복원해도_최초_공지_지정_시각은_보존된다() {
+        Post post = Post.builder()
+                .projectMember(ProjectMember.builder().build())
+                .title("이전 공지")
+                .content("본문")
+                .build();
+        post.markAsNotice();
+        LocalDateTime firstNoticedAt = post.getNoticedAt();
+        post.unpinNotice();
+
+        post.restoreNotice();
+
+        assertThat(post.isNotice()).isTrue();
+        assertThat(post.getNoticedAt()).isEqualTo(firstNoticedAt);
+    }
 }

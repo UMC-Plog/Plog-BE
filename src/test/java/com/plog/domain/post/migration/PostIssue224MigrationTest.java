@@ -13,6 +13,31 @@ import org.testcontainers.containers.PostgreSQLContainer;
 class PostIssue224MigrationTest {
 
     @Test
+    void 빈_데이터베이스에서도_초기_posts_생성_후_V224를_적용한다() throws SQLException {
+        try (PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")) {
+            postgres.start();
+
+            migrate(postgres);
+
+            try (Connection connection = DriverManager.getConnection(
+                    postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())) {
+                var columns = connection.createStatement().executeQuery("""
+                        select column_name
+                        from information_schema.columns
+                        where table_name = 'posts'
+                        """);
+                java.util.Set<String> names = new java.util.HashSet<>();
+                while (columns.next()) {
+                    names.add(columns.getString("column_name"));
+                }
+                assertThat(names).contains(
+                        "post_id", "project_member_id", "title", "content",
+                        "is_notice", "noticed_at", "created_at", "updated_at");
+            }
+        }
+    }
+
+    @Test
     void 기존_게시글_제목을_백필하고_NOT_NULL_제약을_적용한다() throws SQLException {
         try (PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")) {
             postgres.start();
@@ -35,13 +60,7 @@ class PostIssue224MigrationTest {
                         """);
             }
 
-            Flyway.configure()
-                    .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
-                    .locations("classpath:db/migration")
-                    .baselineOnMigrate(true)
-                    .baselineVersion("0")
-                    .load()
-                    .migrate();
+            migrate(postgres);
 
             try (Connection connection = DriverManager.getConnection(
                     postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())) {
@@ -63,5 +82,15 @@ class PostIssue224MigrationTest {
                         .isInstanceOf(SQLException.class);
             }
         }
+    }
+
+    private void migrate(PostgreSQLContainer<?> postgres) {
+        Flyway.configure()
+                .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+                .locations("classpath:db/migration")
+                .baselineOnMigrate(true)
+                .baselineVersion("0")
+                .load()
+                .migrate();
     }
 }

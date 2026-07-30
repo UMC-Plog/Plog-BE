@@ -180,7 +180,7 @@ public class PostService {
         postRepository.flush();
         if (deletedCurrentNotice) {
             postRepository.findFirstByProjectMemberProjectIdAndNoticedAtIsNotNullOrderByNoticedAtDescIdDesc(projectId)
-                    .ifPresent(Post::markAsNotice);
+                    .ifPresent(Post::restoreNotice);
         }
         uploadedFileService.release(fileIds);
         return new PostDto.DeletedResponse(true);

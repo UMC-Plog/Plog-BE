@@ -73,4 +73,8 @@ public class Post extends BaseEntity {
     public void unpinNotice() {
         this.isNotice = false;
     }
+
+    public void restoreNotice() {
+        this.isNotice = true;
+    }
 }
