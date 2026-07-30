@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.plog.domain.post.dto.PostDto;
@@ -17,6 +18,7 @@ import com.plog.domain.post.repository.PostLikeRepository;
 import com.plog.domain.post.repository.PostRepository;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.exception.ProjectApiErrorCode;
 import com.plog.domain.project.repository.ProjectMemberRepository;
@@ -61,6 +63,27 @@ class PostServicePolicyTest {
                 attachmentPolicy,
                 uploadedFileService
         );
+    }
+
+    @Test
+    void 현재_공지_삭제는_프로젝트_잠금_안에서_이전_공지를_복원한다() {
+        ProjectMember author = ProjectMember.builder()
+                .id(3L).role(ProjectRole.OWNER).status(MemberStatus.ACTIVE).build();
+        Post post = Post.builder()
+                .id(2L).projectMember(author).title("공지").content("본문").isNotice(true).build();
+        Project project = org.mockito.Mockito.mock(Project.class);
+        when(projectRepository.existsById(1L)).thenReturn(true);
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(author));
+        when(postRepository.findByIdAndProjectMemberProjectId(2L, 1L)).thenReturn(Optional.of(post));
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project));
+        when(attachmentRepository.findFileIdsByPostId(2L)).thenReturn(List.of());
+
+        service.deletePost(1L, 2L, 7L);
+
+        verify(projectRepository).findByIdForUpdate(1L);
+        verify(postRepository)
+                .findFirstByProjectMemberProjectIdAndNoticedAtIsNotNullOrderByNoticedAtDescIdDesc(1L);
     }
 
     @Test

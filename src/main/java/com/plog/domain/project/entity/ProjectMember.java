@@ -76,6 +76,12 @@ public class ProjectMember extends BaseEntity {
         this.role = role;
     }
 
+    public String getDisplayNickname() {
+        return anNickname == null || anNickname.isBlank()
+                ? user.getNickname()
+                : anNickname;
+    }
+
     public void transferOwnershipTo(ProjectMember targetMember) {
         this.role = ProjectRole.MEMBER;
         targetMember.assignRole(ProjectRole.OWNER);

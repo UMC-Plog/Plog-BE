@@ -27,20 +27,34 @@ public final class PostDto {
             String linkUrl
     ) {}
 
+    @Schema(name = "PostCreateRequest")
     public record CreateRequest(
+            @NotBlank @Size(max = 100) String title,
             @NotBlank @Size(max = 5000) String content,
             boolean isNotice,
             @Size(max = 10) List<@Valid AttachmentRequest> attachments
-    ) {}
+    ) {
+        public CreateRequest(String content, boolean isNotice, List<AttachmentRequest> attachments) {
+            this("제목", content, isNotice, attachments);
+        }
+    }
 
+    @Schema(name = "PostUpdateRequest")
     public record UpdateRequest(
+            @Size(min = 1, max = 100) String title,
             @Size(min = 1, max = 5000) String content,
             @Size(max = 10) List<@Valid AttachmentRequest> attachments
-    ) {}
+    ) {
+        public UpdateRequest(String content, List<AttachmentRequest> attachments) {
+            this(null, content, attachments);
+        }
+    }
 
+    @Schema(name = "PostNoticeRequest")
     public record NoticeRequest(@NotNull Boolean isNotice) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(name = "PostAttachmentResponse")
     public record AttachmentResponse(
             Long postAttachmentId,
             AttachmentType attachmentType,
@@ -56,11 +70,14 @@ public final class PostDto {
             String downloadUrlApi
     ) {}
 
+    @Schema(name = "PostResponse")
     public record PostResponse(
             Long postId,
             Long projectId,
             Long projectMemberId,
             String authorNickname,
+            com.plog.domain.user.entity.ProfilePreset profilePreset,
+            String title,
             String content,
             boolean isNotice,
             long likeCount,
@@ -71,10 +88,14 @@ public final class PostDto {
             Instant updatedAt
     ) {}
 
+    @Schema(name = "PostCreateResponse")
     public record CreateResponse(
             Long postId,
             Long projectId,
             Long projectMemberId,
+            String authorNickname,
+            com.plog.domain.user.entity.ProfilePreset profilePreset,
+            String title,
             String content,
             boolean isNotice,
             long likeCount,
@@ -84,10 +105,14 @@ public final class PostDto {
             Instant createdAt
     ) {}
 
+    @Schema(name = "PostUpdateResponse")
     public record UpdateResponse(
             Long postId,
             Long projectId,
             Long projectMemberId,
+            String authorNickname,
+            com.plog.domain.user.entity.ProfilePreset profilePreset,
+            String title,
             String content,
             boolean isNotice,
             long likeCount,
@@ -97,12 +122,16 @@ public final class PostDto {
             Instant updatedAt
     ) {}
 
+    @Schema(name = "PostFeedResponse")
     public record FeedResponse(
             PostResponse notice,
             List<PostResponse> posts,
             String nextCursor,
             boolean hasNext
     ) {}
+
+    @Schema(name = "PostNoticeListResponse")
+    public record NoticeListResponse(List<PostResponse> notices) {}
 
     public record NoticeResponse(Long postId, Long projectId, boolean isNotice, Instant updatedAt) {}
 

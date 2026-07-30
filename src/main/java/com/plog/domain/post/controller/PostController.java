@@ -53,6 +53,15 @@ public class PostController implements PostControllerDoc {
     }
 
     @Override
+    @GetMapping("/notices")
+    public ApiResponse<PostDto.NoticeListResponse> getNotices(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal Long userId
+    ) {
+        return ApiResponse.success(postService.getNotices(projectId, userId));
+    }
+
+    @Override
     @GetMapping("/{postId}")
     public ApiResponse<PostDto.PostResponse> getPost(
             @PathVariable Long projectId,

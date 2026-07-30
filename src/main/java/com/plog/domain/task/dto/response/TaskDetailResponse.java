@@ -37,7 +37,7 @@ public record TaskDetailResponse(
         public static AssigneeResponse from(Task task) {
             return new AssigneeResponse(
                     task.getProjectMember().getId(),
-                    task.getProjectMember().getAnNickname(),
+                    task.getProjectMember().getDisplayNickname(),
                     task.getProjectMember().getUser().getProfilePreset()
             );
         }

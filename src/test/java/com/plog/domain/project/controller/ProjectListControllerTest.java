@@ -56,6 +56,7 @@ class ProjectListControllerTest {
         SliceResponse<ProjectListResponse> response = new SliceResponse<>(
                 List.of(new ProjectListResponse(
                         10L,
+                        42L,
                         "Plog",
                         ProjectType.DEVELOP,
                         ProjectStatus.IN_PROGRESS,
@@ -78,6 +79,7 @@ class ProjectListControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("PROJECT007"))
                 .andExpect(jsonPath("$.result.content[0].projectId").value(10L))
+                .andExpect(jsonPath("$.result.content[0].myProjectMemberId").value(42L))
                 .andExpect(jsonPath("$.result.content[0].projectType").value("DEVELOP"))
                 .andExpect(jsonPath("$.result.content[0].memberPreviews[0].nickname").value("vana"))
                 .andExpect(jsonPath("$.result.content[0].progressPercent").value(66))

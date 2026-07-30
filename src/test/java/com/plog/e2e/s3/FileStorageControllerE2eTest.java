@@ -126,6 +126,7 @@ class FileStorageControllerE2eTest extends E2eTestBase {
                     userId,
                     Map.of(
                             "content", "파일을 공유합니다.",
+                            "title", "제목",
                             "isNotice", false,
                             "attachments", List.of(Map.of(
                                     "attachmentType", "FILE",
@@ -199,6 +200,7 @@ class FileStorageControllerE2eTest extends E2eTestBase {
             return request(HttpMethod.POST, "/api/projects/" + projectId + "/posts", userId,
                     Map.of(
                             "content", "파일을 공유합니다.",
+                            "title", "제목",
                             "isNotice", false,
                             "attachments", List.of(Map.of(
                                     "attachmentType", "FILE",
