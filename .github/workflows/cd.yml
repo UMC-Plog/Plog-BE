@@ -75,6 +75,11 @@ jobs:
             #    (빈 값으로 넣으면 application.yaml 의 기본값을 빈 문자열로 덮어써 리다이렉트가 깨진다)
             #  - 리다이렉트(성공/실패) 목적지는 프론트 주소다. 프론트 배포 전이라 로컬 프론트가 기본값이고,
             #    배포되면 INTEGRATION_*_REDIRECT_URL 시크릿만 추가하면 된다.
+            #
+            # FCM:
+            #  - Firebase 서비스 계정 JSON은 이미지나 .env에 넣지 않고 GitHub Secret의 base64 값을
+            #    EC2 전용 파일로 복원한 뒤 컨테이너에 read-only로 마운트한다.
+            #  - 다음 배포가 파일을 교체하므로 EC2에서 직접 수정하지 않는다.
             cat > .env <<'EOF'
             DOCKER_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/plog-be:latest
             DB_URL=${{ secrets.DB_URL }}
@@ -113,17 +118,39 @@ jobs:
             SOCIAL_GOOGLE_CLIENT_ID=${{ secrets.SOCIAL_GOOGLE_CLIENT_ID }}
             SOCIAL_GOOGLE_CLIENT_SECRET=${{ secrets.SOCIAL_GOOGLE_CLIENT_SECRET }}
             SOCIAL_GOOGLE_REDIRECT_URI=${{ secrets.SOCIAL_GOOGLE_REDIRECT_URI || 'https://umc-plog.site/oauth/google' }}
+            FCM_ENABLED=true
+            FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
+            GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/firebase-service-account.json
             EOF
             chmod 600 .env
 
             # 시크릿 누락은 빈 값으로 조용히 통과한다 → 컨테이너 띄우기 전에 여기서 끊는다.
             for required in DB_URL DB_USERNAME DB_PASSWORD JWT_SECRET MAIL_USERNAME \
-                            MAIL_PASSWORD INVITE_TOKEN_ENCRYPTION_KEY_BASE64 INVITE_BASE_URL; do
+                            MAIL_PASSWORD INVITE_TOKEN_ENCRYPTION_KEY_BASE64 INVITE_BASE_URL \
+                            FIREBASE_PROJECT_ID; do
               if ! grep -q "^${required}=." .env; then
                 echo "❌ 필수 시크릿이 비어 있습니다: ${required}"
                 exit 1
               fi
             done
+
+            firebase_service_account_base64='${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 }}'
+            if [ -z "${firebase_service_account_base64}" ]; then
+              echo "❌ 필수 시크릿이 비어 있습니다: FIREBASE_SERVICE_ACCOUNT_JSON_BASE64"
+              exit 1
+            fi
+
+            mkdir -p .secrets
+            chmod 700 .secrets
+            printf '%s' "${firebase_service_account_base64}" \
+              | base64 --decode > .secrets/firebase-service-account.json.next
+            unset firebase_service_account_base64
+            if [ ! -s .secrets/firebase-service-account.json.next ]; then
+              echo "❌ Firebase 서비스 계정 파일 복원에 실패했습니다."
+              exit 1
+            fi
+            chmod 600 .secrets/firebase-service-account.json.next
+            mv .secrets/firebase-service-account.json.next .secrets/firebase-service-account.json
 
             # 연동 값은 없어도 앱이 기동한다 → 조용히 죽는 대신 경고만 남긴다.
             # (비어 있으면 해당 provider 연동 API 만 PROVIDER_CONFIGURATION_ERROR 로 실패한다)
@@ -143,6 +170,7 @@ jobs:
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
             docker compose pull
+            docker compose config --quiet
             docker compose up -d
             docker image prune -f
 
