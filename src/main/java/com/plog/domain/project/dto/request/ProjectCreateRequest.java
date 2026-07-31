@@ -16,7 +16,7 @@ public record ProjectCreateRequest(
         @Schema(description = "프로젝트 유형. DEVELOP=개발 프로젝트, GENERAL=일반 프로젝트",
                 example = "DEVELOP", allowableValues = {"DEVELOP", "GENERAL"})
         ProjectType projectType,
-        @Schema(description = "예상 종료일. 오늘 이후 날짜만 허용됩니다.", example = "2026-07-31")
+        @Schema(description = "예상 종료일. 오늘 당일부터 허용되며, 과거 날짜는 검증 오류입니다.", example = "2026-07-31")
         LocalDate endDay
 ) {
 }

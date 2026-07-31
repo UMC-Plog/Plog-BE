@@ -200,9 +200,48 @@ class ProjectCreateServiceTest {
         );
     }
 
+    @Test
+    void acceptsTodayAsTheEndDay() {
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        User user = User.createLocal("owner@plog.test", "encoded-password", "Owner", "owner");
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        executeInviteTokenPersistence();
+        given(projectRepository.save(any(Project.class))).willAnswer(invocation -> {
+            Project project = invocation.getArgument(0);
+            return Project.builder()
+                    .id(10L)
+                    .projectName(project.getProjectName())
+                    .inviteTokenHash(project.getInviteTokenHash())
+                    .inviteTokenEncrypted(project.getInviteTokenEncrypted())
+                    .projectType(project.getProjectType())
+                    .status(project.getStatus())
+                    .startDay(project.getStartDay())
+                    .endDay(project.getEndDay())
+                    .build();
+        });
+        given(projectMemberRepository.save(any(ProjectMember.class))).willAnswer(invocation -> {
+            ProjectMember member = invocation.getArgument(0);
+            return ProjectMember.builder()
+                    .id(20L)
+                    .user(member.getUser())
+                    .project(member.getProject())
+                    .role(member.getRole())
+                    .status(member.getStatus())
+                    .build();
+        });
+
+        ProjectCreateResponse response = projectCreateService.create(
+                1L,
+                new ProjectCreateRequest("Plog API", ProjectType.DEVELOP, today)
+        );
+
+        assertThat(response.startDay()).isEqualTo(today);
+        assertThat(response.endDay()).isEqualTo(today);
+    }
+
     @ParameterizedTest
     @MethodSource("invalidEndDays")
-    void rejectsAnEndDayThatIsNotAfterUtcToday(LocalDate endDay) {
+    void rejectsAnEndDayBeforeUtcToday(LocalDate endDay) {
         ProjectCreateRequest request = new ProjectCreateRequest("Plog API", ProjectType.DEVELOP, endDay);
 
         assertProjectError(
@@ -285,6 +324,6 @@ class ProjectCreateServiceTest {
 
     private static Stream<LocalDate> invalidEndDays() {
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
-        return Stream.of(null, today, today.minusDays(1));
+        return Stream.of(null, today.minusDays(1), today.minusDays(30));
     }
 }

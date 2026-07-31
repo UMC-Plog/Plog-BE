@@ -110,7 +110,14 @@ public class Project extends BaseEntity {
         }
     }
 
+    /**
+     * 평가 대기 상태 판정. 기준은 마감일 하나뿐이다 — 업무 진행률은 보지 않는다.
+     * <p>
+     * 마감일 "당일"부터 열린다(경계 포함). 마감일 당일로 프로젝트를 만든 팀도 그날 바로 평가할 수 있어야 하고,
+     * 완료 전환 타임아웃이 endDay+7일이라 당일부터 열어야 7일 창이 온전히 확보된다.
+     * 리포트가 발행되면(COMPLETED) 더 이상 평가 대기가 아니다.
+     */
     public boolean isEvaluatingState(LocalDate today) {
-        return !isCompleted() && !today.isAfter(this.endDay);
+        return !isCompleted() && !today.isBefore(this.endDay);
     }
 }

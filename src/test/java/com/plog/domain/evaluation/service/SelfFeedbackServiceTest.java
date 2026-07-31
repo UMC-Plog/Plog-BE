@@ -2,6 +2,8 @@ package com.plog.domain.evaluation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.plog.domain.evaluation.dto.request.SelfFeedbackCreateRequest;
@@ -15,6 +17,7 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,7 +73,36 @@ class SelfFeedbackServiceTest {
                                 .isEqualTo(EvaluationErrorCode.CANNOT_MODIFY_FEEDBACK_AFTER_PUBLISH));
     }
 
+    @Test
+    void createsSelfFeedbackOnceTheEndDayHasPassed() {
+        ProjectMember projectMember = projectMember(
+                ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC).minusDays(1));
+        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(projectMember));
+        when(selfFeedbackRepository.findByProjectMemberId(10L)).thenReturn(Optional.empty());
+
+        selfFeedbackService.createSelfFeedback(1L, 7L, new SelfFeedbackCreateRequest("셀프 피드백"));
+
+        verify(selfFeedbackRepository).saveAndFlush(any(SelfFeedback.class));
+    }
+
+    @Test
+    void rejectsSelfFeedbackBeforeTheEndDay() {
+        ProjectMember projectMember = projectMember(
+                ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC).plusDays(1));
+        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(projectMember));
+
+        assertThatThrownBy(() -> selfFeedbackService.createSelfFeedback(
+                1L, 7L, new SelfFeedbackCreateRequest("셀프 피드백")))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isEqualTo(EvaluationErrorCode.NOT_EVALUATING_STATE));
+    }
+
     private ProjectMember projectMember(ProjectStatus status) {
+        return projectMember(status, LocalDate.of(2026, 12, 31));
+    }
+
+    private ProjectMember projectMember(ProjectStatus status, LocalDate endDay) {
         Project project = Project.builder()
                 .id(1L)
                 .projectName("Plog")
@@ -79,7 +111,7 @@ class SelfFeedbackServiceTest {
                 .projectType(ProjectType.DEVELOP)
                 .status(status)
                 .startDay(LocalDate.of(2026, 1, 1))
-                .endDay(LocalDate.of(2026, 12, 31))
+                .endDay(endDay)
                 .build();
         return ProjectMember.builder()
                 .id(10L)

@@ -21,6 +21,8 @@ public class EvaluationController {
 
     private final EvaluationService evaluationService;
 
+    @Operation(summary = "평가 대상 팀원 목록 조회",
+            description = "본인을 제외한 팀원 목록을 아바타 표시에 필요한 프로필 프리셋과 평가 완료 여부까지 함께 반환합니다.")
     @GetMapping("/targets")
     public ApiResponse<EvaluationTargetResponse> getEvaluationTargets(
             @PathVariable Long projectId,

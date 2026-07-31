@@ -21,17 +21,24 @@ class ProjectTest {
     }
 
     @Test
-    void staysEvaluatingOnTheEndDayItself() {
+    void startsEvaluatingOnTheEndDayItself() {
         Project project = projectEndingOnEndDay(ProjectStatus.IN_PROGRESS);
 
         assertThat(project.isEvaluatingState(END_DAY)).isTrue();
     }
 
     @Test
-    void stopsEvaluatingTheDayAfterTheEndDay() {
+    void isNotEvaluatingBeforeTheEndDay() {
         Project project = projectEndingOnEndDay(ProjectStatus.IN_PROGRESS);
 
-        assertThat(project.isEvaluatingState(END_DAY.plusDays(1))).isFalse();
+        assertThat(project.isEvaluatingState(END_DAY.minusDays(1))).isFalse();
+    }
+
+    @Test
+    void keepsEvaluatingAfterTheEndDayHasPassed() {
+        Project project = projectEndingOnEndDay(ProjectStatus.IN_PROGRESS);
+
+        assertThat(project.isEvaluatingState(END_DAY.plusDays(1))).isTrue();
     }
 
     @Test

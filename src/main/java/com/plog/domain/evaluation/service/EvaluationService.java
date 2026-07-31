@@ -50,7 +50,8 @@ public class EvaluationService {
 
                     return TargetMemberDto.builder()
                             .projectMemberId(member.getId())
-                            .nickname(member.getAnNickname() != null ? member.getAnNickname() : member.getUser().getNickname())
+                            .nickname(member.getDisplayNickname())
+                            .profilePreset(member.getUser().getProfilePreset())
                             .isEvaluated(isEvaluated)
                             .build();
                 })
