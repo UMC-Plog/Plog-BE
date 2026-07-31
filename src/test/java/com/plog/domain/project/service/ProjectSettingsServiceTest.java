@@ -64,7 +64,24 @@ class ProjectSettingsServiceTest {
     }
 
     @Test
-    void ownerCannotSetTodayAsExpectedEndDate() {
+    void ownerCanSetTodayAsExpectedEndDate() {
+        LocalDate today = LocalDate.now(java.time.ZoneOffset.UTC);
+        Project project = project();
+        ProjectMember owner = ProjectMember.builder()
+                .id(3L).role(ProjectRole.OWNER).status(MemberStatus.ACTIVE).build();
+        when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(owner));
+
+        ProjectSettingsDto.UpdateResponse response = service.updateSettings(
+                1L, 7L, new ProjectSettingsDto.UpdateRequest(null, today, null));
+
+        assertThat(response.endDay()).isEqualTo(today);
+        assertThat(project.getEndDay()).isEqualTo(today);
+    }
+
+    @Test
+    void ownerCannotSetAPastDateAsExpectedEndDate() {
         Project project = project();
         ProjectMember owner = ProjectMember.builder()
                 .id(3L).role(ProjectRole.OWNER).status(MemberStatus.ACTIVE).build();
@@ -73,7 +90,8 @@ class ProjectSettingsServiceTest {
                 .thenReturn(Optional.of(owner));
 
         assertThatThrownBy(() -> service.updateSettings(
-                1L, 7L, new ProjectSettingsDto.UpdateRequest(null, LocalDate.now(java.time.ZoneOffset.UTC), null)))
+                1L, 7L, new ProjectSettingsDto.UpdateRequest(
+                        null, LocalDate.now(java.time.ZoneOffset.UTC).minusDays(1), null)))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(ProjectApiErrorCode.VALIDATION_ERROR));
     }

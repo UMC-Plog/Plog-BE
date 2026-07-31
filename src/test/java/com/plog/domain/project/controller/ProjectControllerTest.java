@@ -143,7 +143,7 @@ class ProjectControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.isSuccess").value(false))
                 .andExpect(jsonPath("$.code").value("PROJECT005"))
-                .andExpect(jsonPath("$.message").value("예상 종료일은 오늘과 시작일 이후여야 합니다."));
+                .andExpect(jsonPath("$.message").value("예상 종료일은 오늘 또는 그 이후여야 합니다."));
     }
 
     @Test
