@@ -20,7 +20,6 @@ import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
-import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectPurgeService;
 import com.plog.domain.user.entity.ProfilePreset;
 import com.plog.domain.user.entity.ProviderType;
@@ -64,7 +63,6 @@ class UserWithdrawalServiceTest {
 
     private UserRepository userRepository;
     private ProjectMemberRepository projectMemberRepository;
-    private ProjectRepository projectRepository;
     private ProjectPurgeService projectPurgeService;
     private RefreshTokenRepository refreshTokenRepository;
     private FcmTokenRepository fcmTokenRepository;
@@ -77,7 +75,6 @@ class UserWithdrawalServiceTest {
     void setUp() {
         userRepository = mock(UserRepository.class);
         projectMemberRepository = mock(ProjectMemberRepository.class);
-        projectRepository = mock(ProjectRepository.class);
         projectPurgeService = mock(ProjectPurgeService.class);
         refreshTokenRepository = mock(RefreshTokenRepository.class);
         fcmTokenRepository = mock(FcmTokenRepository.class);
@@ -86,7 +83,7 @@ class UserWithdrawalServiceTest {
         // 행 단위 파기는 별 빈(WithdrawnUserAnonymizer)이 담당한다. 익명화 값 생성까지 함께 검증해야 하므로
         // 목이 아니라 실제 구현을 끼운다 — 리포지토리·인코더는 그대로 목이라 DB는 필요 없다.
         service = new UserWithdrawalService(userRepository, projectMemberRepository,
-                projectRepository, projectPurgeService, refreshTokenRepository, fcmTokenRepository,
+                projectPurgeService, refreshTokenRepository, fcmTokenRepository,
                 emailVerificationCodeService, new WithdrawnUserAnonymizer(userRepository, passwordEncoder),
                 new WithdrawalProperties(RETENTION));
 
@@ -158,7 +155,6 @@ class UserWithdrawalServiceTest {
         assertThat(mine.getStatus()).isEqualTo(MemberStatus.EXIT);
         // 후임자가 있으므로 프로젝트는 살아남는다.
         verify(projectPurgeService, never()).purge(anyLong());
-        verify(projectRepository, never()).delete(any(Project.class));
     }
 
     @Test
@@ -196,11 +192,11 @@ class UserWithdrawalServiceTest {
         // EXIT 멤버는 후임 후보가 아니다 → 소유권 이전 없음.
         assertThat(exited.getRole()).isEqualTo(ProjectRole.MEMBER);
         assertThat(mine.getStatus()).isEqualTo(MemberStatus.EXIT);
-        // 멤버 상태를 flush한 뒤 purge → delete 순서여야 한다(purge가 지운 행에 UPDATE가 뒤따르면 실패).
-        InOrder inOrder = inOrder(projectMemberRepository, projectPurgeService, projectRepository);
+        // 멤버 상태를 flush한 뒤 purge 순서여야 한다(purge가 지운 행에 UPDATE가 뒤따르면 실패).
+        // 프로젝트 행 삭제는 purge가 벌크로 처리한다(em.remove(project)를 섞지 않는다).
+        InOrder inOrder = inOrder(projectMemberRepository, projectPurgeService);
         inOrder.verify(projectMemberRepository).flush();
         inOrder.verify(projectPurgeService).purge(10L);
-        inOrder.verify(projectRepository).delete(project);
     }
 
     @Test
@@ -219,7 +215,6 @@ class UserWithdrawalServiceTest {
         verify(projectMemberRepository, never()).findAllByProjectId(anyLong());
         verify(projectMemberRepository, never()).flush();
         verify(projectPurgeService, never()).purge(anyLong());
-        verify(projectRepository, never()).delete(any(Project.class));
     }
 
     @Test
@@ -350,15 +345,14 @@ class UserWithdrawalServiceTest {
         service.withdraw(1L, true);
 
         assertThat(mine.getStatus()).isEqualTo(MemberStatus.EXIT);
-        // leave 엔드포인트와 같은 처리: 멤버 상태 flush → 하위 데이터 purge → 프로젝트 삭제.
-        InOrder inOrder = inOrder(projectMemberRepository, projectPurgeService, projectRepository);
+        // leave 엔드포인트와 같은 처리: 멤버 상태 flush → 하위 데이터·프로젝트 purge(프로젝트 행 삭제 포함).
+        InOrder inOrder = inOrder(projectMemberRepository, projectPurgeService);
         inOrder.verify(projectMemberRepository).flush();
         inOrder.verify(projectPurgeService).purge(10L);
-        inOrder.verify(projectRepository).delete(project);
     }
 
     @Test
-    @DisplayName("후임 없는 OWNER의 프로젝트도 purge와 delete는 한 번만 실행한다")
+    @DisplayName("후임 없는 OWNER의 프로젝트도 purge는 한 번만 실행한다")
     void ownerlessProjectIsPurgedOnlyOnce() {
         // "후임 없는 OWNER"와 "남은 활성 멤버 0"은 같은 프로젝트를 가리킨다.
         // 두 조건을 각각 삭제 경로로 두면 같은 프로젝트를 두 번 purge하게 되므로 판정 지점은 하나여야 한다.
@@ -371,7 +365,6 @@ class UserWithdrawalServiceTest {
         service.withdraw(1L, true);
 
         verify(projectPurgeService, times(1)).purge(10L);
-        verify(projectRepository, times(1)).delete(project);
     }
 
     @Test
