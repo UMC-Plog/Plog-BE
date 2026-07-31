@@ -12,6 +12,7 @@ build/
 # 시크릿 / 로컬 설정
 .env
 .env.*
+.secrets/
 *.pem
 *.key
 *.p12
