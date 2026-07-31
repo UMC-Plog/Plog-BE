@@ -111,8 +111,9 @@ public class ProjectCreateService {
         return normalizedName;
     }
 
+    // 당일 마감 프로젝트를 허용한다 — startDay는 오늘이므로 endDay == 오늘까지 통과시키고 과거만 막는다.
     private void validateEndDay(LocalDate endDay, LocalDate startDay) {
-        if (endDay == null || !endDay.isAfter(startDay)) {
+        if (endDay == null || endDay.isBefore(startDay)) {
             throw new ApiException(ProjectErrorCode.INVALID_PROJECT_END_DAY);
         }
     }

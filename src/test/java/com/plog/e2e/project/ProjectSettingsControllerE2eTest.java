@@ -135,13 +135,24 @@ class ProjectSettingsControllerE2eTest extends E2eTestBase {
                     HttpMethod.PATCH, settings(projectId), ownerId, Map.of("projectName", " 한 "));
             assertThat(code(invalidName)).isEqualTo("VALIDATION_ERROR");
 
-            ResponseEntity<JsonNode> invalidEndDay = request(
+            ResponseEntity<JsonNode> pastEndDay = request(
+                    HttpMethod.PATCH,
+                    settings(projectId),
+                    ownerId,
+                    Map.of("endDay", LocalDate.now(ZoneOffset.UTC).minusDays(1).toString())
+            );
+            assertThat(code(pastEndDay)).isEqualTo("VALIDATION_ERROR");
+
+            // 당일 마감으로 당기는 것은 허용된다 — 마감일 당일부터 평가 대기 상태로 들어간다.
+            ResponseEntity<JsonNode> todayEndDay = request(
                     HttpMethod.PATCH,
                     settings(projectId),
                     ownerId,
                     Map.of("endDay", LocalDate.now(ZoneOffset.UTC).toString())
             );
-            assertThat(code(invalidEndDay)).isEqualTo("VALIDATION_ERROR");
+            assertThat(todayEndDay.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(todayEndDay.getBody().path("result").path("endDay").asText())
+                    .isEqualTo(LocalDate.now(ZoneOffset.UTC).toString());
         }
     }
 

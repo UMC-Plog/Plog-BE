@@ -25,10 +25,11 @@ class ProjectSettingsValidator {
         }
     }
 
+    // 마감일을 오늘로 당기는 것까지 허용한다(당일 마감). 과거로 되돌리거나 시작일보다 앞당기는 것만 막는다.
     private void validateEndDay(Project project, ProjectSettingsDto.UpdateRequest request) {
         if (request.endDay() != null
-                && (!request.endDay().isAfter(TimeUtil.todayUtc())
-                || !request.endDay().isAfter(project.getStartDay()))) {
+                && (request.endDay().isBefore(TimeUtil.todayUtc())
+                || request.endDay().isBefore(project.getStartDay()))) {
             throw new ApiException(ProjectApiErrorCode.VALIDATION_ERROR);
         }
     }
