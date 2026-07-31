@@ -60,6 +60,11 @@ public class ProjectPurgeService {
         delete("delete from Report report where report.project.id = :projectId", projectId);
         delete("delete from Notification notification where notification.project.id = :projectId", projectId);
         delete("delete from ProjectMember member where member.project.id = :projectId", projectId);
+        // 프로젝트 행도 여기서 벌크로 지운다. 호출부가 em.remove(project)로 지우면,
+        // 위 벌크 delete가 남긴 managed ProjectMember 엔티티가 REMOVED 상태의 project를
+        // 참조하게 되어 flush 시 TransientObjectException(500)이 난다. 전부 벌크로 끝내
+        // REMOVED 상태 엔티티 자체를 만들지 않는다.
+        delete("delete from Project project where project.id = :projectId", projectId);
     }
 
     /** 세 도메인이 참조 중인 uploaded_file ID. 벌크 delete 전에 모아야 한다. */
