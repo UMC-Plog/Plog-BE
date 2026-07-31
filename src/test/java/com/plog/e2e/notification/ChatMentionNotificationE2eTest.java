@@ -48,6 +48,7 @@ class ChatMentionNotificationE2eTest extends E2eTestBase {
 
             publishAfterCommit(new ChatMentionEvent(
                     projectId,
+                    55L,
                     77L,
                     senderMemberId,
                     List.of(targetMemberId, targetMemberId, senderMemberId, exitedMemberId),
@@ -63,7 +64,9 @@ class ChatMentionNotificationE2eTest extends E2eTestBase {
             assertThat(message.body()).isEqualTo("Plog mention: 곰곰님이 회원님을 멘션했습니다.");
             assertThat(message.data())
                     .containsEntry("projectId", projectId.toString())
-                    .containsEntry("chatId", "77")
+                    .containsEntry("roomId", "55")
+                    .containsEntry("resourceId", "77")
+                    .doesNotContainKey("chatId")
                     .containsEntry("type", "CHAT_MENTION");
         }
 
@@ -80,7 +83,7 @@ class ChatMentionNotificationE2eTest extends E2eTestBase {
                     .when(fcmGateway).send(any(FcmMessage.class));
 
             publishAfterCommit(new ChatMentionEvent(
-                    projectId, 88L, senderMemberId, List.of(targetMemberId), "hello"));
+                    projectId, 66L, 88L, senderMemberId, List.of(targetMemberId), "hello"));
 
             verify(fcmGateway, timeout(3_000).times(1)).send(any(FcmMessage.class));
             awaitTokenDeletion("invalid-token");

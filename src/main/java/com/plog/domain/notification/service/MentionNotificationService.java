@@ -77,7 +77,8 @@ public class MentionNotificationService {
         String body = project.getProjectName() + ": " + senderNickname + "님이 회원님을 멘션했습니다.";
         Map<String, String> data = Map.of(
                 "projectId", event.projectId().toString(),
-                "chatId", event.chatId().toString(),
+                "roomId", event.roomId().toString(),
+                "resourceId", event.chatId().toString(),
                 "type", "CHAT_MENTION"
         );
 
@@ -140,7 +141,7 @@ public class MentionNotificationService {
     }
 
     private boolean isValid(ChatMentionEvent event) {
-        return event != null && event.projectId() != null && event.chatId() != null
+        return event != null && event.projectId() != null && event.roomId() != null && event.chatId() != null
                 && event.senderMemberId() != null && event.mentionMemberIds() != null;
     }
 

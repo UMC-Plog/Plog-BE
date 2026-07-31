@@ -161,7 +161,12 @@ class ChatMessageAppenderTest {
 
         chatMessageAppender.appendByUser(ROOM_ID, USER_ID, "client-4", "@지현 확인 부탁", List.of());
 
-        verify(eventPublisher, times(1)).publishEvent(any(ChatMentionEvent.class));
+        ArgumentCaptor<ChatMentionEvent> eventCaptor = ArgumentCaptor.forClass(ChatMentionEvent.class);
+        verify(eventPublisher, times(1)).publishEvent(eventCaptor.capture());
+        ChatMentionEvent event = eventCaptor.getValue();
+        assertThat(event.projectId()).isEqualTo(PROJECT_ID);
+        assertThat(event.roomId()).isEqualTo(ROOM_ID);
+        assertThat(event.chatId()).isEqualTo(501L);
     }
 
     @Test

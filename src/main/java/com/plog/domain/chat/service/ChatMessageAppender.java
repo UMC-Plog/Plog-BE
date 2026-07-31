@@ -135,6 +135,7 @@ public class ChatMessageAppender {
 
         eventPublisher.publishEvent(new ChatMentionEvent(
                 room.getProject().getId(),
+                room.getId(),
                 chatMessage.getId(),
                 sender.getId(),
                 mentionMemberIds,

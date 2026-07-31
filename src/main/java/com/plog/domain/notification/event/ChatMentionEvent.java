@@ -4,6 +4,7 @@ import java.util.List;
 
 public record ChatMentionEvent(
         Long projectId,
+        Long roomId,
         Long chatId,
         Long senderMemberId,
         List<Long> mentionMemberIds,
