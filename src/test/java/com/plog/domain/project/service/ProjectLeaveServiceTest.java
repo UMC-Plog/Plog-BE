@@ -93,8 +93,11 @@ class ProjectLeaveServiceTest {
 
         projectLeaveService.leave(1L, 7L);
 
+        // purge가 프로젝트 행까지 벌크로 지운다. 서비스가 em.remove(project)를 하면
+        // 벌크 delete가 남긴 managed ProjectMember가 REMOVED project를 참조해
+        // flush 시 TransientObjectException(500)이 나므로, delete()는 호출하지 않는다.
         verify(projectPurgeService).purge(1L);
-        verify(projectRepository).delete(project);
+        verify(projectRepository, never()).delete(project);
     }
 
     private Project project() {

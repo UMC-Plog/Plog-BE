@@ -6,7 +6,6 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.repository.ProjectMemberRepository;
-import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectPurgeService;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.RefreshTokenRepository;
@@ -38,7 +37,6 @@ public class UserWithdrawalService {
 
     private final UserRepository userRepository;
     private final ProjectMemberRepository projectMemberRepository;
-    private final ProjectRepository projectRepository;
     private final ProjectPurgeService projectPurgeService;
     private final RefreshTokenRepository refreshTokenRepository;
     private final FcmTokenRepository fcmTokenRepository;
@@ -48,7 +46,6 @@ public class UserWithdrawalService {
 
     public UserWithdrawalService(UserRepository userRepository,
                                  ProjectMemberRepository projectMemberRepository,
-                                 ProjectRepository projectRepository,
                                  ProjectPurgeService projectPurgeService,
                                  RefreshTokenRepository refreshTokenRepository,
                                  FcmTokenRepository fcmTokenRepository,
@@ -57,7 +54,6 @@ public class UserWithdrawalService {
                                  WithdrawalProperties properties) {
         this.userRepository = userRepository;
         this.projectMemberRepository = projectMemberRepository;
-        this.projectRepository = projectRepository;
         this.projectPurgeService = projectPurgeService;
         this.refreshTokenRepository = refreshTokenRepository;
         this.fcmTokenRepository = fcmTokenRepository;
@@ -190,8 +186,10 @@ public class UserWithdrawalService {
         // 벌크 삭제 전에 방금 바꾼 멤버 상태를 반영한다 — purge가 지운 행에 UPDATE가 뒤따르면 실패한다.
         projectMemberRepository.flush();
         for (Project project : emptyProjects) {
+            // purge가 하위 데이터와 프로젝트 행까지 벌크로 삭제한다.
+            // em.remove(project)를 쓰면 벌크 delete가 남긴 managed ProjectMember가
+            // REMOVED 상태 project를 참조해 flush 시 TransientObjectException이 난다.
             projectPurgeService.purge(project.getId());
-            projectRepository.delete(project);
         }
     }
 

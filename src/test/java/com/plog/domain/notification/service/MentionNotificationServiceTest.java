@@ -63,7 +63,7 @@ class MentionNotificationServiceTest {
                 .thenReturn(List.of(sender, target, exitedTarget));
         when(fcmTokenRepository.findAllByUserIdIn(anyCollection())).thenReturn(List.of(token));
 
-        service.send(new ChatMentionEvent(10L, 20L, 1L, List.of(2L, 2L, 1L, 3L), " 확인 부탁해요 "));
+        service.send(new ChatMentionEvent(10L, 30L, 20L, 1L, List.of(2L, 2L, 1L, 3L), " 확인 부탁해요 "));
 
         // C안: title = 프로젝트명, body = "{프로젝트명}: {닉네임}님이 회원님을 멘션했습니다." (preview 미사용)
         ArgumentCaptor<FcmMessage> messageCaptor = ArgumentCaptor.forClass(FcmMessage.class);
@@ -73,7 +73,9 @@ class MentionNotificationServiceTest {
         assertThat(message.title()).isEqualTo("Plog");
         assertThat(message.body()).isEqualTo("Plog: 곰곰님이 회원님을 멘션했습니다.");
         assertThat(message.data()).containsEntry("projectId", "10")
-                .containsEntry("chatId", "20")
+                .containsEntry("roomId", "30")
+                .containsEntry("resourceId", "20")
+                .doesNotContainKey("chatId")
                 .containsEntry("type", "CHAT_MENTION");
 
         // 인앱 알림 저장 검증: target만 저장되고, 발신자/탈퇴 멤버는 제외되어야 한다.
@@ -97,7 +99,7 @@ class MentionNotificationServiceTest {
         org.mockito.Mockito.doThrow(new FcmDeliveryException(true, new RuntimeException("invalid")))
                 .when(fcmGateway).send(any(FcmMessage.class));
 
-        service.send(new ChatMentionEvent(10L, 20L, 1L, List.of(2L), "hello"));
+        service.send(new ChatMentionEvent(10L, 30L, 20L, 1L, List.of(2L), "hello"));
 
         verify(fcmTokenRepository).deleteByToken("invalid-token");
         verify(fcmGateway).send(any(FcmMessage.class));
