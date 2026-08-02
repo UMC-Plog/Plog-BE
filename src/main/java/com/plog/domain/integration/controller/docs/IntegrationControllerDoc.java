@@ -107,9 +107,9 @@ public interface IntegrationControllerDoc {
             tags = "Integration",
             summary = "6. 외부 계정 연동 해제",
             description = """
-                    프로젝트에 저장된 provider 연동 정보를 삭제합니다.
-                    Plog에 저장된 연결 정보, 수집 대상, 수집 활동, 계정 매핑이 함께 정리됩니다.
-                    provider 서비스 자체의 앱 설치 또는 OAuth 권한 철회는 각 provider 화면에서 별도로 처리할 수 있습니다.
+                    provider 서비스의 앱 설치·OAuth 권한은 유지하고 Plog 프로젝트 내부 연결만 해제합니다.
+                    저장된 provider 자격증명을 제거하고 수집 대상은 비활성화하지만,
+                    기존 수집 활동과 계정 매핑은 기여도 이력 보존을 위해 유지합니다.
                     """
     )
     @ApiResponses({

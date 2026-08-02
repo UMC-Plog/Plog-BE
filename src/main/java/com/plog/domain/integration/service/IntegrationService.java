@@ -35,6 +35,7 @@ public class IntegrationService {
     private final ProjectRepository projectRepository;
     private final ProjectAccessService projectAccessService;
     private final ProjectIntegrationRepository projectIntegrationRepository;
+    private final ProjectIntegrationService projectIntegrationService;
 
     public IntegrationStatusResponse getProjectIntegrations(Long projectId, Long userId) {
         if (!projectRepository.existsById(projectId)) {
@@ -68,10 +69,7 @@ public class IntegrationService {
             throw new ApiException(IntegrationErrorCode.WORKSPACE_INTEGRATION_LOCKED);
         }
 
-        ProjectIntegration integration = projectIntegrationRepository.findByProjectIdAndLinkType(projectId, linkType)
-                .filter(ProjectIntegration::isConnected)
-                .orElseThrow(() -> new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND));
-        projectIntegrationRepository.delete(integration);
+        projectIntegrationService.disconnect(projectId, linkType);
         return new IntegrationDisconnectionResponse(projectId, linkType);
     }
 
