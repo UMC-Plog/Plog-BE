@@ -124,10 +124,11 @@ public class IntegrationResourceService {
         List<IntegrationResource> existingResources = integrationResourceRepository
                 .findAllByProjectIntegrationIdOrderByIdAsc(integration.getId());
         if (repositoryListing.complete()) {
+            Instant now = Instant.now();
             existingResources.stream()
                     .filter(resource -> resource.getResourceType() == IntegrationResourceType.GITHUB_REPOSITORY)
                     .filter(resource -> !selectedRepositoryIds.contains(resource.getProviderResourceId()))
-                    .forEach(IntegrationResource::disable);
+                    .forEach(resource -> resource.disable(now));
         }
         Map<String, IntegrationResource> existingResourceByProviderId = existingResources.stream()
                 .collect(Collectors.toMap(

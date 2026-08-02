@@ -161,17 +161,17 @@ public class IntegrationResource extends BaseEntity {
         this.resourceStatus = IntegrationResourceStatus.ACTIVE;
     }
 
-    public void requireReauthorization() {
+    public void requireReauthorization(Instant now) {
         this.resourceStatus = IntegrationResourceStatus.REAUTH_REQUIRED;
         this.collectionStatus = IntegrationCollectionStatus.REAUTH_REQUIRED;
         this.lastCollectionFailure = "provider reauthorization required";
-        this.collectionStatusUpdatedAt = Instant.now();
+        this.collectionStatusUpdatedAt = now;
     }
 
-    public void disable() {
+    public void disable(Instant now) {
         this.resourceStatus = IntegrationResourceStatus.DISABLED;
         this.collectionStatus = IntegrationCollectionStatus.FAILED;
         this.lastCollectionFailure = "provider resource unavailable";
-        this.collectionStatusUpdatedAt = Instant.now();
+        this.collectionStatusUpdatedAt = now;
     }
 }

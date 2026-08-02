@@ -42,13 +42,13 @@ class IntegrationResourceCollectionStateService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void requireReauthorization(Long resourceId) {
-        requireResource(resourceId).requireReauthorization();
+    public void requireReauthorization(Long resourceId, Instant now) {
+        requireResource(resourceId).requireReauthorization(now);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void disable(Long resourceId) {
-        requireResource(resourceId).disable();
+    public void disable(Long resourceId, Instant now) {
+        requireResource(resourceId).disable(now);
     }
 
     private IntegrationResource requireResource(Long resourceId) {

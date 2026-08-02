@@ -102,8 +102,9 @@ public class ProjectIntegrationService {
                 .filter(ProjectIntegration::isConnected)
                 .orElseThrow(() -> new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND));
         integration.disconnect();
+        Instant now = Instant.now();
         integrationResourceRepository.findAllByProjectIntegrationIdOrderByIdAsc(integration.getId())
-                .forEach(IntegrationResource::disable);
+                .forEach(resource -> resource.disable(now));
     }
 
     @Transactional
@@ -112,8 +113,9 @@ public class ProjectIntegrationService {
                 .filter(ProjectIntegration::isConnected)
                 .ifPresent(integration -> {
                     integration.requireReauthorization();
+                    Instant now = Instant.now();
                     integrationResourceRepository.findAllByProjectIntegrationIdOrderByIdAsc(integrationId)
-                            .forEach(IntegrationResource::requireReauthorization);
+                            .forEach(resource -> resource.requireReauthorization(now));
                 });
     }
 

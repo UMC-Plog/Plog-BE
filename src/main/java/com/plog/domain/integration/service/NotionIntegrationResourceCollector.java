@@ -262,6 +262,7 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
             case "page" -> "/v1/pages/" + current.id();
             case "block" -> "/v1/blocks/" + current.id();
             case "data_source" -> "/v1/data_sources/" + current.id();
+            case "database" -> "/v1/databases/" + current.id();
             default -> null;
         };
         if (path == null) {

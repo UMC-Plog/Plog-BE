@@ -207,7 +207,7 @@ public class IntegrationDataCollectionService {
             return true;
         }
         if (exception.statusCode() == 404) {
-            resourceCollectionStateService.disable(resource.getId());
+            resourceCollectionStateService.disable(resource.getId(), Instant.now());
             failures.add(new CollectionFailure(resource, "provider resource not found"));
             return true;
         }

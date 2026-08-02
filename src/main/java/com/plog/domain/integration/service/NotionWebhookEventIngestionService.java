@@ -144,8 +144,16 @@ public class NotionWebhookEventIngestionService {
         String previous = lastLoggedVerificationToken.getAndSet(verificationToken);
         if (!verificationToken.equals(previous)) {
             log.warn("Notion webhook verification token received. "
-                    + "Set NOTION_WEBHOOK_VERIFICATION_TOKEN and redeploy: {}", verificationToken);
+                    + "Set NOTION_WEBHOOK_VERIFICATION_TOKEN and redeploy. tokenFingerprint={}",
+                    maskToken(verificationToken));
         }
+    }
+
+    private String maskToken(String token) {
+        if (token.length() <= 8) {
+            return "****";
+        }
+        return token.substring(0, 4) + "..." + token.substring(token.length() - 4);
     }
 
     public enum IngestionResult {

@@ -9,7 +9,7 @@ class NotionApiRateLimiter {
 
     private static final long MIN_INTERVAL_NANOS = Duration.ofMillis(350).toNanos();
 
-    private long nextRequestAtNanos;
+    private long nextRequestAtNanos = System.nanoTime();
 
     synchronized void acquire() {
         long now = System.nanoTime();

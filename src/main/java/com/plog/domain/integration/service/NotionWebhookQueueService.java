@@ -89,7 +89,13 @@ class NotionWebhookQueueService {
         Instant staleBefore = now.minus(properties.processingTimeout());
         List<NotionWebhookEvent> stale = notionWebhookEventRepository.findStaleForUpdate(
                 NotionWebhookEventStatus.PROCESSING, staleBefore, PageRequest.of(0, 100));
-        stale.forEach(event -> event.reclaim(now, now.plusSeconds(1)));
+        stale.forEach(event -> {
+            if (event.getAttemptCount() >= properties.maxAttempts()) {
+                event.fail(event.getClaimToken(), now, "stale webhook collection exhausted");
+                return;
+            }
+            event.reclaim(now, now.plusSeconds(1));
+        });
         return stale.size();
     }
 

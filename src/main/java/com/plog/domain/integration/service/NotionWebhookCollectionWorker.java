@@ -186,12 +186,15 @@ class NotionWebhookCollectionWorker {
         int status = exception.statusCode();
         if (status == 401 || status == 403) {
             projectIntegrationService.requireReauthorization(integration.getId());
+            if (resource != null) {
+                resourceStateService.requireReauthorization(resource.getId(), Instant.now());
+            }
             failures.add("Notion workspace reauthorization required");
             return new FailureResult(true, null);
         }
         if (status == 404) {
             if (resource != null && resource.getProviderResourceId().equals(event.entityId())) {
-                resourceStateService.disable(resource.getId());
+                resourceStateService.disable(resource.getId(), Instant.now());
                 failures.add(resource.getResourceName() + ": provider resource not found");
             } else if (resource != null) {
                 // 삭제된 하위 페이지·블록 이벤트 자체는 이미 보존됐으므로 루트 리소스는 유지한다.

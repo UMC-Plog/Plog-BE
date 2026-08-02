@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -173,6 +174,8 @@ public class IntegrationService {
         } else if (resources.stream().allMatch(resource ->
                 resource.getCollectionStatus() == IntegrationCollectionStatus.SUCCEEDED)) {
             status = IntegrationCollectionStatus.SUCCEEDED;
+        } else if (succeeded) {
+            status = IntegrationCollectionStatus.PENDING;
         } else {
             status = IntegrationCollectionStatus.NOT_STARTED;
         }
@@ -186,7 +189,7 @@ public class IntegrationService {
     private Instant latestCollectedAt(List<IntegrationResource> resources) {
         return resources.stream()
                 .map(IntegrationResource::getLastCollectedAt)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .max(Comparator.naturalOrder())
                 .orElse(null);
     }
