@@ -30,6 +30,7 @@ import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -248,6 +249,63 @@ class IntegrationServiceTest {
                 .isEqualTo("provider reauthorization required");
     }
 
+    @Test
+    @DisplayName("수집 성공 리소스와 미수집 리소스가 섞이면 전체 수집 상태는 대기로 응답한다")
+    void getProjectIntegrationsTreatsSucceededAndNotStartedResourcesAsPending() {
+        Long projectId = 1L;
+        Long userId = 10L;
+        ProjectMember projectMember = projectMember();
+        ProjectIntegration notion = projectIntegration(LinkType.NOTION, "workspace");
+        IntegrationResource collected = resource(
+                300L, notion, IntegrationCollectionStatus.SUCCEEDED,
+                Instant.parse("2026-08-02T10:00:00Z"), null);
+        IntegrationResource notStarted = resource(
+                301L, notion, IntegrationCollectionStatus.NOT_STARTED, null, null);
+        given(projectRepository.existsById(projectId)).willReturn(true);
+        given(projectAccessService.requireActiveMember(projectId, userId)).willReturn(projectMember);
+        given(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId))
+                .willReturn(List.of(notion));
+        given(integrationResourceRepository.findAllByProjectIntegrationProjectIdOrderByIdAsc(projectId))
+                .willReturn(List.of(collected, notStarted));
+
+        IntegrationStatusResponse response = integrationService.getProjectIntegrations(projectId, userId);
+
+        assertThat(response.integrations().get(2).collectionStatus())
+                .isEqualTo(IntegrationCollectionStatus.PENDING);
+        assertThat(response.integrations().get(2).lastCollectedAt())
+                .isEqualTo(Instant.parse("2026-08-02T10:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("성공과 실패 리소스가 섞이면 부분 실패와 가장 최근 수집 시각을 응답한다")
+    void getProjectIntegrationsTreatsSucceededAndFailedResourcesAsPartialFailed() {
+        Long projectId = 1L;
+        Long userId = 10L;
+        ProjectMember projectMember = projectMember();
+        ProjectIntegration notion = projectIntegration(LinkType.NOTION, "workspace");
+        IntegrationResource olderCollected = resource(
+                300L, notion, IntegrationCollectionStatus.SUCCEEDED,
+                Instant.parse("2026-08-02T10:00:00Z"), null);
+        IntegrationResource newerFailed = resource(
+                301L, notion, IntegrationCollectionStatus.FAILED,
+                Instant.parse("2026-08-02T12:00:00Z"), "provider resource unavailable");
+        given(projectRepository.existsById(projectId)).willReturn(true);
+        given(projectAccessService.requireActiveMember(projectId, userId)).willReturn(projectMember);
+        given(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId))
+                .willReturn(List.of(notion));
+        given(integrationResourceRepository.findAllByProjectIntegrationProjectIdOrderByIdAsc(projectId))
+                .willReturn(List.of(olderCollected, newerFailed));
+
+        IntegrationStatusResponse response = integrationService.getProjectIntegrations(projectId, userId);
+
+        assertThat(response.integrations().get(2).collectionStatus())
+                .isEqualTo(IntegrationCollectionStatus.PARTIAL_FAILED);
+        assertThat(response.integrations().get(2).lastCollectedAt())
+                .isEqualTo(Instant.parse("2026-08-02T12:00:00Z"));
+        assertThat(response.integrations().get(2).lastCollectionFailure())
+                .isEqualTo("provider resource unavailable");
+    }
+
     private ProjectMember projectMember() {
         return ProjectMember.builder()
                 .id(100L)
@@ -267,6 +325,27 @@ class IntegrationServiceTest {
                 .externalAccountId(externalAccountId)
                 .externalAccountName(externalAccountId)
                 .providerConnectionId(externalAccountId)
+                .build();
+    }
+
+    private IntegrationResource resource(
+            Long id,
+            ProjectIntegration integration,
+            IntegrationCollectionStatus collectionStatus,
+            Instant lastCollectedAt,
+            String failure
+    ) {
+        return IntegrationResource.builder()
+                .id(id)
+                .projectIntegration(integration)
+                .resourceType(IntegrationResourceType.NOTION_PAGE)
+                .providerResourceId("page-" + id)
+                .resourceName("회의록 " + id)
+                .resourceStatus(IntegrationResourceStatus.ACTIVE)
+                .collectionStatus(collectionStatus)
+                .lastCollectedAt(lastCollectedAt)
+                .lastCollectionFailure(failure)
+                .collectionStatusUpdatedAt(lastCollectedAt)
                 .build();
     }
 }

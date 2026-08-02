@@ -63,6 +63,30 @@ class NotionWebhookEventControllerTest {
     }
 
     @Test
+    void returnsOkForDuplicateIgnoredEvent() throws Exception {
+        given(ingestionService.ingest(eq("{}"), eq("signature")))
+                .willReturn(IngestionResult.DUPLICATE_IGNORED);
+
+        mockMvc.perform(post("/api/integrations/notion/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Notion-Signature", "signature")
+                        .content("{}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void returnsOkForVerificationChallenge() throws Exception {
+        given(ingestionService.ingest(eq("{}"), eq("signature")))
+                .willReturn(IngestionResult.VERIFICATION_ACCEPTED);
+
+        mockMvc.perform(post("/api/integrations/notion/events")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Notion-Signature", "signature")
+                        .content("{}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void returnsUnauthorizedForInvalidSignature() throws Exception {
         given(ingestionService.ingest(eq("{}"), eq("invalid")))
                 .willReturn(IngestionResult.INVALID_SIGNATURE);

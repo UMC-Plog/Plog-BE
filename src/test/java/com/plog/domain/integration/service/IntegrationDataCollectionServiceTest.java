@@ -147,7 +147,10 @@ class IntegrationDataCollectionServiceTest {
                 org.mockito.ArgumentMatchers.eq(collectedResource.getId()),
                 org.mockito.ArgumentMatchers.any()
         );
-        verify(resourceCollectionStateService).disable(missingResource.getId());
+        verify(resourceCollectionStateService).disable(
+                org.mockito.ArgumentMatchers.eq(missingResource.getId()),
+                org.mockito.ArgumentMatchers.any()
+        );
         verify(integrationActivityStoreService, times(2)).beginResourceCollection();
         verify(integrationActivityStoreService, times(2)).endResourceCollection();
     }
