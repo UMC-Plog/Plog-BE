@@ -105,7 +105,6 @@ plog:
       client-id: ${GITHUB_CLIENT_ID:}
       client-secret: ${GITHUB_CLIENT_SECRET:}
       private-key-base64: ${GITHUB_APP_PRIVATE_KEY_BASE64:}
-      callback-url: ${GITHUB_CALLBACK_URL:http://localhost:8080/api/integrations/github/callback}
     figma:
       client-id: ${FIGMA_CLIENT_ID:}
       client-secret: ${FIGMA_CLIENT_SECRET:}

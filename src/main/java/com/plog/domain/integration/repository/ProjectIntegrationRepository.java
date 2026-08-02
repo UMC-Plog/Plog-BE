@@ -23,4 +23,8 @@ public interface ProjectIntegrationRepository extends JpaRepository<ProjectInteg
             @Param("projectId") Long projectId,
             @Param("linkType") LinkType linkType
     );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select integration from ProjectIntegration integration where integration.id = :integrationId")
+    Optional<ProjectIntegration> findByIdForUpdate(@Param("integrationId") Long integrationId);
 }

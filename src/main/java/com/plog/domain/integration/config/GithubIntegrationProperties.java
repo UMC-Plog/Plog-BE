@@ -8,6 +8,5 @@ public record GithubIntegrationProperties(
         String appSlug,
         String clientId,
         String clientSecret,
-        String privateKeyBase64,
-        String callbackUrl
+        String privateKeyBase64
 ) {}

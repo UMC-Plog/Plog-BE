@@ -4,24 +4,28 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.plog.domain.integration.dto.response.IntegrationStatusResponse;
-import com.plog.domain.integration.entity.LinkType;
+import com.plog.domain.integration.entity.IntegrationConnectionStatus;
 import com.plog.domain.integration.entity.IntegrationCredentialType;
+import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.project.entity.MemberStatus;
-import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.Project;
+import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
-import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.error.IntegrationErrorCode;
+import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +44,9 @@ class IntegrationServiceTest {
 
     @Mock
     private ProjectIntegrationRepository projectIntegrationRepository;
+
+    @Mock
+    private ProjectIntegrationService projectIntegrationService;
 
     @InjectMocks
     private IntegrationService integrationService;
@@ -109,8 +116,8 @@ class IntegrationServiceTest {
     void disconnectRejectsCompletedProject() {
         Long projectId = 1L;
         Long userId = 10L;
-        Project completedProject = org.mockito.Mockito.mock(Project.class);
-        given(projectRepository.findById(projectId)).willReturn(java.util.Optional.of(completedProject));
+        Project completedProject = mock(Project.class);
+        given(projectRepository.findById(projectId)).willReturn(Optional.of(completedProject));
         given(completedProject.isCompleted()).willReturn(true);
 
         assertThatThrownBy(() -> integrationService.disconnect(projectId, userId, LinkType.GITHUB))
@@ -119,7 +126,22 @@ class IntegrationServiceTest {
                                 .isEqualTo(IntegrationErrorCode.WORKSPACE_INTEGRATION_LOCKED));
 
         verify(projectAccessService).requireActiveMember(projectId, userId);
-        verify(projectIntegrationRepository, never()).findByProjectIdAndLinkType(projectId, LinkType.GITHUB);
+        verify(projectIntegrationService, never()).disconnect(projectId, LinkType.GITHUB);
+    }
+
+    @Test
+    @DisplayName("외부 연동 해제는 연결 행을 삭제하지 않고 내부 연결 상태를 변경한다")
+    void disconnectUsesSoftDisconnection() {
+        Long projectId = 1L;
+        Long userId = 10L;
+        Project project = mock(Project.class);
+        given(projectRepository.findById(projectId)).willReturn(Optional.of(project));
+
+        integrationService.disconnect(projectId, userId, LinkType.GITHUB);
+
+        verify(projectAccessService).requireActiveMember(projectId, userId);
+        verify(projectIntegrationService).disconnect(projectId, LinkType.GITHUB);
+        verify(projectIntegrationRepository, never()).delete(any());
     }
 
     @Test
@@ -142,6 +164,31 @@ class IntegrationServiceTest {
         assertThat(response.integrations()).extracting("connectedAccountName")
                 .containsExactly(null, null, null, null);
         verify(projectIntegrationRepository).findAllByProjectIdOrderByLinkTypeAsc(projectId);
+    }
+
+    @Test
+    @DisplayName("Plog에서 해제한 외부 계정은 provider 식별자가 남아 있어도 미연결로 응답한다")
+    void getProjectIntegrationsTreatsDisconnectedIntegrationAsUnlinked() {
+        Long projectId = 1L;
+        Long userId = 10L;
+        ProjectMember projectMember = projectMember();
+        ProjectIntegration github = ProjectIntegration.builder()
+                .linkType(LinkType.GITHUB)
+                .credentialType(IntegrationCredentialType.APP_INSTALLATION)
+                .externalAccountId("UMC-Plog")
+                .externalAccountName("UMC-Plog")
+                .providerConnectionId("12345")
+                .connectionStatus(IntegrationConnectionStatus.REVOKED)
+                .build();
+        given(projectRepository.existsById(projectId)).willReturn(true);
+        given(projectAccessService.requireActiveMember(projectId, userId)).willReturn(projectMember);
+        given(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId))
+                .willReturn(List.of(github));
+
+        IntegrationStatusResponse response = integrationService.getProjectIntegrations(projectId, userId);
+
+        assertThat(response.integrations().getFirst().linked()).isFalse();
+        assertThat(response.integrations().getFirst().connectedAccountName()).isNull();
     }
 
     private ProjectMember projectMember() {
