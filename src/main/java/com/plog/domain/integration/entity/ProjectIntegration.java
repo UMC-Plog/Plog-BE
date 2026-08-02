@@ -77,8 +77,21 @@ public class ProjectIntegration extends BaseEntity {
     @Column(name = "access_token_expires_at")
     private Instant accessTokenExpiresAt;
 
+    @Getter(AccessLevel.NONE)
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "connection_status")
+    private IntegrationConnectionStatus connectionStatus = IntegrationConnectionStatus.ACTIVE;
+
+    /** 기존 행의 null 상태는 연결 상태 컬럼 도입 전 생성된 ACTIVE 연결로 해석한다. */
+    public IntegrationConnectionStatus getConnectionStatus() {
+        return connectionStatus == null ? IntegrationConnectionStatus.ACTIVE : connectionStatus;
+    }
+
     public boolean isConnected() {
-        return providerConnectionId != null && !providerConnectionId.isBlank();
+        return getConnectionStatus() == IntegrationConnectionStatus.ACTIVE
+                && providerConnectionId != null
+                && !providerConnectionId.isBlank();
     }
 
     public void updateConnection(
@@ -99,6 +112,7 @@ public class ProjectIntegration extends BaseEntity {
         this.accessTokenEncrypted = accessTokenEncrypted;
         this.refreshTokenEncrypted = refreshTokenEncrypted;
         this.accessTokenExpiresAt = accessTokenExpiresAt;
+        this.connectionStatus = IntegrationConnectionStatus.ACTIVE;
     }
 
     public void updateOAuthTokens(
@@ -111,5 +125,22 @@ public class ProjectIntegration extends BaseEntity {
             this.refreshTokenEncrypted = refreshTokenEncrypted;
         }
         this.accessTokenExpiresAt = accessTokenExpiresAt;
+    }
+
+    /** Provider 권한은 유지하고 Plog 내부 연결 자격증명만 제거한다. */
+    public void disconnect() {
+        this.connectionStatus = IntegrationConnectionStatus.REVOKED;
+        clearOAuthCredentials();
+    }
+
+    public void requireReauthorization() {
+        this.connectionStatus = IntegrationConnectionStatus.REAUTH_REQUIRED;
+        clearOAuthCredentials();
+    }
+
+    private void clearOAuthCredentials() {
+        this.accessTokenEncrypted = null;
+        this.refreshTokenEncrypted = null;
+        this.accessTokenExpiresAt = null;
     }
 }
