@@ -26,6 +26,4 @@ public interface IntegrationResourceRepository extends JpaRepository<Integration
             Long projectIntegrationId,
             String providerResourceId
     );
-
-    void deleteAllByProjectIntegrationId(Long projectIntegrationId);
 }

@@ -1,11 +1,13 @@
 package com.plog.domain.integration.service;
 
 import com.plog.domain.integration.entity.IntegrationCredentialType;
+import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
+import com.plog.domain.integration.repository.IntegrationResourceRepository;
 import com.plog.domain.integration.repository.ProjectIntegrationRepository;
-import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.Project;
+import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
@@ -20,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ProjectIntegrationService {
     private final ProjectIntegrationRepository projectIntegrationRepository;
+    private final IntegrationResourceRepository integrationResourceRepository;
     private final IntegrationCredentialCipher credentialCipher;
     private final ProjectRepository projectRepository;
 
@@ -31,6 +34,7 @@ public class ProjectIntegrationService {
             throw new ApiException(IntegrationErrorCode.WORKSPACE_INTEGRATION_LOCKED);
         }
         projectIntegrationRepository.findByProjectIdAndLinkType(projectId, linkType)
+                .filter(ProjectIntegration::isConnected)
                 .ifPresent(integration -> {
                     throw new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_ALREADY_CONNECTED);
                 });
@@ -48,9 +52,31 @@ public class ProjectIntegrationService {
             String refreshToken,
             Instant accessTokenExpiresAt
     ) {
-        requireNotConnected(projectMember.getProject().getId(), linkType);
+        Long projectId = projectMember.getProject().getId();
+        requireMutableProject(projectId);
+        ProjectIntegration existingIntegration = projectIntegrationRepository
+                .findByProjectIdAndLinkTypeForUpdate(projectId, linkType)
+                .orElse(null);
+        if (existingIntegration != null && existingIntegration.isConnected()) {
+            throw new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_ALREADY_CONNECTED);
+        }
         String encryptedAccessToken = encrypt(accessToken);
         String encryptedRefreshToken = encrypt(refreshToken);
+        if (existingIntegration != null) {
+            existingIntegration.updateConnection(
+                    projectMember,
+                    credentialType,
+                    externalAccountId,
+                    externalAccountName,
+                    providerConnectionId,
+                    encryptedAccessToken,
+                    encryptedRefreshToken,
+                    accessTokenExpiresAt
+            );
+            integrationResourceRepository.findAllByProjectIntegrationIdOrderByIdAsc(existingIntegration.getId())
+                    .forEach(IntegrationResource::activate);
+            return existingIntegration;
+        }
         try {
             return projectIntegrationRepository.saveAndFlush(ProjectIntegration.builder()
                         .project(projectMember.getProject())
@@ -69,6 +95,28 @@ public class ProjectIntegrationService {
         }
     }
 
+    @Transactional
+    public void disconnect(Long projectId, LinkType linkType) {
+        ProjectIntegration integration = projectIntegrationRepository
+                .findByProjectIdAndLinkTypeForUpdate(projectId, linkType)
+                .filter(ProjectIntegration::isConnected)
+                .orElseThrow(() -> new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND));
+        integration.disconnect();
+        integrationResourceRepository.findAllByProjectIntegrationIdOrderByIdAsc(integration.getId())
+                .forEach(IntegrationResource::disable);
+    }
+
+    @Transactional
+    public void requireReauthorization(Long integrationId) {
+        projectIntegrationRepository.findByIdForUpdate(integrationId)
+                .filter(ProjectIntegration::isConnected)
+                .ifPresent(integration -> {
+                    integration.requireReauthorization();
+                    integrationResourceRepository.findAllByProjectIntegrationIdOrderByIdAsc(integrationId)
+                            .forEach(IntegrationResource::requireReauthorization);
+                });
+    }
+
     public String decryptAccessToken(ProjectIntegration integration) {
         return decrypt(integration.getAccessTokenEncrypted());
     }
@@ -84,15 +132,10 @@ public class ProjectIntegrationService {
             String refreshToken,
             Instant accessTokenExpiresAt
     ) {
-        projectIntegrationRepository.findById(integrationId)
+        projectIntegrationRepository.findByIdForUpdate(integrationId)
+                .filter(ProjectIntegration::isConnected)
                 .ifPresent(integration -> integration.updateOAuthTokens(
                         encrypt(accessToken), encrypt(refreshToken), accessTokenExpiresAt));
-    }
-
-    @Transactional
-    public void removeIfPresent(Long integrationId) {
-        projectIntegrationRepository.findById(integrationId)
-                .ifPresent(projectIntegrationRepository::delete);
     }
 
     private String encrypt(String value) {
@@ -108,6 +151,14 @@ public class ProjectIntegrationService {
             return credentialCipher.decrypt(value);
         } catch (IllegalStateException | IllegalArgumentException exception) {
             throw new ApiException(IntegrationErrorCode.CREDENTIAL_ENCRYPTION_ERROR, exception);
+        }
+    }
+
+    private void requireMutableProject(Long projectId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
+        if (project.isCompleted()) {
+            throw new ApiException(IntegrationErrorCode.WORKSPACE_INTEGRATION_LOCKED);
         }
     }
 }
