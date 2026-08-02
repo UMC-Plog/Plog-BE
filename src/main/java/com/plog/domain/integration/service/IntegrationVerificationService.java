@@ -31,7 +31,7 @@ public class IntegrationVerificationService {
                     .orElseThrow(() -> new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND));
         }
         if (status == IntegrationVerificationStatus.DISCONNECTED) {
-            projectIntegrationService.removeIfPresent(integration.getId());
+            projectIntegrationService.requireReauthorization(integration.getId());
             throw new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND);
         }
         if (status == IntegrationVerificationStatus.UNAVAILABLE) {
