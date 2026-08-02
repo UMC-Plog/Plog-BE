@@ -22,6 +22,26 @@ class IntegrationResourceCollectionStateService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markPending(Long resourceId, Instant now) {
+        requireResource(resourceId).markCollectionPending(now);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markRunning(Long resourceId, Instant now) {
+        requireResource(resourceId).markCollectionRunning(now);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markRetrying(Long resourceId, Instant now, String failure) {
+        requireResource(resourceId).markCollectionRetrying(now, failure);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markFailed(Long resourceId, Instant now, String failure) {
+        requireResource(resourceId).markCollectionFailed(now, failure);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void requireReauthorization(Long resourceId) {
         requireResource(resourceId).requireReauthorization();
     }

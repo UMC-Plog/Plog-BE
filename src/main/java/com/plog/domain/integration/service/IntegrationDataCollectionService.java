@@ -48,6 +48,7 @@ public class IntegrationDataCollectionService {
     private final IntegrationActivityStoreService integrationActivityStoreService;
     private final IntegrationVerificationService integrationVerificationService;
     private final IntegrationResourceCollectionStateService resourceCollectionStateService;
+    private final ProjectIntegrationService projectIntegrationService;
     private final ConcurrentMap<Long, ReentrantLock> projectCollectionLocks = new ConcurrentHashMap<>();
 
     public IntegrationDataCollectionService(
@@ -58,7 +59,8 @@ public class IntegrationDataCollectionService {
             List<IntegrationResourceCollector> collectors,
             IntegrationActivityStoreService integrationActivityStoreService,
             IntegrationVerificationService integrationVerificationService,
-            IntegrationResourceCollectionStateService resourceCollectionStateService
+            IntegrationResourceCollectionStateService resourceCollectionStateService,
+            ProjectIntegrationService projectIntegrationService
     ) {
         this.integrationResourceRepository = integrationResourceRepository;
         this.projectRepository = projectRepository;
@@ -68,6 +70,7 @@ public class IntegrationDataCollectionService {
         this.integrationActivityStoreService = integrationActivityStoreService;
         this.integrationVerificationService = integrationVerificationService;
         this.resourceCollectionStateService = resourceCollectionStateService;
+        this.projectIntegrationService = projectIntegrationService;
     }
 
     /** 진행 중 프로젝트도 수집할 수 있으며 프로젝트 상태는 변경하지 않는다. */
@@ -111,9 +114,12 @@ public class IntegrationDataCollectionService {
             IntegrationResourceCollector collector =
                     collectorByProvider.get(resource.getProjectIntegration().getLinkType());
             if (collector == null) {
+                resourceCollectionStateService.markFailed(
+                        resource.getId(), Instant.now(), "collector unavailable");
                 failures.add(new CollectionFailure(resource, "collector unavailable"));
                 continue;
             }
+            resourceCollectionStateService.markPending(resource.getId(), Instant.now());
             if (collectResource(resource, collector, failures, verifiedIntegrationIds)) {
                 collectedResourceCount++;
             }
@@ -146,6 +152,7 @@ public class IntegrationDataCollectionService {
     ) {
         for (int attempt = 1; attempt <= MAX_TEMPORARY_ATTEMPTS; attempt++) {
             try {
+                resourceCollectionStateService.markRunning(resource.getId(), Instant.now());
                 integrationActivityStoreService.beginResourceCollection();
                 verifyIntegrationIfNeeded(resource, verifiedIntegrationIds);
                 collector.collect(resource);
@@ -159,8 +166,10 @@ public class IntegrationDataCollectionService {
                 throw exception;
             } catch (RuntimeException exception) {
                 log.error("Integration resource collection failed. resourceId={}", resource.getId(), exception);
+                String failure = "collection failed: " + exception.getClass().getSimpleName();
+                resourceCollectionStateService.markFailed(resource.getId(), Instant.now(), failure);
                 failures.add(new CollectionFailure(
-                        resource, "collection failed: " + exception.getClass().getSimpleName()));
+                        resource, failure));
                 return false;
             } finally {
                 integrationActivityStoreService.endResourceCollection();
@@ -188,7 +197,7 @@ public class IntegrationDataCollectionService {
             int attempt
     ) {
         if (exception.statusCode() == 401 || exception.statusCode() == 403) {
-            resourceCollectionStateService.requireReauthorization(resource.getId());
+            projectIntegrationService.requireReauthorization(resource.getProjectIntegration().getId());
             failures.add(new CollectionFailure(
                     resource,
                     exception.statusCode() == 401
@@ -203,14 +212,19 @@ public class IntegrationDataCollectionService {
             return true;
         }
         if (!isTemporaryFailure(exception.statusCode())) {
-            failures.add(new CollectionFailure(
-                    resource, "provider request failed: HTTP " + exception.statusCode()));
+            String failure = "provider request failed: HTTP " + exception.statusCode();
+            resourceCollectionStateService.markFailed(resource.getId(), Instant.now(), failure);
+            failures.add(new CollectionFailure(resource, failure));
             return true;
         }
         if (attempt == MAX_TEMPORARY_ATTEMPTS) {
-            failures.add(new CollectionFailure(resource, "provider temporarily unavailable"));
+            String failure = "provider temporarily unavailable";
+            resourceCollectionStateService.markFailed(resource.getId(), Instant.now(), failure);
+            failures.add(new CollectionFailure(resource, failure));
             return true;
         }
+        resourceCollectionStateService.markRetrying(
+                resource.getId(), Instant.now(), "provider temporarily unavailable");
         waitBeforeRetry(exception, attempt);
         return false;
     }

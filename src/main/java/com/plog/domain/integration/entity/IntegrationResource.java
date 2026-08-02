@@ -78,9 +78,53 @@ public class IntegrationResource extends BaseEntity {
     @Column(name = "last_modified_at")
     private Instant lastModifiedAt;
 
+    @Getter(AccessLevel.NONE)
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "collection_status")
+    private IntegrationCollectionStatus collectionStatus = IntegrationCollectionStatus.NOT_STARTED;
+
+    @Column(name = "last_collection_failure", columnDefinition = "TEXT")
+    private String lastCollectionFailure;
+
+    @Column(name = "collection_status_updated_at")
+    private Instant collectionStatusUpdatedAt;
+
+    /** 기존 행의 null은 수집 상태 컬럼 도입 전 아직 수집하지 않은 리소스로 해석한다. */
+    public IntegrationCollectionStatus getCollectionStatus() {
+        return collectionStatus == null ? IntegrationCollectionStatus.NOT_STARTED : collectionStatus;
+    }
+
     public void markCollected(Instant collectedAt) {
         this.lastCollectedAt = collectedAt;
         this.resourceStatus = IntegrationResourceStatus.ACTIVE;
+        this.collectionStatus = IntegrationCollectionStatus.SUCCEEDED;
+        this.lastCollectionFailure = null;
+        this.collectionStatusUpdatedAt = collectedAt;
+    }
+
+    public void markCollectionPending(Instant now) {
+        this.collectionStatus = IntegrationCollectionStatus.PENDING;
+        this.lastCollectionFailure = null;
+        this.collectionStatusUpdatedAt = now;
+    }
+
+    public void markCollectionRunning(Instant now) {
+        this.collectionStatus = IntegrationCollectionStatus.RUNNING;
+        this.lastCollectionFailure = null;
+        this.collectionStatusUpdatedAt = now;
+    }
+
+    public void markCollectionRetrying(Instant now, String failure) {
+        this.collectionStatus = IntegrationCollectionStatus.RETRYING;
+        this.lastCollectionFailure = failure;
+        this.collectionStatusUpdatedAt = now;
+    }
+
+    public void markCollectionFailed(Instant now, String failure) {
+        this.collectionStatus = IntegrationCollectionStatus.FAILED;
+        this.lastCollectionFailure = failure;
+        this.collectionStatusUpdatedAt = now;
     }
 
     public void activate() {
@@ -119,9 +163,15 @@ public class IntegrationResource extends BaseEntity {
 
     public void requireReauthorization() {
         this.resourceStatus = IntegrationResourceStatus.REAUTH_REQUIRED;
+        this.collectionStatus = IntegrationCollectionStatus.REAUTH_REQUIRED;
+        this.lastCollectionFailure = "provider reauthorization required";
+        this.collectionStatusUpdatedAt = Instant.now();
     }
 
     public void disable() {
         this.resourceStatus = IntegrationResourceStatus.DISABLED;
+        this.collectionStatus = IntegrationCollectionStatus.FAILED;
+        this.lastCollectionFailure = "provider resource unavailable";
+        this.collectionStatusUpdatedAt = Instant.now();
     }
 }
