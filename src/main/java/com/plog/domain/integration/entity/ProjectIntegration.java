@@ -94,6 +94,11 @@ public class ProjectIntegration extends BaseEntity {
                 && !providerConnectionId.isBlank();
     }
 
+    public boolean canDisconnect() {
+        return getConnectionStatus() == IntegrationConnectionStatus.ACTIVE
+                || getConnectionStatus() == IntegrationConnectionStatus.REAUTH_REQUIRED;
+    }
+
     public void updateConnection(
             ProjectMember connectedByProjectMember,
             IntegrationCredentialType credentialType,
