@@ -8,11 +8,13 @@ import com.plog.domain.integration.dto.NotionResourceType;
 import com.plog.domain.integration.dto.response.IntegrationResourceCandidateResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceListResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceResponse;
+import com.plog.domain.integration.dto.response.IntegrationResourceRemovalResponse;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.IntegrationResourceStatus;
 import com.plog.domain.integration.entity.IntegrationResourceType;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
+import com.plog.domain.integration.repository.IntegrationActivityRepository;
 import com.plog.domain.integration.repository.IntegrationResourceRepository;
 import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.project.entity.ProjectMember;
@@ -55,6 +57,7 @@ public class IntegrationResourceService {
     private final ProjectIntegrationService projectIntegrationService;
     private final IntegrationVerificationService integrationVerificationService;
     private final IntegrationResourceRepository integrationResourceRepository;
+    private final IntegrationActivityRepository integrationActivityRepository;
     private final GithubAppClient githubAppClient;
     private final RestClient restClient = ProviderRestClientFactory.create();
 
@@ -107,6 +110,24 @@ public class IntegrationResourceService {
         ProjectIntegration integration = integrationVerificationService.requireVerifiedConnection(projectId, LinkType.FIGMA);
         ValidatedResource resource = validateFigmaResource(integration, request);
         return toResponse(saveResource(integration, member, resource));
+    }
+
+    @Transactional
+    public IntegrationResourceRemovalResponse removeResource(
+            Long projectId, Long userId, LinkType linkType, Long resourceId
+    ) {
+        requireActiveMember(projectId, userId);
+        if (linkType == LinkType.GITHUB) {
+            throw new ApiException(IntegrationErrorCode.GITHUB_RESOURCE_MANAGED_BY_PROVIDER);
+        }
+        ProjectIntegration integration = requireConnectedIntegration(projectId, linkType);
+        IntegrationResource resource = integrationResourceRepository
+                .findByIdAndProjectIntegrationIdForUpdate(resourceId, integration.getId())
+                .orElseThrow(() -> new ApiException(IntegrationErrorCode.EXTERNAL_RESOURCE_NOT_FOUND));
+
+        integrationActivityRepository.deleteAllByIntegrationResourceId(resource.getId());
+        integrationResourceRepository.delete(resource);
+        return new IntegrationResourceRemovalResponse(projectId, linkType, resource.getId());
     }
 
     @Transactional

@@ -99,7 +99,7 @@ public class ProjectIntegrationService {
     public void disconnect(Long projectId, LinkType linkType) {
         ProjectIntegration integration = projectIntegrationRepository
                 .findByProjectIdAndLinkTypeForUpdate(projectId, linkType)
-                .filter(ProjectIntegration::isConnected)
+                .filter(ProjectIntegration::canDisconnect)
                 .orElseThrow(() -> new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND));
         integration.disconnect();
         Instant now = Instant.now();

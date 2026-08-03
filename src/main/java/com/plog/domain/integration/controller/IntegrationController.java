@@ -12,16 +12,19 @@ import com.plog.domain.integration.dto.response.IntegrationAuthorizationResponse
 import com.plog.domain.integration.dto.response.IntegrationCollectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationConnectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationDisconnectionResponse;
+import com.plog.domain.integration.dto.response.GooglePickerAccessTokenResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceCandidateResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceListResponse;
+import com.plog.domain.integration.dto.response.IntegrationResourceRemovalResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceResponse;
 import com.plog.domain.integration.dto.response.IntegrationStatusResponse;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.service.FigmaIntegrationService;
 import com.plog.domain.integration.service.GithubIntegrationService;
 import com.plog.domain.integration.service.GoogleIntegrationService;
-import com.plog.domain.integration.service.IntegrationDataCollectionService;
+import com.plog.domain.integration.service.GooglePickerAccessTokenService;
 import com.plog.domain.integration.service.IntegrationActorMappingManagementService;
+import com.plog.domain.integration.service.IntegrationDataCollectionService;
 import com.plog.domain.integration.service.IntegrationResourceService;
 import com.plog.domain.integration.service.IntegrationService;
 import com.plog.domain.integration.service.NotionIntegrationService;
@@ -33,6 +36,7 @@ import com.plog.global.api.response.ProjectSuccessCode;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -59,6 +63,7 @@ public class IntegrationController implements IntegrationControllerDoc {
     private final FigmaIntegrationService figmaIntegrationService;
     private final NotionIntegrationService notionIntegrationService;
     private final GoogleIntegrationService googleIntegrationService;
+    private final GooglePickerAccessTokenService googlePickerAccessTokenService;
     private final IntegrationResourceService integrationResourceService;
     private final IntegrationRedirectProperties redirectProperties;
 
@@ -114,6 +119,31 @@ public class IntegrationController implements IntegrationControllerDoc {
         IntegrationResourceListResponse response = integrationResourceService.getResources(
                 projectId, userId, parseLinkType(provider));
         return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_RESOURCES_RETRIEVED, response));
+    }
+
+    @Override
+    @DeleteMapping("/projects/{projectId}/integrations/{provider}/resources/{resourceId}")
+    public ResponseEntity<ApiResponse<IntegrationResourceRemovalResponse>> removeResource(
+            @PathVariable Long projectId,
+            @PathVariable String provider,
+            @PathVariable Long resourceId,
+            @AuthenticationPrincipal Long userId
+    ) {
+        IntegrationResourceRemovalResponse response = integrationResourceService.removeResource(
+                projectId, userId, parseLinkType(provider), resourceId);
+        return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_RESOURCE_REMOVED, response));
+    }
+
+    @Override
+    @PostMapping("/projects/{projectId}/integrations/google/picker-access-token")
+    public ResponseEntity<ApiResponse<GooglePickerAccessTokenResponse>> issueGooglePickerAccessToken(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal Long userId
+    ) {
+        GooglePickerAccessTokenResponse response = googlePickerAccessTokenService.issue(projectId, userId);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(ApiResponse.success(IntegrationSuccessCode.GOOGLE_PICKER_ACCESS_TOKEN_ISSUED, response));
     }
 
     @Override
