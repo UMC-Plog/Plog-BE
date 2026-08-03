@@ -149,7 +149,7 @@ public class NotionWebhookEventIngestionService {
         if (!verificationToken.equals(previous)) {
             log.warn("Notion webhook verification token received. "
                             + "Set NOTION_WEBHOOK_VERIFICATION_TOKEN and redeploy. tokenFingerprint={}",
-                    maskToken(verificationToken));
+                    verificationToken);
         }
     }
 
