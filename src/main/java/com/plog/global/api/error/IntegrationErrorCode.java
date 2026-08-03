@@ -28,7 +28,9 @@ public enum IntegrationErrorCode implements BaseErrorCode {
     ACTOR_MAPPING_NOT_FOUND(HttpStatus.NOT_FOUND, "INTEGRATION017", "현재 멤버의 외부 계정 매핑을 찾을 수 없습니다."),
     ACTOR_MAPPING_AMBIGUOUS(HttpStatus.CONFLICT, "INTEGRATION018", "외부 계정 식별값이 여러 프로젝트 멤버의 매핑과 충돌합니다."),
     ACTOR_MAPPING_LOCKED(HttpStatus.BAD_REQUEST, "INTEGRATION019", "최종 제출 후에는 외부 계정 매핑을 변경하거나 해제할 수 없습니다."),
-    WORKSPACE_INTEGRATION_LOCKED(HttpStatus.BAD_REQUEST, "INTEGRATION020", "프로젝트 완료 후에는 워크스페이스 연동을 변경할 수 없습니다.");
+    WORKSPACE_INTEGRATION_LOCKED(HttpStatus.BAD_REQUEST, "INTEGRATION020", "프로젝트 완료 후에는 워크스페이스 연동을 변경할 수 없습니다."),
+    GITHUB_RESOURCE_MANAGED_BY_PROVIDER(HttpStatus.BAD_REQUEST, "INTEGRATION021", "GitHub 리소스는 GitHub App 설치 설정에서 관리해야 합니다."),
+    GOOGLE_PICKER_TOKEN_PERMISSION_DENIED(HttpStatus.FORBIDDEN, "INTEGRATION024", "Google 계정을 연동한 프로젝트 멤버만 Picker를 사용할 수 있습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
