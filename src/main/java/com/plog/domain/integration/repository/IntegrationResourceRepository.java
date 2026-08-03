@@ -30,4 +30,6 @@ public interface IntegrationResourceRepository extends JpaRepository<Integration
             Long projectIntegrationId,
             String providerResourceId
     );
+
+    Optional<IntegrationResource> findByIdAndProjectIntegrationId(Long id, Long projectIntegrationId);
 }
