@@ -13,6 +13,8 @@ import com.plog.domain.integration.dto.response.IntegrationResourceCandidateResp
 import com.plog.domain.integration.dto.response.IntegrationResourceListResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceResponse;
 import com.plog.domain.integration.dto.response.IntegrationStatusResponse;
+import com.plog.domain.integration.dto.response.GooglePickerAccessTokenResponse;
+import com.plog.domain.integration.dto.response.IntegrationResourceRemovalResponse;
 import com.plog.global.api.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -163,6 +165,77 @@ public interface IntegrationControllerDoc {
     ResponseEntity<ApiResponse<IntegrationResourceListResponse>> getResources(
             @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
             @Parameter(description = "provider 식별자: github, figma, notion, google", example = "figma") String provider,
+            Long userId
+    );
+
+    @Operation(
+            tags = "Integration",
+            summary = "3-7. 등록된 외부 연동 리소스 제거",
+            description = """
+                    프로젝트 ACTIVE 멤버가 Notion, Google, Figma 수집 대상 하나를 제거합니다.
+                    해당 리소스에서 이미 수집한 활동 로그도 함께 제거됩니다.
+                    GitHub repository는 GitHub App 설치 설정에서 관리되므로 이 API로 제거할 수 없습니다.
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
+                    description = "등록 리소스 제거 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
+                    description = "GitHub 관리 리소스 제거 요청",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
+                    description = "인증이 없거나 유효하지 않은 사용자",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403",
+                    description = "ACTIVE 프로젝트 멤버가 아님",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "프로젝트, provider 연동 또는 등록 리소스 없음",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class)))
+    })
+    ResponseEntity<ApiResponse<IntegrationResourceRemovalResponse>> removeResource(
+            @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
+            @Parameter(description = "provider 식별자: figma, notion, google", example = "figma") String provider,
+            @Parameter(description = "Plog에 등록된 리소스 ID", example = "12") Long resourceId,
+            Long userId
+    );
+
+    @Operation(
+            tags = "Integration",
+            summary = "3-4. Google Picker용 access token 발급",
+            description = """
+                    프로젝트에 대표로 연동된 Google 계정의 단기 access token을 해당 계정을 직접 연동한 멤버에게만 발급합니다.
+                    프론트는 응답의 accessToken을 Google Picker의 OAuth token으로 전달해 계정 재선택 없이 파일을 고릅니다.
+                    refresh token은 노출하지 않으며, 만료되었거나 권한을 잃은 access token은 서버가 갱신·검증한 뒤 반환합니다.
+                    이 API는 프로젝트 기여도 수집 리소스 선택용이며 개인 게시글·업무카드 첨부용 Google 계정 연동과는 별개입니다.
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
+                    description = "Picker용 access token 발급 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
+                    description = "인증이 없거나 유효하지 않은 사용자",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403",
+                    description = "ACTIVE 프로젝트 멤버가 아니거나 Google 계정을 직접 연동한 멤버가 아님",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "프로젝트 또는 Google 연동 정보 없음",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503",
+                    description = "Google provider 일시 장애",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class)))
+    })
+    ResponseEntity<ApiResponse<GooglePickerAccessTokenResponse>> issueGooglePickerAccessToken(
+            @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
             Long userId
     );
 
@@ -361,7 +434,7 @@ public interface IntegrationControllerDoc {
     );
 
     @Operation(tags = "Integration",
-            summary = "3-4. Google Docs·Slides 수집 대상 등록",
+            summary = "3-5. Google Docs·Slides 수집 대상 등록",
             description = "Google Picker가 선택한 fileId만 받습니다. name, mimeType, URL은 신뢰하지 않고 서버가 Drive API로 재조회해 Docs 또는 Slides인지 판별합니다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201",
@@ -417,7 +490,7 @@ public interface IntegrationControllerDoc {
     );
 
     @Operation(tags = "Integration",
-            summary = "3-5. Figma Design File 수집 대상 등록",
+            summary = "3-6. Figma Design File 수집 대상 등록",
             description = "사용자가 입력한 Figma Design File URL만 받습니다. 서버가 file key를 추출하고 Figma API 접근 권한을 재검증합니다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201",
