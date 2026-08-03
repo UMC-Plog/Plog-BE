@@ -50,6 +50,9 @@ class IntegrationDataCollectionServiceTest {
     @Mock
     private IntegrationResourceCollectionStateService resourceCollectionStateService;
 
+    @Mock
+    private ProjectIntegrationService projectIntegrationService;
+
     private IntegrationDataCollectionService integrationDataCollectionService;
     private IntegrationResourceCollector collector;
 
@@ -76,7 +79,8 @@ class IntegrationDataCollectionServiceTest {
                 List.of(collector),
                 integrationActivityStoreService,
                 integrationVerificationService,
-                resourceCollectionStateService
+                resourceCollectionStateService,
+                projectIntegrationService
         );
     }
 
@@ -143,7 +147,10 @@ class IntegrationDataCollectionServiceTest {
                 org.mockito.ArgumentMatchers.eq(collectedResource.getId()),
                 org.mockito.ArgumentMatchers.any()
         );
-        verify(resourceCollectionStateService).disable(missingResource.getId());
+        verify(resourceCollectionStateService).disable(
+                org.mockito.ArgumentMatchers.eq(missingResource.getId()),
+                org.mockito.ArgumentMatchers.any()
+        );
         verify(integrationActivityStoreService, times(2)).beginResourceCollection();
         verify(integrationActivityStoreService, times(2)).endResourceCollection();
     }
@@ -195,7 +202,7 @@ class IntegrationDataCollectionServiceTest {
 
         assertEquals(0, response.collectedResourceCount());
         assertEquals(expectedReason, response.failures().get(0).reason());
-        verify(resourceCollectionStateService).requireReauthorization(resource.getId());
+        verify(projectIntegrationService).requireReauthorization(resource.getProjectIntegration().getId());
     }
 
     private IntegrationDataCollectionService serviceWith(IntegrationResourceCollector resourceCollector) {
@@ -207,7 +214,8 @@ class IntegrationDataCollectionServiceTest {
                 List.of(resourceCollector),
                 integrationActivityStoreService,
                 integrationVerificationService,
-                resourceCollectionStateService
+                resourceCollectionStateService,
+                projectIntegrationService
         );
     }
 

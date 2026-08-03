@@ -45,7 +45,9 @@ public class SecurityConfig {
 
     // provider OAuth/GitHub App callback은 사용자 JWT가 없으므로, 서버가 발급한 일회용 state로 검증한다.
     private static final String[] PUBLIC_INTEGRATION_CALLBACK_PATHS = {
-            "/api/integrations/*/callback"
+            "/api/integrations/*/callback",
+            // Notion 서버가 호출하며 JWT 대신 X-Notion-Signature로 인증한다.
+            "/api/integrations/notion/events"
     };
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
