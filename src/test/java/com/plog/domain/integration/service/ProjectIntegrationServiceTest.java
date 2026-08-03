@@ -158,6 +158,28 @@ class ProjectIntegrationServiceTest {
     }
 
     @Test
+    void disconnectsIntegrationThatRequiresReauthorization() {
+        ProjectIntegrationService service = service();
+        ProjectIntegration integration = ProjectIntegration.builder()
+                .id(10L)
+                .providerConnectionId("provider-connection")
+                .connectionStatus(IntegrationConnectionStatus.REAUTH_REQUIRED)
+                .build();
+        IntegrationResource resource = IntegrationResource.builder()
+                .resourceStatus(IntegrationResourceStatus.REAUTH_REQUIRED)
+                .build();
+        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GOOGLE))
+                .willReturn(Optional.of(integration));
+        given(integrationResourceRepository.findAllByProjectIntegrationIdOrderByIdAsc(10L))
+                .willReturn(List.of(resource));
+
+        service.disconnect(1L, LinkType.GOOGLE);
+
+        assertThat(integration.getConnectionStatus()).isEqualTo(IntegrationConnectionStatus.REVOKED);
+        assertThat(resource.getResourceStatus()).isEqualTo(IntegrationResourceStatus.DISABLED);
+    }
+
+    @Test
     void doesNotRestoreOAuthTokensAfterIntegrationWasDisconnected() {
         ProjectIntegrationService service = service();
         ProjectIntegration integration = ProjectIntegration.builder()

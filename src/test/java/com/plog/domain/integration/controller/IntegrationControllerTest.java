@@ -33,6 +33,7 @@ import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.service.FigmaIntegrationService;
 import com.plog.domain.integration.service.GithubIntegrationService;
 import com.plog.domain.integration.service.GoogleIntegrationService;
+import com.plog.domain.integration.service.GooglePickerAccessTokenService;
 import com.plog.domain.integration.service.IntegrationDataCollectionService;
 import com.plog.domain.integration.service.IntegrationActorMappingManagementService;
 import com.plog.domain.integration.service.IntegrationResourceService;
@@ -88,6 +89,9 @@ class IntegrationControllerTest {
 
     @MockitoBean
     private GoogleIntegrationService googleIntegrationService;
+
+    @MockitoBean
+    private GooglePickerAccessTokenService googlePickerAccessTokenService;
 
     @MockitoBean
     private IntegrationRedirectProperties integrationRedirectProperties;

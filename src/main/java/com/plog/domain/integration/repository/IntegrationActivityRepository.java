@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 public interface IntegrationActivityRepository extends JpaRepository<IntegrationActivity, Long> {
 
     @Transactional
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Modifying(flushAutomatically = true)
     @Query(value = "insert into integration_activities "
             + "(integration_resource_id, project_member_id, activity_type, provider_event_key, "
             + "actor_provider_id, actor_login, actor_email, occurred_at, source_url, provider_payload, "
@@ -119,4 +119,8 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
     );
 
     void deleteAllByIntegrationResourceProjectIntegrationId(Long projectIntegrationId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("delete from IntegrationActivity activity where activity.integrationResource.id = :resourceId")
+    int deleteAllByIntegrationResourceId(@Param("resourceId") Long integrationResourceId);
 }

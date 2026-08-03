@@ -30,10 +30,12 @@ import org.springframework.web.util.UriComponentsBuilder;
 @Service
 @RequiredArgsConstructor
 public class GoogleIntegrationService {
+    private static final String DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
     private static final String[] SCOPES = {
             "openid",
             "email",
             "profile",
+            DRIVE_FILE_SCOPE,
             "https://www.googleapis.com/auth/drive.activity.readonly",
             "https://www.googleapis.com/auth/drive.metadata.readonly"
     };
@@ -94,6 +96,10 @@ public class GoogleIntegrationService {
     }
 
     public IntegrationVerificationStatus verifyConnection(ProjectIntegration integration) {
+        if (integration.getAccessTokenExpiresAt() != null
+                && !integration.getAccessTokenExpiresAt().isAfter(Instant.now().plusSeconds(60))) {
+            return refreshAndVerify(integration);
+        }
         String accessToken;
         try {
             accessToken = projectIntegrationService.decryptAccessToken(integration);
@@ -198,6 +204,9 @@ public class GoogleIntegrationService {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                     .retrieve()
                     .toBodilessEntity();
+            if (!hasDriveFileScope(accessToken)) {
+                return TokenCheck.AUTHENTICATION_FAILED;
+            }
             return TokenCheck.VERIFIED;
         } catch (RestClientResponseException exception) {
             return exception.getStatusCode().value() == 401
@@ -205,6 +214,32 @@ public class GoogleIntegrationService {
                     : TokenCheck.UNAVAILABLE;
         } catch (RestClientException exception) {
             return TokenCheck.UNAVAILABLE;
+        }
+    }
+
+    private boolean hasDriveFileScope(String accessToken) {
+        try {
+            JsonNode tokenInfo = restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .scheme("https")
+                            .host("oauth2.googleapis.com")
+                            .path("/tokeninfo")
+                            .queryParam("access_token", accessToken)
+                            .build())
+                    .retrieve()
+                    .body(JsonNode.class);
+            String scopes = tokenInfo == null ? "" : tokenInfo.path("scope").asText("");
+            for (String scope : scopes.split("\\s+")) {
+                if (DRIVE_FILE_SCOPE.equals(scope)) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (RestClientResponseException exception) {
+            if (exception.getStatusCode().value() == 400 || exception.getStatusCode().value() == 401) {
+                return false;
+            }
+            throw exception;
         }
     }
 
