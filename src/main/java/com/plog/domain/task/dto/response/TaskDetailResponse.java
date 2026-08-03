@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import com.plog.global.util.TimeUtil;
 
 public record TaskDetailResponse(
         Long taskId,
@@ -98,9 +99,25 @@ public record TaskDetailResponse(
     }
 
     private static boolean isOverdue(Task task) {
-        return task.getEndDate() != null
-                && task.getCardStatus() != TaskStatus.DONE
-                && task.getEndDate().isBefore(LocalDate.now());
+        if (task.getEndDate() == null) {
+            return false;
+        }
+        if (task.getCardStatus() == TaskStatus.DONE) {
+            return isCompletedAfterDeadline(task);
+        }
+        return task.getEndDate().isBefore(LocalDate.now());
+    }
+
+    // completedAt은 UTC 저장값이라 마감일(KST 달력 기준)과 비교하려면 표시 타임존으로 환산해야 한다.
+    private static boolean isCompletedAfterDeadline(Task task) {
+        if (task.getCompletedAt() == null) {
+            return false;
+        }
+        LocalDate completedDate = task.getCompletedAt()
+                .atZone(TimeUtil.STORAGE_ZONE)
+                .withZoneSameInstant(TimeUtil.DISPLAY_ZONE)
+                .toLocalDate();
+        return completedDate.isAfter(task.getEndDate());
     }
 
     // 마감이 이미 지난 경우(overdue)는 임박이 아니라 초과이므로 배타적으로 처리

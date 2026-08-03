@@ -1,13 +1,11 @@
 package com.plog.domain.task.dto.response;
 
-import com.plog.domain.task.entity.AttachmentType;
 import com.plog.domain.task.entity.Task;
-import com.plog.domain.task.entity.TaskAttachment;
 import com.plog.domain.task.entity.TaskCategory;
 import com.plog.domain.task.entity.TaskStatus;
 import com.plog.domain.user.entity.ProfilePreset;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
-import java.util.List;
 
 public record TaskSummaryResponse(
         Long taskId,
@@ -48,10 +46,26 @@ public record TaskSummaryResponse(
     }
 
     // 마감일 초과는 별도 상태값이 아니라 조회 시점에 계산한다.
-    // (기능명세: 상태는 예정/진행중/완료 3가지만 존재, "지연" 상태값은 두지 않음)
+    // DONE인 경우 completedAt이 마감일 이후인지로 판단한다.
     private static boolean isOverdue(Task task) {
-        return task.getEndDate() != null
-                && task.getCardStatus() != TaskStatus.DONE
-                && task.getEndDate().isBefore(LocalDate.now());
+        if (task.getEndDate() == null) {
+            return false;
+        }
+        if (task.getCardStatus() == TaskStatus.DONE) {
+            return isCompletedAfterDeadline(task);
+        }
+        return task.getEndDate().isBefore(LocalDate.now());
+    }
+
+    // completedAt은 UTC 저장값이라 마감일(KST 달력 기준)과 비교하려면 표시 타임존으로 환산해야 한다.
+    private static boolean isCompletedAfterDeadline(Task task) {
+        if (task.getCompletedAt() == null) {
+            return false;
+        }
+        LocalDate completedDate = task.getCompletedAt()
+                .atZone(TimeUtil.STORAGE_ZONE)
+                .withZoneSameInstant(TimeUtil.DISPLAY_ZONE)
+                .toLocalDate();
+        return completedDate.isAfter(task.getEndDate());
     }
 }
