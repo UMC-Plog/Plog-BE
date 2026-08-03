@@ -34,6 +34,7 @@ public class GoogleIntegrationService {
             "openid",
             "email",
             "profile",
+            "https://www.googleapis.com/auth/drive.file",
             "https://www.googleapis.com/auth/drive.activity.readonly",
             "https://www.googleapis.com/auth/drive.metadata.readonly"
     };
@@ -94,6 +95,10 @@ public class GoogleIntegrationService {
     }
 
     public IntegrationVerificationStatus verifyConnection(ProjectIntegration integration) {
+        if (integration.getAccessTokenExpiresAt() != null
+                && !integration.getAccessTokenExpiresAt().isAfter(Instant.now().plusSeconds(60))) {
+            return refreshAndVerify(integration);
+        }
         String accessToken;
         try {
             accessToken = projectIntegrationService.decryptAccessToken(integration);
