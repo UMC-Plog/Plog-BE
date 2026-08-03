@@ -226,7 +226,7 @@ public interface IntegrationControllerDoc {
                     content = @Content(mediaType = "application/json",
                             schema = @Schema(implementation = ApiResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
-                    description = "프로젝트 또는 Google 연동 정보 없음",
+                    description = "프로젝트 또는 Google 연동 정보 없음, 또는 Google 재인가 필요",
                     content = @Content(mediaType = "application/json",
                             schema = @Schema(implementation = ApiResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503",

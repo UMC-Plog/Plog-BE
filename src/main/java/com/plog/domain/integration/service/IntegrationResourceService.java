@@ -122,7 +122,7 @@ public class IntegrationResourceService {
         }
         ProjectIntegration integration = requireConnectedIntegration(projectId, linkType);
         IntegrationResource resource = integrationResourceRepository
-                .findByIdAndProjectIntegrationId(resourceId, integration.getId())
+                .findByIdAndProjectIntegrationIdForUpdate(resourceId, integration.getId())
                 .orElseThrow(() -> new ApiException(IntegrationErrorCode.EXTERNAL_RESOURCE_NOT_FOUND));
 
         integrationActivityRepository.deleteAllByIntegrationResourceId(resource.getId());
