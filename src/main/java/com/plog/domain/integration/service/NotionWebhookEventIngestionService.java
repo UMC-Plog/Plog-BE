@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class NotionWebhookEventIngestionService {
 
     private static final int MAX_PAYLOAD_LENGTH = 1_048_576;
+    private static final String DUMMY_VERIFICATION_TOKEN = "dummy_token";
     private static final List<NotionWebhookEventStatus> DEBOUNCE_STATUSES = List.of(
             NotionWebhookEventStatus.PENDING,
             NotionWebhookEventStatus.RETRYABLE
@@ -137,18 +138,26 @@ public class NotionWebhookEventIngestionService {
         return value == null || value.isBlank() ? null : value;
     }
 
+
+
     private void logVerificationTokenIfNeeded(String verificationToken) {
-        if (properties.verificationToken() != null && !properties.verificationToken().isBlank()) {
+        if (isRealVerificationTokenConfigured()) {
             return;
         }
+
         String previous = lastLoggedVerificationToken.getAndSet(verificationToken);
         if (!verificationToken.equals(previous)) {
             log.warn("Notion webhook verification token received. "
-                    + "Set NOTION_WEBHOOK_VERIFICATION_TOKEN and redeploy. tokenFingerprint={}",
+                            + "Set NOTION_WEBHOOK_VERIFICATION_TOKEN and redeploy. tokenFingerprint={}",
                     maskToken(verificationToken));
         }
     }
 
+    private boolean isRealVerificationTokenConfigured() {
+        return properties.verificationToken() != null
+                && !properties.verificationToken().isBlank()
+                && !DUMMY_VERIFICATION_TOKEN.equals(properties.verificationToken());
+    }
     private String maskToken(String token) {
         if (token.length() <= 8) {
             return "****";
