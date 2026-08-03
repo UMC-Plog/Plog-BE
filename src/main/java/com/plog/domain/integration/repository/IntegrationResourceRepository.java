@@ -15,6 +15,10 @@ public interface IntegrationResourceRepository extends JpaRepository<Integration
             IntegrationResourceStatus resourceStatus
     );
 
+    @EntityGraph(attributePaths = {"projectIntegration", "projectIntegration.project"})
+    List<IntegrationResource> findAllByProjectIntegrationProjectIdOrderByIdAsc(Long projectId);
+
+    @EntityGraph(attributePaths = {"projectIntegration", "projectIntegration.project"})
     List<IntegrationResource> findAllByProjectIntegrationIdAndResourceStatusOrderByIdAsc(
             Long projectIntegrationId,
             IntegrationResourceStatus resourceStatus

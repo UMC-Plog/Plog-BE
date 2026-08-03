@@ -5,6 +5,7 @@ import com.plog.domain.integration.config.GithubIntegrationProperties;
 import com.plog.domain.integration.config.GoogleIntegrationProperties;
 import com.plog.domain.integration.config.IntegrationRedirectProperties;
 import com.plog.domain.integration.config.NotionIntegrationProperties;
+import com.plog.domain.integration.config.NotionWebhookProperties;
 import com.plog.domain.user.config.GoogleOAuthProperties;
 import com.plog.domain.user.config.KakaoOAuthProperties;
 import com.plog.global.security.jwt.JwtProperties;
@@ -24,6 +25,7 @@ import org.springframework.context.annotation.Configuration;
         GithubIntegrationProperties.class,
         FigmaIntegrationProperties.class,
         NotionIntegrationProperties.class,
+        NotionWebhookProperties.class,
         GoogleIntegrationProperties.class,
         IntegrationRedirectProperties.class,
         KakaoOAuthProperties.class,

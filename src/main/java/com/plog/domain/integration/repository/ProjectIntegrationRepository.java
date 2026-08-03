@@ -1,6 +1,7 @@
 package com.plog.domain.integration.repository;
 
 import com.plog.domain.integration.entity.LinkType;
+import com.plog.domain.integration.entity.IntegrationConnectionStatus;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import jakarta.persistence.LockModeType;
 import java.util.List;
@@ -13,6 +14,12 @@ import org.springframework.data.repository.query.Param;
 public interface ProjectIntegrationRepository extends JpaRepository<ProjectIntegration, Long> {
 
     List<ProjectIntegration> findAllByProjectIdOrderByLinkTypeAsc(Long projectId);
+
+    List<ProjectIntegration> findAllByLinkTypeAndExternalAccountIdAndConnectionStatus(
+            LinkType linkType,
+            String externalAccountId,
+            IntegrationConnectionStatus connectionStatus
+    );
 
     Optional<ProjectIntegration> findByProjectIdAndLinkType(Long projectId, LinkType linkType);
 

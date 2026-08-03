@@ -22,13 +22,33 @@ class IntegrationResourceCollectionStateService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void requireReauthorization(Long resourceId) {
-        requireResource(resourceId).requireReauthorization();
+    public void markPending(Long resourceId, Instant now) {
+        requireResource(resourceId).markCollectionPending(now);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void disable(Long resourceId) {
-        requireResource(resourceId).disable();
+    public void markRunning(Long resourceId, Instant now) {
+        requireResource(resourceId).markCollectionRunning(now);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markRetrying(Long resourceId, Instant now, String failure) {
+        requireResource(resourceId).markCollectionRetrying(now, failure);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markFailed(Long resourceId, Instant now, String failure) {
+        requireResource(resourceId).markCollectionFailed(now, failure);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void requireReauthorization(Long resourceId, Instant now) {
+        requireResource(resourceId).requireReauthorization(now);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void disable(Long resourceId, Instant now) {
+        requireResource(resourceId).disable(now);
     }
 
     private IntegrationResource requireResource(Long resourceId) {

@@ -113,6 +113,14 @@ plog:
       client-id: ${NOTION_CLIENT_ID:}
       client-secret: ${NOTION_CLIENT_SECRET:}
       callback-url: ${NOTION_CALLBACK_URL:http://localhost:8080/api/integrations/notion/callback}
+      webhook:
+        # Notion 구독 인증 요청에서 받은 값을 배포 환경변수로 주입한다.
+        verification-token: ${NOTION_WEBHOOK_VERIFICATION_TOKEN:}
+        debounce: 3m
+        processing-timeout: 30m
+        max-attempts: 5
+        poll-delay-ms: 10000
+        batch-size: 10
     google:
       client-id: ${GOOGLE_CLIENT_ID:}
       client-secret: ${GOOGLE_CLIENT_SECRET:}
