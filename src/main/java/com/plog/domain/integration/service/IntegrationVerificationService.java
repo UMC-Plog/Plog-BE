@@ -32,7 +32,7 @@ public class IntegrationVerificationService {
         }
         if (status == IntegrationVerificationStatus.DISCONNECTED) {
             projectIntegrationService.requireReauthorization(integration.getId());
-            throw new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND);
+            throw new ApiException(IntegrationErrorCode.PROVIDER_REAUTHORIZATION_REQUIRED);
         }
         if (status == IntegrationVerificationStatus.UNAVAILABLE) {
             throw new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE);
