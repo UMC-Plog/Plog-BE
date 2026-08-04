@@ -16,6 +16,7 @@ import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class GoogleIntegrationService {
@@ -130,7 +132,13 @@ public class GoogleIntegrationService {
                     .body(body)
                     .retrieve()
                     .body(JsonNode.class);
+        } catch (RestClientResponseException exception) {
+            log.warn("Google OAuth token exchange failed. status={}, body={}",
+                    exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
+            throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED, exception);
         } catch (RestClientException exception) {
+            log.warn("Google OAuth token exchange call failed without a response (timeout/connection issue).", exception);
             throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED, exception);
         }
     }
@@ -142,7 +150,13 @@ public class GoogleIntegrationService {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                     .retrieve()
                     .body(JsonNode.class);
+        } catch (RestClientResponseException exception) {
+            log.warn("Google userinfo call failed. status={}, body={}",
+                    exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
+            throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED, exception);
         } catch (RestClientException exception) {
+            log.warn("Google userinfo call failed without a response (timeout/connection issue).", exception);
             throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED, exception);
         }
     }
@@ -186,10 +200,15 @@ public class GoogleIntegrationService {
                     expiresIn > 0 ? Instant.now().plusSeconds(expiresIn) : null);
             return IntegrationVerificationStatus.VERIFIED;
         } catch (RestClientResponseException exception) {
+            log.warn("Google OAuth token refresh failed. integrationId={}, status={}, body={}",
+                    integration.getId(), exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
             return isInvalidGrant(exception)
                     ? IntegrationVerificationStatus.DISCONNECTED
                     : IntegrationVerificationStatus.UNAVAILABLE;
         } catch (RestClientException | ApiException exception) {
+            log.warn("Google OAuth token refresh call failed without a usable response. integrationId={}",
+                    integration.getId(), exception);
             return IntegrationVerificationStatus.UNAVAILABLE;
         }
     }
@@ -209,10 +228,14 @@ public class GoogleIntegrationService {
             }
             return TokenCheck.VERIFIED;
         } catch (RestClientResponseException exception) {
+            log.warn("Google Drive access token check failed. status={}, body={}",
+                    exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
             return exception.getStatusCode().value() == 401
                     ? TokenCheck.AUTHENTICATION_FAILED
                     : TokenCheck.UNAVAILABLE;
         } catch (RestClientException exception) {
+            log.warn("Google Drive access token check call failed without a response (timeout/connection issue).", exception);
             return TokenCheck.UNAVAILABLE;
         }
     }

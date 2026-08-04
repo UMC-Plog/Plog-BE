@@ -17,6 +17,7 @@ import com.plog.global.api.exception.ApiException;
 import java.net.URI;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FigmaIntegrationService {
@@ -103,7 +105,13 @@ public class FigmaIntegrationService {
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                     .headers(headers -> headers.setBasicAuth(require(properties.clientId()), require(properties.clientSecret())))
                     .body(body).retrieve().body(JsonNode.class);
+        } catch (RestClientResponseException exception) {
+            log.warn("Figma OAuth token exchange failed. status={}, body={}",
+                    exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
+            throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED, exception);
         } catch (RestClientException exception) {
+            log.warn("Figma OAuth token exchange call failed without a response (timeout/connection issue).", exception);
             throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED, exception);
         }
     }
@@ -147,10 +155,15 @@ public class FigmaIntegrationService {
                     expiresIn > 0 ? Instant.now().plusSeconds(expiresIn) : null);
             return IntegrationVerificationStatus.VERIFIED;
         } catch (RestClientResponseException exception) {
+            log.warn("Figma OAuth token refresh failed. integrationId={}, status={}, body={}",
+                    integration.getId(), exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
             return isInvalidGrant(exception)
                     ? IntegrationVerificationStatus.DISCONNECTED
                     : IntegrationVerificationStatus.UNAVAILABLE;
         } catch (RestClientException | ApiException exception) {
+            log.warn("Figma OAuth token refresh call failed without a usable response. integrationId={}",
+                    integration.getId(), exception);
             return IntegrationVerificationStatus.UNAVAILABLE;
         }
     }
@@ -165,10 +178,16 @@ public class FigmaIntegrationService {
                     .retrieve().toBodilessEntity();
             return TokenCheck.VERIFIED;
         } catch (RestClientResponseException exception) {
-            return exception.getStatusCode().value() == 401
+            log.warn("Figma access token check failed. status={}, body={}",
+                    exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
+            // Figma는 표준 OAuth와 달리 토큰 무효/만료 시 401이 아닌 403을 반환한다.
+            int status = exception.getStatusCode().value();
+            return (status == 401 || status == 403)
                     ? TokenCheck.AUTHENTICATION_FAILED
                     : TokenCheck.UNAVAILABLE;
         } catch (RestClientException exception) {
+            log.warn("Figma access token check call failed without a response (timeout/connection issue).", exception);
             return TokenCheck.UNAVAILABLE;
         }
     }
@@ -183,7 +202,13 @@ public class FigmaIntegrationService {
             return restClient.get().uri(URI.create(API_BASE_URL + path))
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                     .retrieve().body(JsonNode.class);
+        } catch (RestClientResponseException exception) {
+            log.warn("Figma API call failed. path={}, status={}, body={}", path,
+                    exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
+            throw new ApiException(IntegrationErrorCode.PROVIDER_RESOURCE_ACCESS_DENIED, exception);
         } catch (RestClientException exception) {
+            log.warn("Figma API call failed without a response (timeout/connection issue). path={}", path, exception);
             throw new ApiException(IntegrationErrorCode.PROVIDER_RESOURCE_ACCESS_DENIED, exception);
         }
     }

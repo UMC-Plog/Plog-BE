@@ -16,6 +16,7 @@ import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -79,17 +80,17 @@ public class ProjectIntegrationService {
         }
         try {
             return projectIntegrationRepository.saveAndFlush(ProjectIntegration.builder()
-                        .project(projectMember.getProject())
-                        .connectedByProjectMember(projectMember)
-                        .linkType(linkType)
-                        .credentialType(credentialType)
-                        .externalAccountId(externalAccountId)
-                        .externalAccountName(externalAccountName)
-                        .providerConnectionId(providerConnectionId)
-                        .accessTokenEncrypted(encryptedAccessToken)
-                        .refreshTokenEncrypted(encryptedRefreshToken)
-                        .accessTokenExpiresAt(accessTokenExpiresAt)
-                        .build());
+                    .project(projectMember.getProject())
+                    .connectedByProjectMember(projectMember)
+                    .linkType(linkType)
+                    .credentialType(credentialType)
+                    .externalAccountId(externalAccountId)
+                    .externalAccountName(externalAccountName)
+                    .providerConnectionId(providerConnectionId)
+                    .accessTokenEncrypted(encryptedAccessToken)
+                    .refreshTokenEncrypted(encryptedRefreshToken)
+                    .accessTokenExpiresAt(accessTokenExpiresAt)
+                    .build());
         } catch (DataIntegrityViolationException exception) {
             throw new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_ALREADY_CONNECTED, exception);
         }
@@ -107,7 +108,8 @@ public class ProjectIntegrationService {
                 .forEach(resource -> resource.disable(now));
     }
 
-    @Transactional
+    /** 상위 트랜잭션이 이후 예외로 롤백되더라도 재인증 필요 상태는 반드시 반영되어야 하므로 별도 트랜잭션으로 커밋한다. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void requireReauthorization(Long integrationId) {
         projectIntegrationRepository.findByIdForUpdate(integrationId)
                 .filter(ProjectIntegration::isConnected)

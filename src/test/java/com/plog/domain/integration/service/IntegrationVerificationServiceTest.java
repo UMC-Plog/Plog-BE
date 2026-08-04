@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.plog.domain.integration.entity.IntegrationConnectionStatus;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.ProjectIntegrationRepository;
@@ -51,8 +53,27 @@ class IntegrationVerificationServiceTest {
         assertThatThrownBy(() -> service.requireVerifiedConnection(1L, LinkType.GITHUB))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode())
-                                .isEqualTo(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND));
+                                .isEqualTo(IntegrationErrorCode.PROVIDER_REAUTHORIZATION_REQUIRED));
 
         verify(projectIntegrationService).requireReauthorization(10L);
+    }
+
+    @Test
+    void throwsReauthorizationRequiredConsistentlyOnRepeatedVerification() {
+        ProjectIntegration integration = ProjectIntegration.builder()
+                .id(10L)
+                .linkType(LinkType.GITHUB)
+                .providerConnectionId("installation-1")
+                .connectionStatus(IntegrationConnectionStatus.REAUTH_REQUIRED)
+                .build();
+        given(projectIntegrationRepository.findByProjectIdAndLinkType(1L, LinkType.GITHUB))
+                .willReturn(Optional.of(integration));
+
+        assertThatThrownBy(() -> service.requireVerifiedConnection(1L, LinkType.GITHUB))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isEqualTo(IntegrationErrorCode.PROVIDER_REAUTHORIZATION_REQUIRED));
+
+        verifyNoInteractions(githubAppClient, projectIntegrationService);
     }
 }
