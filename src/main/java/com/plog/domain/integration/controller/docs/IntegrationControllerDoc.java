@@ -236,6 +236,7 @@ public interface IntegrationControllerDoc {
     })
     ResponseEntity<ApiResponse<GooglePickerAccessTokenResponse>> issueGooglePickerAccessToken(
             @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
+            @Parameter(description = "provider 식별자: google-docs, google-slides", example = "google-docs") String provider,
             Long userId
     );
 
@@ -485,6 +486,7 @@ public interface IntegrationControllerDoc {
     })
     ResponseEntity<ApiResponse<IntegrationResourceResponse>> registerGoogleResource(
             @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
+            @Parameter(description = "provider 식별자: google-docs, google-slides", example = "google-docs") String provider,
             GoogleResourceRegisterRequest request,
             Long userId
     );
