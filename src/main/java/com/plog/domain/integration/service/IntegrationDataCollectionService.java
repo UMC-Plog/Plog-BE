@@ -127,14 +127,14 @@ public class IntegrationDataCollectionService {
         return new CollectionOutcome(resources.size(), collectedResourceCount, List.copyOf(failures));
     }
 
-    private Map<LinkType, IntegrationResourceCollector> collectorMap(
-            List<IntegrationResourceCollector> collectors
-    ) {
+    private Map<LinkType, IntegrationResourceCollector> collectorMap(List<IntegrationResourceCollector> collectors) {
         Map<LinkType, IntegrationResourceCollector> collectorByProvider = new EnumMap<>(LinkType.class);
         for (IntegrationResourceCollector collector : collectors) {
-            IntegrationResourceCollector duplicate = collectorByProvider.put(collector.provider(), collector);
-            if (duplicate != null) {
-                throw new IllegalStateException("Duplicate integration collector: " + collector.provider());
+            for (LinkType linkType : collector.providers()) {
+                IntegrationResourceCollector duplicate = collectorByProvider.put(linkType, collector);
+                if (duplicate != null) {
+                    throw new IllegalStateException("Duplicate integration collector: " + linkType);
+                }
             }
         }
         return Map.copyOf(collectorByProvider);

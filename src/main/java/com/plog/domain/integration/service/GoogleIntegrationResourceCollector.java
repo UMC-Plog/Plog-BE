@@ -10,12 +10,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.HexFormat;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -40,8 +36,8 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     private final RestClient restClient = ProviderRestClientFactory.create();
 
     @Override
-    public LinkType provider() {
-        return LinkType.GOOGLE;
+    public List<LinkType> providers() {
+        return List.of(LinkType.GOOGLE_DOCS, LinkType.GOOGLE_SLIDES);
     }
 
     @Override

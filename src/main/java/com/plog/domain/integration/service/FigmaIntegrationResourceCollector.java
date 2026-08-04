@@ -7,6 +7,7 @@ import com.plog.domain.integration.entity.LinkType;
 import java.net.URI;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,8 +30,8 @@ class FigmaIntegrationResourceCollector implements IntegrationResourceCollector 
     private final RestClient restClient = ProviderRestClientFactory.create();
 
     @Override
-    public LinkType provider() {
-        return LinkType.FIGMA;
+    public List<LinkType> providers() {
+        return List.of(LinkType.FIGMA);
     }
 
     @Override

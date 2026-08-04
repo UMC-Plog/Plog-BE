@@ -33,8 +33,8 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
     private final RestClient restClient = ProviderRestClientFactory.create();
 
     @Override
-    public LinkType provider() {
-        return LinkType.NOTION;
+    public List<LinkType> providers() {
+        return List.of(LinkType.NOTION);
     }
 
     @Override
