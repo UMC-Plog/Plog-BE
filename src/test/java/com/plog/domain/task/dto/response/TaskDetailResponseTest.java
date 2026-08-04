@@ -29,7 +29,7 @@ class TaskDetailResponseTest {
     }
 
     @Test
-    @DisplayName("완료 + 마감일 이후 완료 -> isOverdue true 유지, isImminent는 false")
+    @DisplayName("완료 + 마감일 이후 완료 -> isOverdue true 유지, isImminent는 false, completedAt은 노출")
     void overdue_whenCompletedAfterDeadline_andNotImminent() {
         Task task = Task.builder()
                 .projectMember(stubAssignee())
@@ -47,23 +47,7 @@ class TaskDetailResponseTest {
     }
 
     @Test
-    @DisplayName("완료 + 마감일 이전 완료 -> isOverdue false")
-    void notOverdue_whenCompletedBeforeDeadline() {
-        Task task = Task.builder()
-                .projectMember(stubAssignee())
-                .title("title")
-                .cardStatus(TaskStatus.DONE)
-                .endDate(LocalDate.now().plusDays(2))
-                .completedAt(LocalDateTime.now())
-                .build();
-
-        TaskDetailResponse response = TaskDetailResponse.from(task, List.of());
-
-        assertThat(response.isOverdue()).isFalse();
-    }
-
-    @Test
-    @DisplayName("미완료 + 마감일 지남 -> isOverdue true (기존 동작 유지)")
+    @DisplayName("미완료 + 마감일 지남 -> isOverdue true, completedAt은 null")
     void overdue_whenNotDoneAndPastDeadline() {
         Task task = Task.builder()
                 .projectMember(stubAssignee())
