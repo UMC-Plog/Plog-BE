@@ -33,7 +33,7 @@ public interface IntegrationControllerDoc {
             summary = "1. 프로젝트 외부 연동 상태 조회",
             description = """
                     현재 사용자가 ACTIVE 멤버인 프로젝트의 외부 provider 연동 상태를 조회합니다.
-                    GITHUB, FIGMA, NOTION, GOOGLE 순서로 모두 내려주며, 아직 연결되지 않은 provider는 linked=false입니다.
+                    GITHUB, FIGMA, NOTION, GOOGLE_DOCS, GOOGLE_SLIDES 순서로 모두 내려주며, 아직 연결되지 않은 provider는 linked=false입니다.
                     토큰/secret은 응답에 포함하지 않고, 화면 표시용 connectedAccountName만 제공합니다.
                     """
     )
@@ -101,7 +101,7 @@ public interface IntegrationControllerDoc {
     })
     ResponseEntity<ApiResponse<IntegrationAuthorizationResponse>> issueAuthorizationUrl(
             @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
-            @Parameter(description = "provider 식별자: github, figma, notion, google", example = "github") String provider,
+            @Parameter(description = "provider 식별자: github, figma, notion, google-docs, google-slides", example = "github") String provider,
             Long userId
     );
 
@@ -136,7 +136,7 @@ public interface IntegrationControllerDoc {
     })
     ResponseEntity<ApiResponse<IntegrationDisconnectionResponse>> disconnect(
             @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
-            @Parameter(description = "provider 식별자: github, figma, notion, google", example = "figma") String provider,
+            @Parameter(description = "provider 식별자: github, figma, notion, google-docs, google-slides", example = "figma") String provider,
             Long userId
     );
 
@@ -164,7 +164,7 @@ public interface IntegrationControllerDoc {
     })
     ResponseEntity<ApiResponse<IntegrationResourceListResponse>> getResources(
             @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
-            @Parameter(description = "provider 식별자: github, figma, notion, google", example = "figma") String provider,
+            @Parameter(description = "provider 식별자: github, figma, notion, google-docs, google-slides", example = "figma") String provider,
             Long userId
     );
 
@@ -199,7 +199,7 @@ public interface IntegrationControllerDoc {
     })
     ResponseEntity<ApiResponse<IntegrationResourceRemovalResponse>> removeResource(
             @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
-            @Parameter(description = "provider 식별자: figma, notion, google", example = "figma") String provider,
+            @Parameter(description = "provider 식별자: figma, notion, google-docs, google-slides", example = "figma") String provider,
             @Parameter(description = "Plog에 등록된 리소스 ID", example = "12") Long resourceId,
             Long userId
     );
@@ -272,7 +272,7 @@ public interface IntegrationControllerDoc {
     })
     ResponseEntity<ApiResponse<IntegrationActorMappingListResponse>> getActorMappings(
             @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
-            @Parameter(description = "provider 식별자: github, figma, notion, google", example = "github") String provider,
+            @Parameter(description = "provider 식별자: github, figma, notion, google-docs, google-slides", example = "github") String provider,
             Long userId
     );
 
@@ -313,7 +313,7 @@ public interface IntegrationControllerDoc {
     })
     ResponseEntity<ApiResponse<IntegrationActorMappingResponse>> saveMyActorMapping(
             @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
-            @Parameter(description = "provider 식별자: github, figma, notion, google", example = "github") String provider,
+            @Parameter(description = "provider 식별자: github, figma, notion, google-docs, google-slides", example = "github") String provider,
             IntegrationActorMappingRequest request,
             Long userId
     );
@@ -345,7 +345,7 @@ public interface IntegrationControllerDoc {
     })
     ResponseEntity<ApiResponse<IntegrationActorMappingResponse>> removeMyActorMapping(
             @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
-            @Parameter(description = "provider 식별자: github, figma, notion, google", example = "github") String provider,
+            @Parameter(description = "provider 식별자: github, figma, notion, google-docs, google-slides", example = "github") String provider,
             Long userId
     );
 
@@ -585,7 +585,7 @@ public interface IntegrationControllerDoc {
 
     @Operation(hidden = true)
     RedirectView integrationCallback(
-            @Parameter(description = "provider 식별자: github, figma, notion, google", example = "notion") String provider,
+            @Parameter(description = "provider 식별자: github, figma, notion, google-docs, google-slides", example = "notion") String provider,
             @Parameter(description = "Plog가 발급한 일회용 OAuth state") String state,
             @Parameter(description = "GitHub App 설치 후 GitHub가 전달하는 installation_id") String installationId,
             @Parameter(description = "OAuth provider가 전달하는 authorization code") String code

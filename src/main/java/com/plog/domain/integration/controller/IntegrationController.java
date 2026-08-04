@@ -219,7 +219,7 @@ public class IntegrationController implements IntegrationControllerDoc {
             @AuthenticationPrincipal Long userId
     ) {
         IntegrationResourceResponse response = integrationResourceService.registerGoogle(
-                projectId, userId, parseLinkType(provider), request);
+                projectId, userId, parseGoogleLinkType(provider), request);
         return ResponseEntity.status(IntegrationSuccessCode.INTEGRATION_RESOURCE_REGISTERED.getHttpStatus())
                 .body(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_RESOURCE_REGISTERED, response));
     }
@@ -279,6 +279,14 @@ public class IntegrationController implements IntegrationControllerDoc {
             case "github" -> LinkType.GITHUB;
             case "figma" -> LinkType.FIGMA;
             case "notion" -> LinkType.NOTION;
+            case "google-docs" -> LinkType.GOOGLE_DOCS;
+            case "google-slides" -> LinkType.GOOGLE_SLIDES;
+            default -> throw new ApiException(IntegrationErrorCode.UNSUPPORTED_PROVIDER);
+        };
+    }
+
+    private LinkType parseGoogleLinkType(String provider) {
+        return switch (normalize(provider)) {
             case "google-docs" -> LinkType.GOOGLE_DOCS;
             case "google-slides" -> LinkType.GOOGLE_SLIDES;
             default -> throw new ApiException(IntegrationErrorCode.UNSUPPORTED_PROVIDER);
