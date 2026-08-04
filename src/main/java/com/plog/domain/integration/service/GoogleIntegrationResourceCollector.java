@@ -17,6 +17,7 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -24,6 +25,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 /** Google Drive Activity, comment/revision과 Docs/Slides 현재 스냅샷을 저장한다. */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 class GoogleIntegrationResourceCollector implements IntegrationResourceCollector {
@@ -177,6 +179,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             return null;
         }
         if (!requestedPageTokens.add(nextPageToken)) {
+            log.warn("Google API pagination loop detected. pageToken={}", nextPageToken);
             throw new ProviderResourceAccessException(503, null);
         }
         return nextPageToken;
@@ -254,8 +257,11 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             return restClient.get().uri(uri).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) {
+            log.warn("Google API returned error response. uri={}, status={}, body={}",
+                    uri, exception.getStatusCode().value(), exception.getResponseBodyAsString());
             throw new ProviderResourceAccessException(exception.getStatusCode().value(), exception);
         } catch (RestClientException exception) {
+            log.warn("Google API call failed without a response (timeout/connection issue). uri={}", uri, exception);
             throw new ProviderResourceAccessException(503, exception);
         }
     }
@@ -265,8 +271,11 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             return restClient.post().uri(uri).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .body(request).retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) {
+            log.warn("Google API returned error response. uri={}, status={}, body={}",
+                    uri, exception.getStatusCode().value(), exception.getResponseBodyAsString());
             throw new ProviderResourceAccessException(exception.getStatusCode().value(), exception);
         } catch (RestClientException exception) {
+            log.warn("Google API call failed without a response (timeout/connection issue). uri={}", uri, exception);
             throw new ProviderResourceAccessException(503, exception);
         }
     }

@@ -12,12 +12,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 /** Notion page/data source의 page·block·comment 원문을 수집한다. 수정 diff가 없으므로 스냅샷을 보관한다. */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 class NotionIntegrationResourceCollector implements IntegrationResourceCollector {
@@ -201,8 +203,11 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
                     .headers(headers -> headers.setBearerAuth(token))
                     .retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) {
+            log.warn("Notion API returned error response. path={}, status={}, body={}",
+                    path, exception.getStatusCode().value(), exception.getResponseBodyAsString());
             throw new ProviderResourceAccessException(exception.getStatusCode().value(), exception);
         } catch (RestClientException exception) {
+            log.warn("Notion API call failed without a response (timeout/connection issue). path={}", path, exception);
             throw new ProviderResourceAccessException(503, exception);
         }
     }
@@ -233,8 +238,11 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
                     .body(request)
                     .retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) {
+            log.warn("Notion API returned error response. path={}, status={}, body={}",
+                    path, exception.getStatusCode().value(), exception.getResponseBodyAsString());
             throw new ProviderResourceAccessException(exception.getStatusCode().value(), exception);
         } catch (RestClientException exception) {
+            log.warn("Notion API call failed without a response (timeout/connection issue). path={}", path, exception);
             throw new ProviderResourceAccessException(503, exception);
         }
     }
