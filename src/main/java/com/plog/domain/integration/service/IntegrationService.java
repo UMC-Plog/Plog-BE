@@ -36,10 +36,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class IntegrationService {
 
     private static final List<LinkType> SUPPORTED_LINK_TYPES = List.of(
-            LinkType.GITHUB,
-            LinkType.FIGMA,
-            LinkType.NOTION,
-            LinkType.GOOGLE
+            LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION,
+            LinkType.GOOGLE_DOCS, LinkType.GOOGLE_SLIDES
     );
 
     private final ProjectRepository projectRepository;

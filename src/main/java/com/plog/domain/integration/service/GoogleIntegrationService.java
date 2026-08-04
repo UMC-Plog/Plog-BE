@@ -49,30 +49,42 @@ public class GoogleIntegrationService {
     private final ProjectIntegrationService projectIntegrationService;
     private final RestClient restClient = ProviderRestClientFactory.create();
 
+    private static final String[] DOCS_SCOPES = {
+            "openid", "email", "profile", DRIVE_FILE_SCOPE,
+            "https://www.googleapis.com/auth/drive.activity.readonly",
+            "https://www.googleapis.com/auth/drive.metadata.readonly",
+            "https://www.googleapis.com/auth/documents.readonly"
+    };
+    private static final String[] SLIDES_SCOPES = {
+            "openid", "email", "profile", DRIVE_FILE_SCOPE,
+            "https://www.googleapis.com/auth/drive.activity.readonly",
+            "https://www.googleapis.com/auth/drive.metadata.readonly",
+            "https://www.googleapis.com/auth/presentations.readonly"
+    };
+
     @Transactional
-    public IntegrationAuthorizationResponse issueAuthorizationUrl(Long projectId, Long userId) {
+    public IntegrationAuthorizationResponse issueAuthorizationUrl(Long projectId, Long userId, LinkType linkType) {
         ProjectMember member = requireMember(projectId, userId);
-        projectIntegrationService.requireNotConnected(projectId, LinkType.GOOGLE);
-        IntegrationAuthorizationStateService.IssuedState state = authorizationStateService.issue(member, LinkType.GOOGLE);
+        projectIntegrationService.requireNotConnected(projectId, linkType);
+        IntegrationAuthorizationStateService.IssuedState state = authorizationStateService.issue(member, linkType);
+        String[] scopes = linkType == LinkType.GOOGLE_SLIDES ? SLIDES_SCOPES : DOCS_SCOPES;
         String url = UriComponentsBuilder.fromUriString("https://accounts.google.com/o/oauth2/v2/auth")
                 .queryParam("client_id", require(properties.clientId()))
                 .queryParam("redirect_uri", require(properties.callbackUrl()))
                 .queryParam("response_type", "code")
-                .queryParam("scope", String.join(" ", SCOPES))
+                .queryParam("scope", String.join(" ", scopes))
                 .queryParam("access_type", "offline")
                 .queryParam("prompt", "consent")
                 .queryParam("include_granted_scopes", "true")
                 .queryParam("state", state.value())
-                .build()
-                .encode()
-                .toUriString();
-        return new IntegrationAuthorizationResponse(LinkType.GOOGLE, url, state.expiresAt());
+                .build().encode().toUriString();
+        return new IntegrationAuthorizationResponse(linkType, url, state.expiresAt());
     }
 
-    public IntegrationConnectionResponse completeCallback(String state, String code) {
-        IntegrationAuthorizationState authorizationState = authorizationStateService.consume(state, LinkType.GOOGLE);
+    public IntegrationConnectionResponse completeCallback(LinkType linkType, String state, String code) {
+        IntegrationAuthorizationState authorizationState = authorizationStateService.consume(state, linkType);
         projectIntegrationService.requireNotConnected(
-                authorizationState.getProjectMember().getProject().getId(), LinkType.GOOGLE);
+                authorizationState.getProjectMember().getProject().getId(), linkType);
         JsonNode token = exchangeCode(code);
         String accessToken = requiredField(token, "access_token");
         String refreshToken = requiredRefreshToken(token);
@@ -81,7 +93,7 @@ public class GoogleIntegrationService {
         String externalAccountName = profile.path("email").asText(profile.path("name").asText(externalAccountId));
         ProjectIntegration integration = projectIntegrationService.connect(
                 authorizationState.getProjectMember(),
-                LinkType.GOOGLE,
+                linkType,
                 IntegrationCredentialType.OAUTH,
                 externalAccountId,
                 externalAccountName,
@@ -92,7 +104,7 @@ public class GoogleIntegrationService {
         );
         return new IntegrationConnectionResponse(
                 integration.getProject().getId(),
-                LinkType.GOOGLE,
+                linkType,
                 integration.getExternalAccountName()
         );
     }

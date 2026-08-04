@@ -96,14 +96,22 @@ public class IntegrationResourceService {
 
     @Transactional
     public IntegrationResourceResponse registerGoogle(
-            Long projectId, Long userId, GoogleResourceRegisterRequest request
+            Long projectId, Long userId, LinkType linkType, GoogleResourceRegisterRequest request
     ) {
         ProjectMember member = requireActiveMember(projectId, userId);
-        ProjectIntegration integration = integrationVerificationService.requireVerifiedConnection(projectId, LinkType.GOOGLE);
+        ProjectIntegration integration = integrationVerificationService.requireVerifiedConnection(projectId, linkType);
         ValidatedResource resource = validateGoogleResource(integration, request);
+        validateResourceMatchesLinkType(linkType, resource.resourceType());
         return toResponse(saveResource(integration, member, resource));
     }
 
+    private void validateResourceMatchesLinkType(LinkType linkType, IntegrationResourceType resourceType) {
+        boolean matches = (linkType == LinkType.GOOGLE_DOCS && resourceType == IntegrationResourceType.GOOGLE_DOCUMENT)
+                || (linkType == LinkType.GOOGLE_SLIDES && resourceType == IntegrationResourceType.GOOGLE_PRESENTATION);
+        if (!matches) {
+            throw new ApiException(IntegrationErrorCode.UNSUPPORTED_GOOGLE_RESOURCE_TYPE);
+        }
+    }
     @Transactional
     public IntegrationResourceResponse registerFigma(
             Long projectId, Long userId, FigmaResourceRegisterRequest request
