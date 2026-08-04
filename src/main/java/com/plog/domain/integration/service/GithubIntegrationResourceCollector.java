@@ -126,7 +126,8 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
                     .retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) {
             log.warn("GitHub API returned error response. path={}, status={}, body={}",
-                    path, exception.getStatusCode().value(), exception.getResponseBodyAsString());
+                    path, exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
             throw new ProviderResourceAccessException(exception.getStatusCode().value(), exception);
         } catch (RestClientException exception) {
             log.warn("GitHub API call failed without a response (timeout/connection issue). path={}", path, exception);

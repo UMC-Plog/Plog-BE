@@ -8,12 +8,14 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class GithubAppClient {
@@ -48,7 +50,14 @@ public class GithubAppClient {
                 throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED);
             }
             return body.path("token").asText();
+        } catch (RestClientResponseException exception) {
+            log.warn("GitHub installation access token issue failed. installationId={}, status={}, body={}",
+                    installationId, exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
+            throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED, exception);
         } catch (RestClientException exception) {
+            log.warn("GitHub installation access token call failed without a response (timeout/connection issue). installationId={}",
+                    installationId, exception);
             throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED, exception);
         }
     }
@@ -87,11 +96,15 @@ public class GithubAppClient {
             return new RepositoryListing(repositories, false);
         } catch (RestClientResponseException exception) {
             int status = exception.getStatusCode().value();
+            log.warn("GitHub installation repositories listing failed. installationId={}, status={}, body={}",
+                    installationId, status, ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
             if (status == 401 || status == 403) {
                 throw new ApiException(IntegrationErrorCode.PROVIDER_RESOURCE_ACCESS_DENIED, exception);
             }
             throw new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE, exception);
         } catch (RestClientException exception) {
+            log.warn("GitHub installation repositories listing call failed without a response (timeout/connection issue). installationId={}",
+                    installationId, exception);
             throw new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE, exception);
         }
     }
@@ -109,12 +122,18 @@ public class GithubAppClient {
                     .toBodilessEntity();
             return IntegrationVerificationStatus.VERIFIED;
         } catch (RestClientResponseException exception) {
+            log.warn("GitHub installation verification failed. installationId={}, status={}, body={}",
+                    installationId, exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
             return exception.getStatusCode().value() == 404
                     ? IntegrationVerificationStatus.DISCONNECTED
                     : IntegrationVerificationStatus.UNAVAILABLE;
         } catch (RestClientException exception) {
+            log.warn("GitHub installation verification call failed without a response (timeout/connection issue). installationId={}",
+                    installationId, exception);
             return IntegrationVerificationStatus.UNAVAILABLE;
         } catch (Exception exception) {
+            log.warn("GitHub installation verification failed unexpectedly. installationId={}", installationId, exception);
             return IntegrationVerificationStatus.UNAVAILABLE;
         }
     }
@@ -138,7 +157,14 @@ public class GithubAppClient {
                     .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
                     .retrieve()
                     .body(JsonNode.class);
+        } catch (RestClientResponseException exception) {
+            log.warn("GitHub App JWT-authenticated call failed. uri={}, status={}, body={}",
+                    uriTemplate, exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
+            throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED, exception);
         } catch (RestClientException exception) {
+            log.warn("GitHub App JWT-authenticated call failed without a response (timeout/connection issue). uri={}",
+                    uriTemplate, exception);
             throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED, exception);
         }
     }

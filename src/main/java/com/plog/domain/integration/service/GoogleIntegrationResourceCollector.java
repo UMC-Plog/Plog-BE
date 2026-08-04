@@ -119,7 +119,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
                                 .asText(activity.path("timeRange").path("endTime").asText(null))),
                         resource.getResourceUrl(), activity.toString());
             }
-            pageToken = nextPageToken(body, requestedPageTokens);
+            pageToken = nextPageToken(body, requestedPageTokens, "drive-activity", fileId);
         } while (pageToken != null && !pageToken.isBlank());
     }
 
@@ -149,7 +149,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
                             reply.toString());
                 }
             }
-            pageToken = nextPageToken(body, requestedPageTokens);
+            pageToken = nextPageToken(body, requestedPageTokens, "drive-comments", fileId);
         } while (pageToken != null && !pageToken.isBlank());
     }
 
@@ -169,17 +169,17 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
                         parseInstant(revision.path("modifiedTime").asText(null)), resource.getResourceUrl(),
                         revision.toString());
             }
-            pageToken = nextPageToken(body, requestedPageTokens);
+            pageToken = nextPageToken(body, requestedPageTokens, "drive-revisions", fileId);
         } while (pageToken != null && !pageToken.isBlank());
     }
 
-    private String nextPageToken(JsonNode response, Set<String> requestedPageTokens) {
+    private String nextPageToken(JsonNode response, Set<String> requestedPageTokens, String context, String fileId) {
         String nextPageToken = response.path("nextPageToken").asText(null);
         if (nextPageToken == null || nextPageToken.isBlank()) {
             return null;
         }
         if (!requestedPageTokens.add(nextPageToken)) {
-            log.warn("Google API pagination loop detected. pageToken={}", nextPageToken);
+            log.warn("Google API pagination loop detected. fileId={}, context={}", fileId, context);
             throw new ProviderResourceAccessException(503, null);
         }
         return nextPageToken;
@@ -257,8 +257,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             return restClient.get().uri(uri).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) {
-            log.warn("Google API returned error response. uri={}, status={}, body={}",
-                    uri, exception.getStatusCode().value(), exception.getResponseBodyAsString());
+            logProviderErrorResponse("Google", uri, exception);
             throw new ProviderResourceAccessException(exception.getStatusCode().value(), exception);
         } catch (RestClientException exception) {
             log.warn("Google API call failed without a response (timeout/connection issue). uri={}", uri, exception);
@@ -271,13 +270,23 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             return restClient.post().uri(uri).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .body(request).retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) {
-            log.warn("Google API returned error response. uri={}, status={}, body={}",
-                    uri, exception.getStatusCode().value(), exception.getResponseBodyAsString());
+            logProviderErrorResponse("Google", uri, exception);
             throw new ProviderResourceAccessException(exception.getStatusCode().value(), exception);
         } catch (RestClientException exception) {
             log.warn("Google API call failed without a response (timeout/connection issue). uri={}", uri, exception);
             throw new ProviderResourceAccessException(503, exception);
         }
+    }
+
+    /** 404는 collectOptional에서 정상적으로 무시되는 흐름이 많아 DEBUG로, 그 외는 WARN으로 남긴다. */
+    private void logProviderErrorResponse(String provider, String uri, RestClientResponseException exception) {
+        int status = exception.getStatusCode().value();
+        String sanitizedBody = ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString());
+        if (status == 404) {
+            log.debug("{} API returned 404 (may be expected for optional resources). uri={}", provider, uri);
+            return;
+        }
+        log.warn("{} API returned error response. uri={}, status={}, body={}", provider, uri, status, sanitizedBody);
     }
 
     private Instant parseInstant(String value) {

@@ -57,6 +57,7 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
                     parseInstant(dataSource.path("last_edited_time").asText(null)), dataSource.path("url").asText(resource.getResourceUrl()),
                     dataSource.toString());
             String cursor = null;
+            Set<String> requestedCursors = new HashSet<>();
             do {
                 JsonNode page = post("/v1/data_sources/" + resource.getProviderResourceId() + "/query", token,
                         cursor == null
@@ -68,7 +69,7 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
                         collectPage(resource, pageId, token, new HashSet<>());
                     }
                 }
-                cursor = page.path("has_more").asBoolean(false) ? page.path("next_cursor").asText(null) : null;
+                cursor = nextCursor(page, requestedCursors, "data-source-query", resource.getProviderResourceId());
             } while (cursor != null && !cursor.isBlank());
         }
     }
@@ -144,6 +145,7 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
             return;
         }
         String cursor = null;
+        Set<String> requestedCursors = new HashSet<>();
         do {
             String path = "/v1/blocks/" + blockId + "/children?page_size=100"
                     + (cursor == null ? "" : "&start_cursor=" + cursor);
@@ -158,7 +160,7 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
                     collectBlocks(resource, id, token, visitedBlocks);
                 }
             }
-            cursor = body.path("has_more").asBoolean(false) ? body.path("next_cursor").asText(null) : null;
+            cursor = nextCursor(body, requestedCursors, "block-children", blockId);
         } while (cursor != null && !cursor.isBlank());
     }
 
@@ -181,6 +183,7 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
 
     private void collectComments(IntegrationResource resource, String pageId, String token) {
         String cursor = null;
+        Set<String> requestedCursors = new HashSet<>();
         do {
             String path = "/v1/comments?block_id=" + pageId + "&page_size=100"
                     + (cursor == null ? "" : "&start_cursor=" + cursor);
@@ -191,8 +194,21 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
                         "comment:" + comment.path("id").asText(), actorId(author), actorName(author), actorEmail(author),
                         parseInstant(comment.path("created_time").asText(null)), resource.getResourceUrl(), comment.toString());
             }
-            cursor = body.path("has_more").asBoolean(false) ? body.path("next_cursor").asText(null) : null;
+            cursor = nextCursor(body, requestedCursors, "page-comments", pageId);
         } while (cursor != null && !cursor.isBlank());
+    }
+
+    private String nextCursor(JsonNode body, Set<String> requestedCursors, String context, String parentId) {
+        boolean hasMore = body.path("has_more").asBoolean(false);
+        String cursor = hasMore ? body.path("next_cursor").asText(null) : null;
+        if (cursor == null || cursor.isBlank()) {
+            return null;
+        }
+        if (!requestedCursors.add(cursor)) {
+            log.warn("Notion API pagination loop detected. parentId={}, context={}", parentId, context);
+            throw new ProviderResourceAccessException(503, null);
+        }
+        return cursor;
     }
 
     private JsonNode get(String path, String token) {
@@ -204,7 +220,8 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
                     .retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) {
             log.warn("Notion API returned error response. path={}, status={}, body={}",
-                    path, exception.getStatusCode().value(), exception.getResponseBodyAsString());
+                    path, exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
             throw new ProviderResourceAccessException(exception.getStatusCode().value(), exception);
         } catch (RestClientException exception) {
             log.warn("Notion API call failed without a response (timeout/connection issue). path={}", path, exception);
@@ -239,7 +256,8 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
                     .retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) {
             log.warn("Notion API returned error response. path={}, status={}, body={}",
-                    path, exception.getStatusCode().value(), exception.getResponseBodyAsString());
+                    path, exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
             throw new ProviderResourceAccessException(exception.getStatusCode().value(), exception);
         } catch (RestClientException exception) {
             log.warn("Notion API call failed without a response (timeout/connection issue). path={}", path, exception);

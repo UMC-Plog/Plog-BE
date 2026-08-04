@@ -16,6 +16,7 @@ import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotionIntegrationService {
@@ -108,7 +110,13 @@ public class NotionIntegrationService {
                     ))
                     .retrieve()
                     .body(JsonNode.class);
+        } catch (RestClientResponseException exception) {
+            log.warn("Notion OAuth token exchange failed. status={}, body={}",
+                    exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
+            throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED, exception);
         } catch (RestClientException exception) {
+            log.warn("Notion OAuth token exchange call failed without a response (timeout/connection issue).", exception);
             throw new ApiException(IntegrationErrorCode.PROVIDER_AUTHORIZATION_FAILED, exception);
         }
     }
@@ -145,10 +153,15 @@ public class NotionIntegrationService {
             projectIntegrationService.rotateOAuthTokens(integration.getId(), accessToken, nextRefreshToken, null);
             return IntegrationVerificationStatus.VERIFIED;
         } catch (RestClientResponseException exception) {
+            log.warn("Notion OAuth token refresh failed. integrationId={}, status={}, body={}",
+                    integration.getId(), exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
             return isInvalidGrant(exception)
                     ? IntegrationVerificationStatus.DISCONNECTED
                     : IntegrationVerificationStatus.UNAVAILABLE;
         } catch (RestClientException | ApiException exception) {
+            log.warn("Notion OAuth token refresh call failed without a usable response. integrationId={}",
+                    integration.getId(), exception);
             return IntegrationVerificationStatus.UNAVAILABLE;
         }
     }
@@ -166,10 +179,14 @@ public class NotionIntegrationService {
                     .toBodilessEntity();
             return TokenCheck.VERIFIED;
         } catch (RestClientResponseException exception) {
+            log.warn("Notion access token check failed. status={}, body={}",
+                    exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
             return exception.getStatusCode().value() == 401
                     ? TokenCheck.AUTHENTICATION_FAILED
                     : TokenCheck.UNAVAILABLE;
         } catch (RestClientException exception) {
+            log.warn("Notion access token check call failed without a response (timeout/connection issue).", exception);
             return TokenCheck.UNAVAILABLE;
         }
     }

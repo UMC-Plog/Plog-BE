@@ -33,6 +33,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 /** 선택 리소스의 provider 검증·등록만 담당한다. 활동 수집과 기여도 계산은 별도 서비스 책임이다. */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class IntegrationResourceService {
@@ -224,9 +226,9 @@ public class IntegrationResourceService {
             }
             return candidates;
         } catch (RestClientResponseException exception) {
-            throw providerException(exception);
+            throw providerException("Notion 리소스 검색", exception);
         } catch (RestClientException exception) {
-            throw new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE, exception);
+            throw providerUnavailableException("Notion 리소스 검색", exception);
         }
     }
 
@@ -259,9 +261,9 @@ public class IntegrationResourceService {
                     parseInstant(body.path("last_edited_time").asText(null))
             );
         } catch (RestClientResponseException exception) {
-            throw providerException(exception);
+            throw providerException("Notion 리소스 검증", exception);
         } catch (RestClientException exception) {
-            throw new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE, exception);
+            throw providerUnavailableException("Notion 리소스 검증", exception);
         }
     }
 
@@ -292,9 +294,9 @@ public class IntegrationResourceService {
                     parseInstant(body.path("modifiedTime").asText(null))
             );
         } catch (RestClientResponseException exception) {
-            throw providerException(exception);
+            throw providerException("Google Drive 리소스 검증", exception);
         } catch (RestClientException exception) {
-            throw new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE, exception);
+            throw providerUnavailableException("Google Drive 리소스 검증", exception);
         }
     }
 
@@ -320,9 +322,9 @@ public class IntegrationResourceService {
                     request.fileUrl(), body.toString(), parseInstant(body.path("lastModified").asText(null))
             );
         } catch (RestClientResponseException exception) {
-            throw providerException(exception);
+            throw providerException("Figma 리소스 검증", exception);
         } catch (RestClientException exception) {
-            throw new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE, exception);
+            throw providerUnavailableException("Figma 리소스 검증", exception);
         }
     }
 
@@ -414,14 +416,21 @@ public class IntegrationResourceService {
         }
     }
 
-    private ApiException providerException(RestClientResponseException exception) {
+    private ApiException providerException(String context, RestClientResponseException exception) {
         int status = exception.getStatusCode().value();
+        log.warn("{} 중 provider 응답 에러. status={}, body={}", context, status,
+                ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
         if (status == 401 || status == 403) {
             return new ApiException(IntegrationErrorCode.PROVIDER_RESOURCE_ACCESS_DENIED, exception);
         }
         if (status == 404) {
             return new ApiException(IntegrationErrorCode.EXTERNAL_RESOURCE_NOT_FOUND, exception);
         }
+        return new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE, exception);
+    }
+
+    private ApiException providerUnavailableException(String context, RestClientException exception) {
+        log.warn("{} 중 provider 응답 없음 (timeout/connection issue).", context, exception);
         return new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE, exception);
     }
 
