@@ -3,6 +3,7 @@ package com.plog.domain.chat.service;
 import com.plog.domain.chat.dto.response.ChatReadResponse;
 import com.plog.domain.chat.entity.ChatRoom;
 import com.plog.domain.chat.entity.ChatRoomReadCursor;
+import com.plog.domain.chat.event.ChatReadUpdatedEvent;
 import com.plog.domain.chat.repository.ChatMessageRepository;
 import com.plog.domain.chat.repository.ChatRoomReadCursorRepository;
 import com.plog.domain.chat.repository.ChatRoomRepository;
@@ -13,6 +14,7 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.global.api.error.ChatErrorCode;
 import com.plog.global.api.exception.ApiException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +26,7 @@ public class ChatReadService {
     private final ChatMessageRepository chatMessageRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final ChatRoomReadCursorRepository chatRoomReadCursorRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public ChatReadResponse markAsRead(Long roomId, Long userId, Long lastReadMessageId) {
@@ -53,6 +56,11 @@ public class ChatReadService {
         long unreadCount = chatRoomReadCursorRepository.findUnreadCount(roomId, userId, MemberStatus.ACTIVE)
                 .map(ChatRoomUnreadCount::getUnreadCount)
                 .orElse(0L);
+
+        // 커밋 후에만 발행됨(AFTER_COMMIT) — 같은 계정의 다른 세션(기기/탭)에
+        // unread count 변경을 실시간으로 동기화하기 위함
+        eventPublisher.publishEvent(new ChatReadUpdatedEvent(
+                roomId, userId, cursor.getLastReadMessageSequence(), unreadCount));
 
         return new ChatReadResponse(roomId, cursor.getLastReadMessageSequence(), unreadCount);
     }
