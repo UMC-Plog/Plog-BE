@@ -1,10 +1,6 @@
 package com.plog.domain.task.dto.response;
 
-import com.plog.domain.task.entity.AttachmentType;
-import com.plog.domain.task.entity.Task;
-import com.plog.domain.task.entity.TaskAttachment;
-import com.plog.domain.task.entity.TaskCategory;
-import com.plog.domain.task.entity.TaskStatus;
+import com.plog.domain.task.entity.*;
 import com.plog.domain.user.entity.ProfilePreset;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
@@ -74,7 +70,7 @@ public record TaskDetailResponse(
 
     public static TaskDetailResponse from(Task task, List<AttachmentResponse> attachments) {
         int dDay = calculateDDay(task);
-        boolean overdue = isOverdue(task);
+        boolean overdue = TaskOverdueCalculator.isOverdue(task);
         return new TaskDetailResponse(
                 task.getId(),
                 task.getTitle(),
@@ -95,12 +91,6 @@ public record TaskDetailResponse(
             return 0;
         }
         return (int) ChronoUnit.DAYS.between(LocalDate.now(), task.getEndDate());
-    }
-
-    private static boolean isOverdue(Task task) {
-        return task.getEndDate() != null
-                && task.getCardStatus() != TaskStatus.DONE
-                && task.getEndDate().isBefore(LocalDate.now());
     }
 
     // 마감이 이미 지난 경우(overdue)는 임박이 아니라 초과이므로 배타적으로 처리
