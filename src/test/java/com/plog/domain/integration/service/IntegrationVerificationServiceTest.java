@@ -51,7 +51,7 @@ class IntegrationVerificationServiceTest {
         assertThatThrownBy(() -> service.requireVerifiedConnection(1L, LinkType.GITHUB))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode())
-                                .isEqualTo(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND));
+                                .isEqualTo(IntegrationErrorCode.PROVIDER_REAUTHORIZATION_REQUIRED));
 
         verify(projectIntegrationService).requireReauthorization(10L);
     }
