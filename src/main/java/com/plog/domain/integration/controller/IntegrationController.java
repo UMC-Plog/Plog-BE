@@ -91,7 +91,8 @@ public class IntegrationController implements IntegrationControllerDoc {
             case "github" -> githubIntegrationService.issueAuthorizationUrl(projectId, userId);
             case "figma" -> figmaIntegrationService.issueAuthorizationUrl(projectId, userId);
             case "notion" -> notionIntegrationService.issueAuthorizationUrl(projectId, userId);
-            case "google" -> googleIntegrationService.issueAuthorizationUrl(projectId, userId);
+            case "google-docs" -> googleIntegrationService.issueAuthorizationUrl(projectId, userId, LinkType.GOOGLE_DOCS);
+            case "google-slides" -> googleIntegrationService.issueAuthorizationUrl(projectId, userId, LinkType.GOOGLE_SLIDES);
             default -> throw new ApiException(IntegrationErrorCode.UNSUPPORTED_PROVIDER);
         };
         return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.AUTHORIZATION_URL_ISSUED, response));
@@ -135,12 +136,14 @@ public class IntegrationController implements IntegrationControllerDoc {
     }
 
     @Override
-    @PostMapping("/projects/{projectId}/integrations/google/picker-access-token")
+    @PostMapping("/projects/{projectId}/integrations/{provider}/picker-access-token")
     public ResponseEntity<ApiResponse<GooglePickerAccessTokenResponse>> issueGooglePickerAccessToken(
             @PathVariable Long projectId,
+            @PathVariable String provider,
             @AuthenticationPrincipal Long userId
     ) {
-        GooglePickerAccessTokenResponse response = googlePickerAccessTokenService.issue(projectId, userId);
+        GooglePickerAccessTokenResponse response = googlePickerAccessTokenService.issue(
+                projectId, userId, parseLinkType(provider));
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(ApiResponse.success(IntegrationSuccessCode.GOOGLE_PICKER_ACCESS_TOKEN_ISSUED, response));
@@ -208,13 +211,15 @@ public class IntegrationController implements IntegrationControllerDoc {
     }
 
     @Override
-    @PostMapping("/projects/{projectId}/integrations/google/resources")
+    @PostMapping("/projects/{projectId}/integrations/{provider}/resources")
     public ResponseEntity<ApiResponse<IntegrationResourceResponse>> registerGoogleResource(
             @PathVariable Long projectId,
+            @PathVariable String provider,
             @Valid @RequestBody GoogleResourceRegisterRequest request,
             @AuthenticationPrincipal Long userId
     ) {
-        IntegrationResourceResponse response = integrationResourceService.registerGoogle(projectId, userId, request);
+        IntegrationResourceResponse response = integrationResourceService.registerGoogle(
+                projectId, userId, parseGoogleLinkType(provider), request);
         return ResponseEntity.status(IntegrationSuccessCode.INTEGRATION_RESOURCE_REGISTERED.getHttpStatus())
                 .body(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_RESOURCE_REGISTERED, response));
     }
@@ -255,7 +260,8 @@ public class IntegrationController implements IntegrationControllerDoc {
                 case "github" -> githubIntegrationService.completeCallback(state, requireCallbackValue(installationId));
                 case "figma" -> figmaIntegrationService.completeCallback(state, requireCallbackValue(code));
                 case "notion" -> notionIntegrationService.completeCallback(state, requireCallbackValue(code));
-                case "google" -> googleIntegrationService.completeCallback(state, requireCallbackValue(code));
+                case "google-docs" -> googleIntegrationService.completeCallback(LinkType.GOOGLE_DOCS, state, requireCallbackValue(code));
+                case "google-slides" -> googleIntegrationService.completeCallback(LinkType.GOOGLE_SLIDES, state, requireCallbackValue(code));
                 default -> throw new ApiException(IntegrationErrorCode.UNSUPPORTED_PROVIDER);
             };
             return new RedirectView(successRedirectUrl(response));
@@ -273,7 +279,16 @@ public class IntegrationController implements IntegrationControllerDoc {
             case "github" -> LinkType.GITHUB;
             case "figma" -> LinkType.FIGMA;
             case "notion" -> LinkType.NOTION;
-            case "google" -> LinkType.GOOGLE;
+            case "google-docs" -> LinkType.GOOGLE_DOCS;
+            case "google-slides" -> LinkType.GOOGLE_SLIDES;
+            default -> throw new ApiException(IntegrationErrorCode.UNSUPPORTED_PROVIDER);
+        };
+    }
+
+    private LinkType parseGoogleLinkType(String provider) {
+        return switch (normalize(provider)) {
+            case "google-docs" -> LinkType.GOOGLE_DOCS;
+            case "google-slides" -> LinkType.GOOGLE_SLIDES;
             default -> throw new ApiException(IntegrationErrorCode.UNSUPPORTED_PROVIDER);
         };
     }

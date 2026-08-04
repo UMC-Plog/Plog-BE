@@ -15,6 +15,7 @@ import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.Instant;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -33,14 +34,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 @RequiredArgsConstructor
 public class GoogleIntegrationService {
     private static final String DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
-    private static final String[] SCOPES = {
-            "openid",
-            "email",
-            "profile",
-            DRIVE_FILE_SCOPE,
-            "https://www.googleapis.com/auth/drive.activity.readonly",
-            "https://www.googleapis.com/auth/drive.metadata.readonly"
-    };
+    private static final String DOCS_READONLY_SCOPE = "https://www.googleapis.com/auth/documents.readonly";
+    private static final String SLIDES_READONLY_SCOPE = "https://www.googleapis.com/auth/presentations.readonly";
 
     private final GoogleIntegrationProperties properties;
     private final ProjectRepository projectRepository;
@@ -49,31 +44,44 @@ public class GoogleIntegrationService {
     private final ProjectIntegrationService projectIntegrationService;
     private final RestClient restClient = ProviderRestClientFactory.create();
 
+    private static final String[] DOCS_SCOPES = {
+            "openid", "email", "profile", DRIVE_FILE_SCOPE,
+            "https://www.googleapis.com/auth/drive.activity.readonly",
+            "https://www.googleapis.com/auth/drive.metadata.readonly",
+            DOCS_READONLY_SCOPE
+    };
+    private static final String[] SLIDES_SCOPES = {
+            "openid", "email", "profile", DRIVE_FILE_SCOPE,
+            "https://www.googleapis.com/auth/drive.activity.readonly",
+            "https://www.googleapis.com/auth/drive.metadata.readonly",
+            SLIDES_READONLY_SCOPE
+    };
+
     @Transactional
-    public IntegrationAuthorizationResponse issueAuthorizationUrl(Long projectId, Long userId) {
+    public IntegrationAuthorizationResponse issueAuthorizationUrl(Long projectId, Long userId, LinkType linkType) {
         ProjectMember member = requireMember(projectId, userId);
-        projectIntegrationService.requireNotConnected(projectId, LinkType.GOOGLE);
-        IntegrationAuthorizationStateService.IssuedState state = authorizationStateService.issue(member, LinkType.GOOGLE);
+        projectIntegrationService.requireNotConnected(projectId, linkType);
+        IntegrationAuthorizationStateService.IssuedState state = authorizationStateService.issue(member, linkType);
+        String[] scopes = linkType == LinkType.GOOGLE_SLIDES ? SLIDES_SCOPES : DOCS_SCOPES;
+        String callbackUrl = getCallbackUrl(linkType);
         String url = UriComponentsBuilder.fromUriString("https://accounts.google.com/o/oauth2/v2/auth")
                 .queryParam("client_id", require(properties.clientId()))
-                .queryParam("redirect_uri", require(properties.callbackUrl()))
+                .queryParam("redirect_uri", require(callbackUrl))
                 .queryParam("response_type", "code")
-                .queryParam("scope", String.join(" ", SCOPES))
+                .queryParam("scope", String.join(" ", scopes))
                 .queryParam("access_type", "offline")
                 .queryParam("prompt", "consent")
                 .queryParam("include_granted_scopes", "true")
                 .queryParam("state", state.value())
-                .build()
-                .encode()
-                .toUriString();
-        return new IntegrationAuthorizationResponse(LinkType.GOOGLE, url, state.expiresAt());
+                .build().encode().toUriString();
+        return new IntegrationAuthorizationResponse(linkType, url, state.expiresAt());
     }
 
-    public IntegrationConnectionResponse completeCallback(String state, String code) {
-        IntegrationAuthorizationState authorizationState = authorizationStateService.consume(state, LinkType.GOOGLE);
+    public IntegrationConnectionResponse completeCallback(LinkType linkType, String state, String code) {
+        IntegrationAuthorizationState authorizationState = authorizationStateService.consume(state, linkType);
         projectIntegrationService.requireNotConnected(
-                authorizationState.getProjectMember().getProject().getId(), LinkType.GOOGLE);
-        JsonNode token = exchangeCode(code);
+                authorizationState.getProjectMember().getProject().getId(), linkType);
+        JsonNode token = exchangeCode(code, linkType);
         String accessToken = requiredField(token, "access_token");
         String refreshToken = requiredRefreshToken(token);
         JsonNode profile = profile(accessToken);
@@ -81,7 +89,7 @@ public class GoogleIntegrationService {
         String externalAccountName = profile.path("email").asText(profile.path("name").asText(externalAccountId));
         ProjectIntegration integration = projectIntegrationService.connect(
                 authorizationState.getProjectMember(),
-                LinkType.GOOGLE,
+                linkType,
                 IntegrationCredentialType.OAUTH,
                 externalAccountId,
                 externalAccountName,
@@ -92,7 +100,7 @@ public class GoogleIntegrationService {
         );
         return new IntegrationConnectionResponse(
                 integration.getProject().getId(),
-                LinkType.GOOGLE,
+                linkType,
                 integration.getExternalAccountName()
         );
     }
@@ -108,7 +116,7 @@ public class GoogleIntegrationService {
         } catch (ApiException exception) {
             return IntegrationVerificationStatus.UNAVAILABLE;
         }
-        TokenCheck tokenCheck = checkAccessToken(accessToken);
+        TokenCheck tokenCheck = checkAccessToken(accessToken, integration.getLinkType());
         if (tokenCheck == TokenCheck.VERIFIED) {
             return IntegrationVerificationStatus.VERIFIED;
         }
@@ -118,13 +126,13 @@ public class GoogleIntegrationService {
         return refreshAndVerify(integration);
     }
 
-    private JsonNode exchangeCode(String code) {
+    private JsonNode exchangeCode(String code, LinkType linkType) {
         try {
             MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
             body.add("code", require(code));
             body.add("client_id", require(properties.clientId()));
             body.add("client_secret", require(properties.clientSecret()));
-            body.add("redirect_uri", require(properties.callbackUrl()));
+            body.add("redirect_uri", require(getCallbackUrl(linkType)));
             body.add("grant_type", "authorization_code");
             return restClient.post()
                     .uri("https://oauth2.googleapis.com/token")
@@ -187,7 +195,7 @@ public class GoogleIntegrationService {
             if (accessToken == null || accessToken.isBlank()) {
                 return IntegrationVerificationStatus.UNAVAILABLE;
             }
-            TokenCheck tokenCheck = checkAccessToken(accessToken);
+            TokenCheck tokenCheck = checkAccessToken(accessToken, integration.getLinkType());
             if (tokenCheck != TokenCheck.VERIFIED) {
                 return tokenCheck == TokenCheck.AUTHENTICATION_FAILED
                         ? IntegrationVerificationStatus.DISCONNECTED
@@ -213,7 +221,7 @@ public class GoogleIntegrationService {
         }
     }
 
-    private TokenCheck checkAccessToken(String accessToken) {
+    private TokenCheck checkAccessToken(String accessToken, LinkType linkType) {
         if (accessToken == null || accessToken.isBlank()) {
             return TokenCheck.AUTHENTICATION_FAILED;
         }
@@ -223,7 +231,7 @@ public class GoogleIntegrationService {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                     .retrieve()
                     .toBodilessEntity();
-            if (!hasDriveFileScope(accessToken)) {
+            if (!hasRequiredScopes(accessToken, linkType)) {
                 return TokenCheck.AUTHENTICATION_FAILED;
             }
             return TokenCheck.VERIFIED;
@@ -240,7 +248,7 @@ public class GoogleIntegrationService {
         }
     }
 
-    private boolean hasDriveFileScope(String accessToken) {
+    private boolean hasRequiredScopes(String accessToken, LinkType linkType) {
         try {
             JsonNode tokenInfo = restClient.get()
                     .uri(uriBuilder -> uriBuilder
@@ -252,18 +260,38 @@ public class GoogleIntegrationService {
                     .retrieve()
                     .body(JsonNode.class);
             String scopes = tokenInfo == null ? "" : tokenInfo.path("scope").asText("");
-            for (String scope : scopes.split("\\s+")) {
-                if (DRIVE_FILE_SCOPE.equals(scope)) {
-                    return true;
-                }
+            Set<String> scopeSet = Set.of(scopes.split("\\s+"));
+            if (!scopeSet.contains(DRIVE_FILE_SCOPE)) {
+                return false;
             }
-            return false;
+            if (linkType == LinkType.GOOGLE_DOCS && !scopeSet.contains(DOCS_READONLY_SCOPE)) {
+                return false;
+            }
+            if (linkType == LinkType.GOOGLE_SLIDES && !scopeSet.contains(SLIDES_READONLY_SCOPE)) {
+                return false;
+            }
+            return true;
         } catch (RestClientResponseException exception) {
             if (exception.getStatusCode().value() == 400 || exception.getStatusCode().value() == 401) {
                 return false;
             }
             throw exception;
         }
+    }
+
+    private String getCallbackUrl(LinkType linkType) {
+        String baseCallbackUrl = properties.callbackUrl();
+        if (baseCallbackUrl == null || baseCallbackUrl.isBlank()) {
+            throw new ApiException(IntegrationErrorCode.PROVIDER_CONFIGURATION_ERROR);
+        }
+        String providerSegment = linkType == LinkType.GOOGLE_SLIDES ? "google-slides" : "google-docs";
+        if (baseCallbackUrl.contains("/integrations/google/callback")) {
+            return baseCallbackUrl.replace("/integrations/google/callback", "/integrations/" + providerSegment + "/callback");
+        }
+        if (baseCallbackUrl.contains("/integrations/google-docs/callback") || baseCallbackUrl.contains("/integrations/google-slides/callback")) {
+            return baseCallbackUrl.replaceFirst("/integrations/google-(docs|slides)/callback", "/integrations/" + providerSegment + "/callback");
+        }
+        return baseCallbackUrl;
     }
 
     private boolean isInvalidGrant(RestClientResponseException exception) {

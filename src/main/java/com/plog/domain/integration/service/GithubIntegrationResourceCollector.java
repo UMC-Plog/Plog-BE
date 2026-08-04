@@ -31,8 +31,8 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
     private final RestClient restClient = ProviderRestClientFactory.create();
 
     @Override
-    public LinkType provider() {
-        return LinkType.GITHUB;
+    public List<LinkType> providers() {
+        return List.of(LinkType.GITHUB);
     }
 
     @Override

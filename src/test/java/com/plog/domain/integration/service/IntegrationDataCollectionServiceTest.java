@@ -31,25 +31,18 @@ class IntegrationDataCollectionServiceTest {
 
     @Mock
     private IntegrationResourceRepository integrationResourceRepository;
-
     @Mock
     private ProjectRepository projectRepository;
-
     @Mock
     private ProjectAccessService projectAccessService;
-
     @Mock
     private IntegrationResourceService integrationResourceService;
-
     @Mock
     private IntegrationActivityStoreService integrationActivityStoreService;
-
     @Mock
     private IntegrationVerificationService integrationVerificationService;
-
     @Mock
     private IntegrationResourceCollectionStateService resourceCollectionStateService;
-
     @Mock
     private ProjectIntegrationService projectIntegrationService;
 
@@ -58,10 +51,11 @@ class IntegrationDataCollectionServiceTest {
 
     @BeforeEach
     void setUp() {
+        // Docs/Slides 둘 다 처리하는 구글 컬렉터 하나로 가정
         collector = new IntegrationResourceCollector() {
             @Override
-            public LinkType provider() {
-                return LinkType.GOOGLE;
+            public List<LinkType> providers() {
+                return List.of(LinkType.GOOGLE_DOCS, LinkType.GOOGLE_SLIDES);
             }
 
             @Override
@@ -88,28 +82,15 @@ class IntegrationDataCollectionServiceTest {
     void collectsAvailableResourcesAndReturnsIdentifiablePartialFailures() {
         Long projectId = 1L;
         Long userId = 10L;
-        Project project = Project.builder()
-                .id(projectId)
-                .projectName("Plog")
-                .inviteTokenHash("hash")
-                .inviteTokenEncrypted("encrypted")
-                .projectType(ProjectType.DEVELOP)
-                .status(ProjectStatus.IN_PROGRESS)
-                .startDay(LocalDate.of(2026, 7, 1))
-                .endDay(LocalDate.of(2026, 8, 1))
-                .build();
-        ProjectIntegration projectIntegration = ProjectIntegration.builder()
-                .id(20L)
-                .project(project)
-                .linkType(LinkType.GOOGLE)
-                .credentialType(IntegrationCredentialType.OAUTH)
-                .externalAccountId("google-account")
-                .externalAccountName("team@plog.test")
-                .providerConnectionId("google-account")
-                .build();
+        Project project = project(projectId);
+
+        // Docs 연동 / Slides 연동을 각각 별개의 ProjectIntegration으로 분리
+        ProjectIntegration googleDocsIntegration = googleIntegration(project, LinkType.GOOGLE_DOCS, 20L);
+        ProjectIntegration googleSlidesIntegration = googleIntegration(project, LinkType.GOOGLE_SLIDES, 21L);
+
         IntegrationResource collectedResource = IntegrationResource.builder()
                 .id(101L)
-                .projectIntegration(projectIntegration)
+                .projectIntegration(googleDocsIntegration)
                 .resourceType(IntegrationResourceType.GOOGLE_DOCUMENT)
                 .providerResourceId("available-file")
                 .resourceName("프로젝트 기획서")
@@ -118,13 +99,14 @@ class IntegrationDataCollectionServiceTest {
                 .build();
         IntegrationResource missingResource = IntegrationResource.builder()
                 .id(102L)
-                .projectIntegration(projectIntegration)
+                .projectIntegration(googleSlidesIntegration)
                 .resourceType(IntegrationResourceType.GOOGLE_PRESENTATION)
                 .providerResourceId("missing-file")
                 .resourceName("삭제된 발표자료")
                 .resourceUrl("https://docs.google.com/presentation/d/missing-file")
                 .resourceStatus(IntegrationResourceStatus.ACTIVE)
                 .build();
+
         given(projectRepository.existsById(projectId)).willReturn(true);
         given(integrationResourceRepository
                 .findAllByProjectIntegrationProjectIdAndResourceStatusOrderByIdAsc(
@@ -138,11 +120,14 @@ class IntegrationDataCollectionServiceTest {
         assertEquals(1, response.collectedResourceCount());
         assertEquals(1, response.failures().size());
         assertEquals(102L, response.failures().get(0).resourceId());
-        assertEquals(LinkType.GOOGLE, response.failures().get(0).linkType());
+        assertEquals(LinkType.GOOGLE_SLIDES, response.failures().get(0).linkType());
         assertEquals("삭제된 발표자료", response.failures().get(0).resourceName());
         assertEquals("provider resource not found", response.failures().get(0).reason());
+
         verify(projectAccessService).requireActiveMember(projectId, userId);
-        verify(integrationVerificationService).requireVerifiedConnection(projectId, LinkType.GOOGLE);
+        // 연동이 두 개(Docs/Slides)라서 각각 검증됨
+        verify(integrationVerificationService).requireVerifiedConnection(projectId, LinkType.GOOGLE_DOCS);
+        verify(integrationVerificationService).requireVerifiedConnection(projectId, LinkType.GOOGLE_SLIDES);
         verify(resourceCollectionStateService).markCollected(
                 org.mockito.ArgumentMatchers.eq(collectedResource.getId()),
                 org.mockito.ArgumentMatchers.any()
@@ -169,8 +154,8 @@ class IntegrationDataCollectionServiceTest {
     void retriesTemporaryFailureTwiceAndReturnsUnavailableFailure() {
         Long projectId = 1L;
         Long userId = 10L;
-        IntegrationResource resource = resource(project(projectId), "temporary-file");
-        CountingFailureCollector failureCollector = new CountingFailureCollector(503);
+        IntegrationResource resource = resource(project(projectId), LinkType.GOOGLE_DOCS, "temporary-file");
+        CountingFailureCollector failureCollector = new CountingFailureCollector(503, LinkType.GOOGLE_DOCS);
         IntegrationDataCollectionService service = serviceWith(failureCollector);
         given(projectRepository.existsById(projectId)).willReturn(true);
         given(integrationResourceRepository
@@ -190,8 +175,9 @@ class IntegrationDataCollectionServiceTest {
     private void assertReauthorizationFailure(int statusCode, String expectedReason) {
         Long projectId = 1L;
         Long userId = 10L;
-        IntegrationResource resource = resource(project(projectId), "denied-file");
-        IntegrationDataCollectionService service = serviceWith(new CountingFailureCollector(statusCode));
+        IntegrationResource resource = resource(project(projectId), LinkType.GOOGLE_DOCS, "denied-file");
+        IntegrationDataCollectionService service =
+                serviceWith(new CountingFailureCollector(statusCode, LinkType.GOOGLE_DOCS));
         given(projectRepository.existsById(projectId)).willReturn(true);
         given(integrationResourceRepository
                 .findAllByProjectIntegrationProjectIdAndResourceStatusOrderByIdAsc(
@@ -232,16 +218,20 @@ class IntegrationDataCollectionServiceTest {
                 .build();
     }
 
-    private IntegrationResource resource(Project project, String providerResourceId) {
-        ProjectIntegration integration = ProjectIntegration.builder()
-                .id(20L)
+    private ProjectIntegration googleIntegration(Project project, LinkType linkType, Long id) {
+        return ProjectIntegration.builder()
+                .id(id)
                 .project(project)
-                .linkType(LinkType.GOOGLE)
+                .linkType(linkType)
                 .credentialType(IntegrationCredentialType.OAUTH)
                 .externalAccountId("google-account")
                 .externalAccountName("team@plog.test")
                 .providerConnectionId("google-account")
                 .build();
+    }
+
+    private IntegrationResource resource(Project project, LinkType linkType, String providerResourceId) {
+        ProjectIntegration integration = googleIntegration(project, linkType, 20L);
         return IntegrationResource.builder()
                 .id(101L)
                 .projectIntegration(integration)
@@ -255,15 +245,17 @@ class IntegrationDataCollectionServiceTest {
 
     private static final class CountingFailureCollector implements IntegrationResourceCollector {
         private final int statusCode;
+        private final LinkType linkType;
         private int attempts;
 
-        private CountingFailureCollector(int statusCode) {
+        private CountingFailureCollector(int statusCode, LinkType linkType) {
             this.statusCode = statusCode;
+            this.linkType = linkType;
         }
 
         @Override
-        public LinkType provider() {
-            return LinkType.GOOGLE;
+        public List<LinkType> providers() {
+            return List.of(linkType);
         }
 
         @Override

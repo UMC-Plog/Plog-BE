@@ -55,7 +55,7 @@ public class IntegrationVerificationService {
             case GITHUB -> githubAppClient.verifyInstallation(integration.getProviderConnectionId());
             case FIGMA -> figmaIntegrationService.verifyConnection(integration);
             case NOTION -> notionIntegrationService.verifyConnection(integration);
-            case GOOGLE -> googleIntegrationService.verifyConnection(integration);
+            case GOOGLE_DOCS, GOOGLE_SLIDES -> googleIntegrationService.verifyConnection(integration);
         };
     }
 }
