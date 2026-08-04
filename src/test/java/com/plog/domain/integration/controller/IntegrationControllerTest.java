@@ -120,7 +120,8 @@ class IntegrationControllerTest {
                         new IntegrationItemResponse(LinkType.GITHUB, true, "github-user"),
                         new IntegrationItemResponse(LinkType.FIGMA, false, null),
                         new IntegrationItemResponse(LinkType.NOTION, true, "notion-user"),
-                        new IntegrationItemResponse(LinkType.GOOGLE, false, null)
+                        new IntegrationItemResponse(LinkType.GOOGLE_DOCS, false, null),
+                        new IntegrationItemResponse(LinkType.GOOGLE_SLIDES, false, null)
                 )));
 
         mockMvc.perform(get("/api/projects/{projectId}/integrations", projectId))
@@ -139,13 +140,17 @@ class IntegrationControllerTest {
                 .andExpect(jsonPath("$.result.integrations[2].linkType").value("NOTION"))
                 .andExpect(jsonPath("$.result.integrations[2].linked").value(true))
                 .andExpect(jsonPath("$.result.integrations[2].connectedAccountName").value("notion-user"))
-                .andExpect(jsonPath("$.result.integrations[3].linkType").value("GOOGLE"))
+                .andExpect(jsonPath("$.result.integrations[3].linkType").value("GOOGLE_DOCS"))
                 .andExpect(jsonPath("$.result.integrations[3].linked").value(false))
                 .andExpect(jsonPath("$.result.integrations[3].connectedAccountName").value(nullValue()))
+                .andExpect(jsonPath("$.result.integrations[4].linkType").value("GOOGLE_SLIDES"))
+                .andExpect(jsonPath("$.result.integrations[4].linked").value(false))
+                .andExpect(jsonPath("$.result.integrations[4].connectedAccountName").value(nullValue()))
                 .andExpect(jsonPath("$.result.integrations[0].accessToken").doesNotExist())
                 .andExpect(jsonPath("$.result.integrations[1].accessToken").doesNotExist())
                 .andExpect(jsonPath("$.result.integrations[2].accessToken").doesNotExist())
-                .andExpect(jsonPath("$.result.integrations[3].accessToken").doesNotExist());
+                .andExpect(jsonPath("$.result.integrations[3].accessToken").doesNotExist())
+                .andExpect(jsonPath("$.result.integrations[4].accessToken").doesNotExist());
     }
 
     @Test
@@ -428,7 +433,7 @@ class IntegrationControllerTest {
         Long userId = 10L;
         authenticate(userId);
         given(integrationResourceService.registerGoogle(
-                eq(projectId), eq(userId), any(GoogleResourceRegisterRequest.class)))
+                eq(projectId), eq(userId), eq(LinkType.GOOGLE_DOCS), any(GoogleResourceRegisterRequest.class)))
                 .willReturn(new IntegrationResourceResponse(
                         2L,
                         "google-file-id",
@@ -440,13 +445,13 @@ class IntegrationControllerTest {
                         null
                 ));
 
-        mockMvc.perform(post("/api/projects/{projectId}/integrations/google/resources", projectId)
+        mockMvc.perform(post("/api/projects/{projectId}/integrations/google-docs/resources", projectId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {
-                                  "fileId": "google-file-id"
-                                }
-                                """))
+                            {
+                              "fileId": "google-file-id"
+                            }
+                            """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("INTEGRATION005"))
                 .andExpect(jsonPath("$.result.resourceType").value("GOOGLE_DOCUMENT"))
@@ -543,16 +548,16 @@ class IntegrationControllerTest {
         Long userId = 10L;
         authenticate(userId);
         given(integrationResourceService.registerGoogle(
-                eq(projectId), eq(userId), any(GoogleResourceRegisterRequest.class)))
+                eq(projectId), eq(userId), eq(LinkType.GOOGLE_DOCS), any(GoogleResourceRegisterRequest.class)))
                 .willThrow(new ApiException(IntegrationErrorCode.EXTERNAL_RESOURCE_NOT_FOUND));
 
-        mockMvc.perform(post("/api/projects/{projectId}/integrations/google/resources", projectId)
+        mockMvc.perform(post("/api/projects/{projectId}/integrations/google-docs/resources", projectId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {
-                                  "fileId": "missing-google-file-id"
-                                }
-                                """))
+                    {
+                      "fileId": "missing-google-file-id"
+                    }
+                    """))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("INTEGRATION007"));
     }
@@ -591,7 +596,7 @@ class IntegrationControllerTest {
                         2,
                         List.of(new IntegrationCollectionFailureResponse(
                                 12L,
-                                LinkType.GOOGLE,
+                                LinkType.GOOGLE_DOCS,
                                 "캡스톤 발표자료",
                                 "provider resource access denied"
                         ))
@@ -605,7 +610,7 @@ class IntegrationControllerTest {
                 .andExpect(jsonPath("$.result.requestedResourceCount").value(3))
                 .andExpect(jsonPath("$.result.collectedResourceCount").value(2))
                 .andExpect(jsonPath("$.result.failures[0].resourceId").value(12L))
-                .andExpect(jsonPath("$.result.failures[0].linkType").value("GOOGLE"))
+                .andExpect(jsonPath("$.result.failures[0].linkType").value("GOOGLE_DOCS"))
                 .andExpect(jsonPath("$.result.failures[0].resourceName").value("캡스톤 발표자료"))
                 .andExpect(jsonPath("$.result.failures[0].reason").value("provider resource access denied"));
     }

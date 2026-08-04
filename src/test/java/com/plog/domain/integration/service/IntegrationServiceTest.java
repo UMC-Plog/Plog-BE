@@ -83,11 +83,11 @@ class IntegrationServiceTest {
         assertThat(response.projectId()).isEqualTo(projectId);
         assertThat(response.projectMemberId()).isEqualTo(100L);
         assertThat(response.integrations()).extracting("linkType")
-                .containsExactly(LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION, LinkType.GOOGLE);
+                .containsExactly(LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION,  LinkType.GOOGLE_DOCS, LinkType.GOOGLE_SLIDES);
         assertThat(response.integrations()).extracting("linked")
-                .containsExactly(true, false, true, false);
+                .containsExactly(true, false, true, false, false);
         assertThat(response.integrations()).extracting("connectedAccountName")
-                .containsExactly("github-user", null, "notion-user", null);
+                .containsExactly("github-user", null, "notion-user", null, null);
         verify(projectIntegrationRepository).findAllByProjectIdOrderByLinkTypeAsc(projectId);
     }
 
@@ -171,11 +171,11 @@ class IntegrationServiceTest {
         IntegrationStatusResponse response = integrationService.getProjectIntegrations(projectId, userId);
 
         assertThat(response.integrations()).extracting("linkType")
-                .containsExactly(LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION, LinkType.GOOGLE);
+                .containsExactly(LinkType.GITHUB, LinkType.FIGMA, LinkType.NOTION,  LinkType.GOOGLE_DOCS, LinkType.GOOGLE_SLIDES);
         assertThat(response.integrations()).extracting("linked")
-                .containsExactly(false, false, false, false);
+                .containsExactly(false, false, false, false, false);
         assertThat(response.integrations()).extracting("connectedAccountName")
-                .containsExactly(null, null, null, null);
+                .containsExactly(null, null, null, null, null);
         verify(projectIntegrationRepository).findAllByProjectIdOrderByLinkTypeAsc(projectId);
     }
 

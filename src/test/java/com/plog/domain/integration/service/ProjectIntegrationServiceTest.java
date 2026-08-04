@@ -168,12 +168,12 @@ class ProjectIntegrationServiceTest {
         IntegrationResource resource = IntegrationResource.builder()
                 .resourceStatus(IntegrationResourceStatus.REAUTH_REQUIRED)
                 .build();
-        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GOOGLE))
+        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GOOGLE_DOCS))
                 .willReturn(Optional.of(integration));
         given(integrationResourceRepository.findAllByProjectIntegrationIdOrderByIdAsc(10L))
                 .willReturn(List.of(resource));
 
-        service.disconnect(1L, LinkType.GOOGLE);
+        service.disconnect(1L, LinkType.GOOGLE_DOCS);
 
         assertThat(integration.getConnectionStatus()).isEqualTo(IntegrationConnectionStatus.REVOKED);
         assertThat(resource.getResourceStatus()).isEqualTo(IntegrationResourceStatus.DISABLED);
