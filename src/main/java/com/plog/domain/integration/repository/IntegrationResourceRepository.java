@@ -5,10 +5,8 @@ import com.plog.domain.integration.entity.IntegrationResourceStatus;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.jpa.repository.EntityGraph;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Query;
+
+import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 public interface IntegrationResourceRepository extends JpaRepository<IntegrationResource, Long> {
@@ -44,4 +42,9 @@ public interface IntegrationResourceRepository extends JpaRepository<Integration
             @Param("resourceId") Long id,
             @Param("projectIntegrationId") Long projectIntegrationId
     );
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("delete from IntegrationResource resource where resource.projectIntegration.id = :projectIntegrationId")
+    void deleteAllByProjectIntegrationId(@Param("projectIntegrationId") Long projectIntegrationId);
 }
+
