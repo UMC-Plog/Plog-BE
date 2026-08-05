@@ -20,4 +20,6 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
     // 4단계 정량계산에서 멤버별로 묶어서 집계할 때 사용
     List<ReportActivityLog> findByProjectMember_IdAndSourceDomainIn(
             Long projectMemberId, List<SourceDomain> sourceDomains);
+
+    List<ReportActivityLog> findByProjectMember_Id(Long projectMemberId);
 }
