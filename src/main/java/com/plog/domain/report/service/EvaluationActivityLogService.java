@@ -34,12 +34,12 @@ public class EvaluationActivityLogService {
                 evaluation.getFeedback(),
                 occurredAt,
                 "{\"evaluationId\":" + evaluationId
-                         ",\"evaluatorId\":" + evaluation.getEvaluator().getId()
-                        ",\"evaluateeId\":" + evaluation.getEvaluatee().getId()
-                        ",\"collaborationScore\":" + evaluation.getCollaborationScore()
-                        ",\"initiativeScore\":" + evaluation.getInitiativeScore()
-                        ",\"communicationScore\":" + evaluation.getCommunicationScore()
-                        ",\"outputScore\":" + evaluation.getOutputScore() + "}");
+                        + ",\"evaluatorId\":" + evaluation.getEvaluator().getId()
+                        + ",\"evaluateeId\":" + evaluation.getEvaluatee().getId()
+                        + ",\"collaborationScore\":" + evaluation.getCollaborationScore()
+                        + ",\"initiativeScore\":" + evaluation.getInitiativeScore()
+                        + ",\"communicationScore\":" + evaluation.getCommunicationScore()
+                        + ",\"outputScore\":" + evaluation.getOutputScore() + "}");
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
