@@ -54,7 +54,7 @@ public class ProjectSettingsService {
             ProjectSettingsDto.UpdateRequest request
     ) {
         Project project = requireProject(projectId);
-        requireOwner(projectId, userId);
+        requireActiveMember(projectId, userId);
         settingsValidator.validate(project, request);
         String projectName = request.projectName() == null ? null : request.projectName().trim();
         project.updateSettings(projectName, request.endDay(), request.projectType());
@@ -78,14 +78,6 @@ public class ProjectSettingsService {
                 .orElseThrow(() -> new ApiException(ProjectApiErrorCode.PROJECT_MEMBER_REQUIRED));
         if (member.getRole() != ProjectRole.OWNER && member.getRole() != ProjectRole.MEMBER) {
             throw new ApiException(ProjectApiErrorCode.PROJECT_MEMBER_REQUIRED);
-        }
-        return member;
-    }
-
-    private ProjectMember requireOwner(Long projectId, Long userId) {
-        ProjectMember member = requireActiveMember(projectId, userId);
-        if (member.getRole() != ProjectRole.OWNER) {
-            throw new ApiException(ProjectApiErrorCode.PROJECT_SETTING_PERMISSION_DENIED);
         }
         return member;
     }

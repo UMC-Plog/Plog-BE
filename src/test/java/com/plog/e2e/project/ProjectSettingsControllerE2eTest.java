@@ -118,7 +118,7 @@ class ProjectSettingsControllerE2eTest extends E2eTestBase {
         }
 
         @Test
-        @DisplayName("일반 멤버의 변경을 거부하고 이름·종료일 정책을 검증한다")
+        @DisplayName("일반 멤버도 변경할 수 있고 이름·종료일 정책은 그대로 검증한다")
         void policies() {
             Long memberUserId = saveUser("settings-member");
             Long ownerId = saveUser("settings-validator");
@@ -126,10 +126,10 @@ class ProjectSettingsControllerE2eTest extends E2eTestBase {
             saveMember(memberUserId, projectId, "MEMBER", "ACTIVE", "멤버");
             saveMember(ownerId, projectId, "OWNER", "ACTIVE", "오너");
 
-            ResponseEntity<JsonNode> denied = request(
-                    HttpMethod.PATCH, settings(projectId), memberUserId, Map.of("projectName", "변경 시도"));
-            assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-            assertThat(code(denied)).isEqualTo("PROJECT_SETTING_PERMISSION_DENIED");
+            ResponseEntity<JsonNode> byMember = request(
+                    HttpMethod.PATCH, settings(projectId), memberUserId, Map.of("projectName", "멤버가 바꾼 이름"));
+            assertThat(byMember.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(result(byMember).path("projectName").asText()).isEqualTo("멤버가 바꾼 이름");
 
             ResponseEntity<JsonNode> invalidName = request(
                     HttpMethod.PATCH, settings(projectId), ownerId, Map.of("projectName", " 한 "));
