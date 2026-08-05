@@ -98,4 +98,9 @@ public interface NotionWebhookEventRepository extends JpaRepository<NotionWebhoo
             @Param("statuses") Collection<NotionWebhookEventStatus> statuses,
             @Param("finishedBefore") Instant finishedBefore
     );
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("delete from NotionWebhookEvent event where event.workspaceId = :workspaceId")
+    int deleteAllByWorkspaceId(@Param("workspaceId") String workspaceId);
+
 }

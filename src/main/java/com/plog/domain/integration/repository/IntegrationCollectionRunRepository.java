@@ -25,4 +25,8 @@ public interface IntegrationCollectionRunRepository extends JpaRepository<Integr
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select run from IntegrationCollectionRun run where run.project.id = :projectId")
     Optional<IntegrationCollectionRun> findByProjectIdForUpdate(@Param("projectId") Long projectId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("delete from IntegrationCollectionRun run where run.project.id = :projectId")
+    int deleteByProjectId(@Param("projectId") Long projectId);
 }
