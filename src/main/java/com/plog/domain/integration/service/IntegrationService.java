@@ -3,6 +3,7 @@ package com.plog.domain.integration.service;
 import com.plog.domain.integration.dto.response.IntegrationItemResponse;
 import com.plog.domain.integration.dto.response.IntegrationDisconnectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationStatusResponse;
+import com.plog.domain.integration.entity.IntegrationCollectionJob;
 import com.plog.domain.integration.entity.IntegrationCollectionRun;
 import com.plog.domain.integration.entity.IntegrationCollectionStatus;
 import com.plog.domain.integration.entity.IntegrationConnectionStatus;
@@ -46,6 +47,7 @@ public class IntegrationService {
     private final IntegrationResourceRepository integrationResourceRepository;
     private final IntegrationCollectionRunRepository integrationCollectionRunRepository;
     private final ProjectIntegrationService projectIntegrationService;
+    private final IntegrationCollectionJobService integrationCollectionJobService;
 
     public IntegrationStatusResponse getProjectIntegrations(Long projectId, Long userId) {
         if (!projectRepository.existsById(projectId)) {
@@ -83,12 +85,18 @@ public class IntegrationService {
 
         IntegrationCollectionRun finalRun = integrationCollectionRunRepository.findByProjectId(projectId)
                 .orElse(null);
+        IntegrationCollectionJob collectionJob = integrationCollectionJobService.findLatest(projectId)
+                .orElse(null);
         return new IntegrationStatusResponse(
                 projectId,
                 projectMember.getId(),
                 integrations,
                 finalRun == null ? null : finalRun.getStatus(),
-                finalRun == null ? null : finalRun.getFailureSummary()
+                finalRun == null ? null : finalRun.getFailureSummary(),
+                collectionJob == null ? null : collectionJob.getStatus(),
+                collectionJob == null ? null : collectionJob.getFailureSummary(),
+                collectionJob == null ? null : collectionJob.getRequestedResourceCount(),
+                collectionJob == null ? null : collectionJob.getCollectedResourceCount()
         );
     }
 

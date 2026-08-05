@@ -41,7 +41,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     }
 
     @Override
-    public void collect(IntegrationResource resource) {
+    public void collect(IntegrationResource resource, CollectionContext context) {
         String token = projectIntegrationService.decryptAccessToken(resource.getProjectIntegration());
         String fileId = resource.getProviderResourceId();
         collectFileMetadata(resource, fileId, token);

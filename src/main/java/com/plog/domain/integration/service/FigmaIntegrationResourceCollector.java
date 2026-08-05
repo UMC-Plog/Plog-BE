@@ -35,7 +35,7 @@ class FigmaIntegrationResourceCollector implements IntegrationResourceCollector 
     }
 
     @Override
-    public void collect(IntegrationResource resource) {
+    public void collect(IntegrationResource resource, CollectionContext context) {
         String token = projectIntegrationService.decryptAccessToken(resource.getProjectIntegration());
         String fileKey = resource.getProviderResourceId();
         JsonNode file = get("/v1/files/" + fileKey + "?depth=1", token);

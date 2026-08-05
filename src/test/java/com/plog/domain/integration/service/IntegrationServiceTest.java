@@ -61,6 +61,9 @@ class IntegrationServiceTest {
     @Mock
     private ProjectIntegrationService projectIntegrationService;
 
+    @Mock
+    private IntegrationCollectionJobService integrationCollectionJobService;
+
     @InjectMocks
     private IntegrationService integrationService;
 

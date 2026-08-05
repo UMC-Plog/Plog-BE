@@ -8,5 +8,5 @@ interface IntegrationResourceCollector {
 
     List<LinkType> providers();
 
-    void collect(IntegrationResource resource);
+    void collect(IntegrationResource resource, CollectionContext context);
 }
