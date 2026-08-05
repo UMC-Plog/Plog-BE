@@ -1,8 +1,12 @@
 package com.plog.domain.report.controller;
 
 import com.plog.domain.report.controller.docs.ReportControllerDoc;
+import com.plog.domain.report.dto.response.ReportDetailResponse;
+import com.plog.domain.report.dto.response.ReportMemberResultResponse;
 import com.plog.domain.report.dto.response.ReportPdfDownloadResponse;
 import com.plog.domain.report.dto.response.ReportSearchResponse;
+import com.plog.domain.report.service.ReportDetailService;
+import com.plog.domain.report.service.ReportGenerationLauncher;
 import com.plog.domain.report.service.ReportPdfDownloadService;
 import com.plog.domain.report.service.ReportSearchService;
 import com.plog.global.api.response.ApiResponse;
@@ -16,6 +20,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,6 +32,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReportController implements ReportControllerDoc {
 
     private final ReportSearchService reportSearchService;
+    private final ReportDetailService reportDetailService;
+    private final ReportGenerationLauncher reportGenerationLauncher;
     private final ReportPdfDownloadService reportPdfDownloadService;
 
     @Override
@@ -61,6 +68,45 @@ public class ReportController implements ReportControllerDoc {
                 size
         );
         return ResponseEntity.ok(ApiResponse.success(ReportSuccessCode.REPORT_SEARCHED, response));
+    }
+
+    @Override
+    @GetMapping("/{reportId}")
+    public ResponseEntity<ApiResponse<ReportDetailResponse>> getReport(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long reportId
+    ) {
+        ReportDetailResponse response = reportDetailService.getReport(userId, reportId);
+        return ResponseEntity.ok(ApiResponse.success(ReportSuccessCode.REPORT_DETAIL_RETRIEVED, response));
+    }
+
+    @Override
+    @GetMapping("/{reportId}/members/{projectMemberId}/result")
+    public ResponseEntity<ApiResponse<ReportMemberResultResponse>> getMemberResult(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long reportId,
+            @PathVariable Long projectMemberId
+    ) {
+        ReportMemberResultResponse response = reportDetailService.getMemberResult(
+                userId,
+                reportId,
+                projectMemberId
+        );
+        return ResponseEntity.ok(ApiResponse.success(
+                ReportSuccessCode.REPORT_MEMBER_RESULT_RETRIEVED,
+                response
+        ));
+    }
+
+    @Override
+    @PostMapping("/{reportId}/generate")
+    public ResponseEntity<ApiResponse<Void>> generateReport(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long reportId
+    ) {
+        reportGenerationLauncher.launch(userId, reportId);
+        return ResponseEntity.accepted()
+                .body(ApiResponse.success(ReportSuccessCode.REPORT_GENERATION_ACCEPTED, null));
     }
 
     @Override
