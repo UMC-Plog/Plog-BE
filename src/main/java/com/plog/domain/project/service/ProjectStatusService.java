@@ -10,6 +10,7 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.domain.report.service.ReportLifecycleService;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
@@ -23,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ProjectStatusService {
 
-    private static final long TIMEOUT_DAYS_AFTER_END = 7L;
     private static final long MIN_MEMBERS_FOR_PEER_EVALUATION = 2L;
 
     private final ProjectRepository projectRepository;
@@ -32,6 +32,7 @@ public class ProjectStatusService {
     private final ProjectAccessService projectAccessService;
     private final ProjectIntegrationRepository projectIntegrationRepository;
     private final ProjectMemberIntegrationIdentityRepository identityRepository;
+    private final ReportLifecycleService reportLifecycleService;
 
     @Transactional
     public ProjectStatusDto.Response checkAndUpdateStatus(
@@ -56,11 +57,14 @@ public class ProjectStatusService {
             throw new ApiException(ProjectErrorCode.ACTOR_MAPPING_REQUIRED);
         }
         boolean allSubmitted = allEvaluationsSubmitted;
-        boolean timeoutApplied = !allSubmitted && isTimeoutReached(project.getEndDay());
+        boolean timeoutApplied = !allSubmitted && project.isEvaluationClosed(TimeUtil.todayUtc());
 
         if (allSubmitted || timeoutApplied) {
             project.complete();
             projectRepository.saveAndFlush(project);
+            // 평가가 닫히는 유일한 지점이라 리포트도 여기서 시작한다. 같은 트랜잭션이므로
+            // "완료됐는데 리포트가 없는 프로젝트"가 생기지 않는다. 재호출은 멱등이다.
+            reportLifecycleService.startFor(project);
         }
 
         return toResponse(project, timeoutApplied && project.isCompleted());
@@ -91,11 +95,6 @@ public class ProjectStatusService {
                 .allMatch(integration -> identityRepository
                         .countByProjectIntegrationIdAndProjectMemberStatus(
                                 integration.getId(), MemberStatus.ACTIVE) >= activeMemberCount);
-    }
-
-    private boolean isTimeoutReached(LocalDate endDay) {
-        LocalDate today = TimeUtil.todayUtc();
-        return !today.isBefore(endDay.plusDays(TIMEOUT_DAYS_AFTER_END));
     }
 
     private ProjectStatusDto.Response toResponse(Project project, boolean timeoutApplied) {

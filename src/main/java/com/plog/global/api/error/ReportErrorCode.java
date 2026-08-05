@@ -13,7 +13,9 @@ public enum ReportErrorCode implements BaseErrorCode {
     INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "REPORT002", "조회 시작일은 종료일 이후일 수 없습니다."),
     REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "REPORT003", "리포트를 찾을 수 없습니다."),
     REPORT_NOT_COMPLETED(HttpStatus.CONFLICT, "REPORT004", "완료된 리포트만 다운로드할 수 있습니다."),
-    REPORT_PDF_NOT_FOUND(HttpStatus.NOT_FOUND, "REPORT005", "리포트 PDF를 찾을 수 없습니다.");
+    REPORT_PDF_NOT_FOUND(HttpStatus.NOT_FOUND, "REPORT005", "리포트 PDF를 찾을 수 없습니다."),
+    REPORT_MEMBER_RESULT_NOT_FOUND(HttpStatus.NOT_FOUND, "REPORT006", "해당 멤버의 리포트 결과를 찾을 수 없습니다."),
+    REPORT_ALREADY_RESOLVED(HttpStatus.CONFLICT, "REPORT007", "이미 발행되었거나 실패한 리포트입니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

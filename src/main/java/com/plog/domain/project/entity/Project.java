@@ -27,6 +27,14 @@ import org.hibernate.annotations.DynamicUpdate;
 })
 public class Project extends BaseEntity {
 
+    /**
+     * 평가 마감까지의 유예 기간. 이 기간이 지나면 전원이 제출하지 않았어도 평가를 닫고 리포트를 확정한다.
+     * 사용자 요청 경로(ProjectStatusService)와 리포트 자동 생성 배치가 <b>같은 값</b>을 봐야 하므로
+     * 서비스가 아니라 엔티티에 둔다 — 한쪽만 바뀌면 "배치는 리포트를 만들었는데 평가는 아직 열려 있는"
+     * 상태가 생긴다.
+     */
+    private static final long EVALUATION_TIMEOUT_DAYS = 7L;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "project_id")
@@ -119,5 +127,24 @@ public class Project extends BaseEntity {
      */
     public boolean isEvaluatingState(LocalDate today) {
         return !isCompleted() && !today.isBefore(this.endDay);
+    }
+
+    /** 평가가 닫히는 날. 이 날짜부터는 미제출자가 있어도 더 기다리지 않는다. */
+    public LocalDate evaluationDeadline() {
+        return this.endDay.plusDays(EVALUATION_TIMEOUT_DAYS);
+    }
+
+    /** 유예 기간이 끝나 평가를 닫아도 되는지. */
+    public boolean isEvaluationClosed(LocalDate today) {
+        return !today.isBefore(evaluationDeadline());
+    }
+
+    /**
+     * "오늘 기준으로 이미 평가가 닫힌 프로젝트"를 endDay 컬럼만으로 거르기 위한 상한값.
+     * {@code endDay <= latestEndDayWithClosedEvaluation(today)} 는 {@link #isEvaluationClosed}
+     * 와 같은 조건이며, 엔티티를 로딩하지 않고 쿼리에서 판정할 때 쓴다.
+     */
+    public static LocalDate latestEndDayWithClosedEvaluation(LocalDate today) {
+        return today.minusDays(EVALUATION_TIMEOUT_DAYS);
     }
 }
