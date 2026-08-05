@@ -1,6 +1,6 @@
 package com.plog.domain.chat.event;
 
-import com.plog.domain.chat.dto.response.ChatReadResponse;
+import com.plog.domain.chat.dto.response.ChatReadUpdateMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.MessagingException;
@@ -10,10 +10,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-// /user/queue/chat-update 로 읽음 처리 결과를 push한다.
-// 대상은 읽음 처리를 수행한 본인 — 같은 계정의 다른 세션(기기/탭)이 REST 폴링 없이
-// unread count를 동기화하도록 하는 용도다. 방의 다른 참여자에게 "누가 어디까지 읽었는지"를
-// 알리는 건 별개 기능(필요 시 /topic/chat-rooms/{roomId} 브로드캐스트로 추가)이다.
+// /user/queue/chat-update 로 읽음 처리 결과를 push한다(type: READ_UPDATE).
+// 대상은 읽음 처리를 수행한 본인 — 같은 계정의 다른 세션(기기/탭)이 REST 폴링 없이 unread count를 동기화하도록 하는 용도
+// 같은 채널로 새 메시지 도착 시 방 참여자 전원에게 가는 목록 갱신 push(type: ROOM_SUMMARY)는
+// ChatRoomSummaryBroadcastListener가 담당한다 — 트리거/대상이 서로 달라 이벤트/리스너를 분리했다.
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -28,12 +28,12 @@ public class ChatReadBroadcastListener {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onChatReadUpdated(ChatReadUpdatedEvent event) {
-        ChatReadResponse payload = new ChatReadResponse(
+        ChatReadUpdateMessage payload = ChatReadUpdateMessage.of(
                 event.roomId(), event.lastReadMessageSequence(), event.unreadMessageCount());
         sendWithRetry(String.valueOf(event.userId()), payload);
     }
 
-    private void sendWithRetry(String userId, ChatReadResponse payload) {
+    private void sendWithRetry(String userId, ChatReadUpdateMessage payload) {
         for (int attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
             try {
                 messagingTemplate.convertAndSendToUser(userId, CHAT_UPDATE_QUEUE, payload);

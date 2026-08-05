@@ -14,6 +14,7 @@ import com.plog.domain.chat.dto.request.ChatMessageSendRequest.ChatMessageAttach
 import com.plog.domain.chat.entity.ChatAttachment;
 import com.plog.domain.chat.entity.ChatMessage;
 import com.plog.domain.chat.entity.ChatRoom;
+import com.plog.domain.chat.event.ChatRoomSummaryUpdatedEvent;
 import com.plog.domain.chat.repository.ChatAttachmentRepository;
 import com.plog.domain.chat.repository.ChatMessageRepository;
 import com.plog.domain.chat.repository.ChatRoomRepository;
@@ -23,6 +24,7 @@ import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.notification.event.ChatMentionEvent;
 import com.plog.domain.notification.event.ChatMessageNotificationEvent;
+import com.plog.domain.user.entity.User;
 import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.UploadedFile;
 import jakarta.persistence.EntityManager;
@@ -154,10 +156,18 @@ class ChatMessageAppenderTest {
         when(savedMessage.getId()).thenReturn(501L);
         when(chatMessageRepository.save(any())).thenReturn(savedMessage);
 
+        User mentionedUser = mock(User.class);
+        when(mentionedUser.getId()).thenReturn(30L);
         ProjectMember mentioned = mock(ProjectMember.class);
         when(mentioned.getId()).thenReturn(300L);
+        when(mentioned.getUser()).thenReturn(mentionedUser);
+
+        User targetUser = mock(User.class);
+        when(targetUser.getId()).thenReturn(40L);
         ProjectMember target = mock(ProjectMember.class);
         when(target.getId()).thenReturn(400L);
+        when(target.getUser()).thenReturn(targetUser);
+
         when(projectMemberRepository.findActiveMembersByProjectIdAndNicknameIn(
                 PROJECT_ID, MemberStatus.ACTIVE, java.util.Set.of("지현")))
                 .thenReturn(List.of(mentioned));
@@ -166,17 +176,30 @@ class ChatMessageAppenderTest {
 
         chatMessageAppender.appendByUser(ROOM_ID, USER_ID, "client-4", "@지현 확인 부탁", List.of());
 
-        ArgumentCaptor<ChatMentionEvent> eventCaptor = ArgumentCaptor.forClass(ChatMentionEvent.class);
-        verify(eventPublisher, times(1)).publishEvent(eventCaptor.capture());
-        ChatMentionEvent event = eventCaptor.getValue();
-        assertThat(event.projectId()).isEqualTo(PROJECT_ID);
-        assertThat(event.roomId()).isEqualTo(ROOM_ID);
-        assertThat(event.chatId()).isEqualTo(501L);
+        // publishEvent는 이제 4번 호출된다: ChatMessageSavedEvent, ChatMentionEvent,
+        // ChatMessageNotificationEvent, ChatRoomSummaryUpdatedEvent. 타입별로 걸러서 검증한다.
+        ArgumentCaptor<Object> allEvents = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, times(4)).publishEvent(allEvents.capture());
 
-        ArgumentCaptor<ChatMessageNotificationEvent> notificationCaptor =
-                ArgumentCaptor.forClass(ChatMessageNotificationEvent.class);
-        verify(eventPublisher).publishEvent(notificationCaptor.capture());
-        assertThat(notificationCaptor.getValue().targetMemberIds()).containsExactly(400L);
+        ChatMentionEvent mentionEvent = allEvents.getAllValues().stream()
+                .filter(ChatMentionEvent.class::isInstance).map(ChatMentionEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(mentionEvent.projectId()).isEqualTo(PROJECT_ID);
+        assertThat(mentionEvent.roomId()).isEqualTo(ROOM_ID);
+        assertThat(mentionEvent.chatId()).isEqualTo(501L);
+
+        ChatMessageNotificationEvent notificationEvent = allEvents.getAllValues().stream()
+                .filter(ChatMessageNotificationEvent.class::isInstance).map(ChatMessageNotificationEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(notificationEvent.targetMemberIds()).containsExactly(400L);
+
+        // 채팅방 목록 갱신은 멘션 여부와 무관하게 발신자만 제외한 전원(mentioned, target 둘 다)한테 간다.
+        ChatRoomSummaryUpdatedEvent summaryEvent = allEvents.getAllValues().stream()
+                .filter(ChatRoomSummaryUpdatedEvent.class::isInstance).map(ChatRoomSummaryUpdatedEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(summaryEvent.roomId()).isEqualTo(ROOM_ID);
+        assertThat(summaryEvent.targetUserIds()).containsExactlyInAnyOrder(30L, 40L);
+        assertThat(summaryEvent.latestMessage()).isEqualTo("@지현 확인 부탁");
     }
 
     @Test
@@ -188,18 +211,69 @@ class ChatMessageAppenderTest {
         ChatMessage savedMessage = mock(ChatMessage.class);
         when(savedMessage.getId()).thenReturn(507L);
         when(chatMessageRepository.save(any())).thenReturn(savedMessage);
+        User targetUser = mock(User.class);
+        when(targetUser.getId()).thenReturn(40L);
         ProjectMember target = mock(ProjectMember.class);
         when(target.getId()).thenReturn(300L);
+        when(target.getUser()).thenReturn(targetUser);
         when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(PROJECT_ID, MemberStatus.ACTIVE))
                 .thenReturn(List.of(member, target));
 
         chatMessageAppender.appendByUser(ROOM_ID, USER_ID, "client-7", "안녕하세요", List.of());
 
-        ArgumentCaptor<ChatMessageNotificationEvent> captor =
-                ArgumentCaptor.forClass(ChatMessageNotificationEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        assertThat(captor.getValue().chatId()).isEqualTo(507L);
-        assertThat(captor.getValue().targetMemberIds()).containsExactly(300L);
+        // publishEvent 3번: ChatMessageSavedEvent, ChatMessageNotificationEvent, ChatRoomSummaryUpdatedEvent
+        ArgumentCaptor<Object> allEvents = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, times(3)).publishEvent(allEvents.capture());
+
+        ChatMessageNotificationEvent notificationEvent = allEvents.getAllValues().stream()
+                .filter(ChatMessageNotificationEvent.class::isInstance).map(ChatMessageNotificationEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(notificationEvent.chatId()).isEqualTo(507L);
+        assertThat(notificationEvent.targetMemberIds()).containsExactly(300L);
+
+        ChatRoomSummaryUpdatedEvent summaryEvent = allEvents.getAllValues().stream()
+                .filter(ChatRoomSummaryUpdatedEvent.class::isInstance).map(ChatRoomSummaryUpdatedEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(summaryEvent.roomId()).isEqualTo(ROOM_ID);
+        assertThat(summaryEvent.targetUserIds()).containsExactly(40L);
+        assertThat(summaryEvent.latestMessage()).isEqualTo("안녕하세요");
+    }
+
+    @Test
+    void 텍스트_없이_첨부만_있으면_목록_미리보기는_파일명이_된다() {
+        when(member.getProject()).thenReturn(project);
+        when(chatMessageRepository.findByChatRoomIdAndProjectMemberIdAndClientMessageId(ROOM_ID, 200L, "client-8"))
+                .thenReturn(Optional.empty());
+        when(room.issueNextMessageSequence()).thenReturn(1L);
+        ChatMessage savedMessage = mock(ChatMessage.class);
+        when(savedMessage.getId()).thenReturn(508L);
+        when(chatMessageRepository.save(any())).thenReturn(savedMessage);
+
+        UploadedFile confirmed = mock(UploadedFile.class);
+        when(attachmentPolicy.confirmFileAttachment(any(), any(), any(), any(), any(), any()))
+                .thenReturn(confirmed);
+
+        User targetUser = mock(User.class);
+        when(targetUser.getId()).thenReturn(40L);
+        ProjectMember target = mock(ProjectMember.class);
+        when(target.getId()).thenReturn(300L);
+        when(target.getUser()).thenReturn(targetUser);
+        when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(PROJECT_ID, MemberStatus.ACTIVE))
+                .thenReturn(List.of(member, target));
+
+        List<ChatMessageAttachmentRequest> attachments = List.of(
+                new ChatMessageAttachmentRequest("key1", "회의록.pdf", 100L),
+                new ChatMessageAttachmentRequest("key2", "녹취록.mp3", 200L));
+
+        chatMessageAppender.appendByUser(ROOM_ID, USER_ID, "client-8", null, attachments);
+
+        ArgumentCaptor<Object> allEvents = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, times(3)).publishEvent(allEvents.capture());
+
+        ChatRoomSummaryUpdatedEvent summaryEvent = allEvents.getAllValues().stream()
+                .filter(ChatRoomSummaryUpdatedEvent.class::isInstance).map(ChatRoomSummaryUpdatedEvent.class::cast)
+                .findFirst().orElseThrow();
+        assertThat(summaryEvent.latestMessage()).isEqualTo("회의록.pdf 외 1개");
     }
 
     @Test

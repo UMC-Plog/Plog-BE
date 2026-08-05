@@ -1,8 +1,10 @@
 package com.plog.domain.chat.repository;
 
 import com.plog.domain.chat.entity.ChatRoomReadCursor;
+import com.plog.domain.chat.repository.projection.ChatRoomParticipantUnreadCount;
 import com.plog.domain.chat.repository.projection.ChatRoomUnreadCount;
 import com.plog.domain.project.entity.MemberStatus;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -78,6 +80,25 @@ public interface ChatRoomReadCursorRepository extends JpaRepository<ChatRoomRead
     Optional<ChatRoomUnreadCount> findUnreadCount(
             @Param("roomId") Long roomId,
             @Param("userId") Long userId,
+            @Param("memberStatus") MemberStatus memberStatus
+    );
+
+    // 방 참여자 "전원"의 unreadCount를 한 번에 조회한다.
+    // 새 메시지 도착 시 참여자마다 findUnreadCount를 반복 호출하면 메시지 1건당 쿼리가 N번(N=참여자 수) 나가므로,
+    // 그 대신 이 쿼리 1번으로 방 전체 참여자의 unreadCount를 묶어서 가져온다.
+    @Query("select member.user.id as userId, count(message.id) as unreadCount "
+            + "from ProjectMember member "
+            + "join ChatRoom room on room.project = member.project "
+            + "left join ChatRoomReadCursor cursor "
+            + "on cursor.chatRoom = room and cursor.projectMember = member "
+            + "left join ChatMessage message on message.chatRoom = room "
+            + "and (cursor.lastReadMessageSequence is null "
+            + "or message.messageSequence > cursor.lastReadMessageSequence) "
+            + "where room.id = :roomId "
+            + "and member.status = :memberStatus "
+            + "group by member.user.id")
+    List<ChatRoomParticipantUnreadCount> findUnreadCountsForRoom(
+            @Param("roomId") Long roomId,
             @Param("memberStatus") MemberStatus memberStatus
     );
 
