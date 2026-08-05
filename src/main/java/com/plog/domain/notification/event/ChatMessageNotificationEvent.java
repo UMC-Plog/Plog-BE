@@ -7,10 +7,10 @@ public record ChatMessageNotificationEvent(
         Long roomId,
         Long chatId,
         Long senderMemberId,
-        List<Long> mentionMemberIds,
+        List<Long> targetMemberIds,
         String messagePreview
 ) {
     public ChatMessageNotificationEvent {
-        mentionMemberIds = mentionMemberIds == null ? List.of() : List.copyOf(mentionMemberIds);
+        targetMemberIds = targetMemberIds == null ? List.of() : List.copyOf(targetMemberIds);
     }
 }

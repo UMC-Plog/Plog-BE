@@ -156,9 +156,13 @@ class ChatMessageAppenderTest {
 
         ProjectMember mentioned = mock(ProjectMember.class);
         when(mentioned.getId()).thenReturn(300L);
+        ProjectMember target = mock(ProjectMember.class);
+        when(target.getId()).thenReturn(400L);
         when(projectMemberRepository.findActiveMembersByProjectIdAndNicknameIn(
                 PROJECT_ID, MemberStatus.ACTIVE, java.util.Set.of("지현")))
                 .thenReturn(List.of(mentioned));
+        when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(PROJECT_ID, MemberStatus.ACTIVE))
+                .thenReturn(List.of(member, mentioned, target));
 
         chatMessageAppender.appendByUser(ROOM_ID, USER_ID, "client-4", "@지현 확인 부탁", List.of());
 
@@ -168,6 +172,11 @@ class ChatMessageAppenderTest {
         assertThat(event.projectId()).isEqualTo(PROJECT_ID);
         assertThat(event.roomId()).isEqualTo(ROOM_ID);
         assertThat(event.chatId()).isEqualTo(501L);
+
+        ArgumentCaptor<ChatMessageNotificationEvent> notificationCaptor =
+                ArgumentCaptor.forClass(ChatMessageNotificationEvent.class);
+        verify(eventPublisher).publishEvent(notificationCaptor.capture());
+        assertThat(notificationCaptor.getValue().targetMemberIds()).containsExactly(400L);
     }
 
     @Test
@@ -179,6 +188,10 @@ class ChatMessageAppenderTest {
         ChatMessage savedMessage = mock(ChatMessage.class);
         when(savedMessage.getId()).thenReturn(507L);
         when(chatMessageRepository.save(any())).thenReturn(savedMessage);
+        ProjectMember target = mock(ProjectMember.class);
+        when(target.getId()).thenReturn(300L);
+        when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(PROJECT_ID, MemberStatus.ACTIVE))
+                .thenReturn(List.of(member, target));
 
         chatMessageAppender.appendByUser(ROOM_ID, USER_ID, "client-7", "안녕하세요", List.of());
 
@@ -186,7 +199,7 @@ class ChatMessageAppenderTest {
                 ArgumentCaptor.forClass(ChatMessageNotificationEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().chatId()).isEqualTo(507L);
-        assertThat(captor.getValue().mentionMemberIds()).isEmpty();
+        assertThat(captor.getValue().targetMemberIds()).containsExactly(300L);
     }
 
     @Test
