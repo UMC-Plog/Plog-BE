@@ -48,7 +48,7 @@ class ProjectSettingsServiceTest {
     }
 
     @Test
-    void memberCannotChangeProjectSettings() {
+    void memberCanChangeProjectSettings() {
         Project project = project();
         ProjectMember member = ProjectMember.builder()
                 .id(3L).role(ProjectRole.MEMBER).status(MemberStatus.ACTIVE).build();
@@ -56,11 +56,25 @@ class ProjectSettingsServiceTest {
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
                 .thenReturn(Optional.of(member));
 
+        ProjectSettingsDto.UpdateResponse response = service.updateSettings(
+                1L, 7L, new ProjectSettingsDto.UpdateRequest("New name", null, null));
+
+        assertThat(response.projectName()).isEqualTo("New name");
+        assertThat(project.getProjectName()).isEqualTo("New name");
+    }
+
+    @Test
+    void nonMemberCannotChangeProjectSettings() {
+        Project project = project();
+        when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.empty());
+
         assertThatThrownBy(() -> service.updateSettings(
                 1L, 7L, new ProjectSettingsDto.UpdateRequest("New name", null, null)))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode())
-                                .isEqualTo(ProjectApiErrorCode.PROJECT_SETTING_PERMISSION_DENIED));
+                                .isEqualTo(ProjectApiErrorCode.PROJECT_MEMBER_REQUIRED));
     }
 
     @Test

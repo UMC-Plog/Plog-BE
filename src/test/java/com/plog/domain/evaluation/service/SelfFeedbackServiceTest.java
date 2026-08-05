@@ -85,6 +85,21 @@ class SelfFeedbackServiceTest {
         verify(selfFeedbackRepository).saveAndFlush(any(SelfFeedback.class));
     }
 
+    // 리포트 발행 = 셀프 피드백 마감. 리포트가 셀프 피드백을 분석 재료로 쓰게 될 예정이라,
+    // 발행 후에 들어온 피드백은 반영할 곳이 없다. 필수가 아닐 뿐 아무 때나 낼 수 있는 것은 아니다.
+    @Test
+    void rejectsSelfFeedbackAfterReportPublication() {
+        ProjectMember projectMember = projectMember(
+                ProjectStatus.COMPLETED, LocalDate.now(ZoneOffset.UTC).minusDays(1));
+        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(projectMember));
+
+        assertThatThrownBy(() -> selfFeedbackService.createSelfFeedback(
+                1L, 7L, new SelfFeedbackCreateRequest("완료 후에 쓴 셀프 피드백")))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isEqualTo(EvaluationErrorCode.NOT_EVALUATING_STATE));
+    }
+
     @Test
     void rejectsSelfFeedbackBeforeTheEndDay() {
         ProjectMember projectMember = projectMember(

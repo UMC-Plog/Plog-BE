@@ -4,7 +4,6 @@ import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.integration.repository.ProjectMemberIntegrationIdentityRepository;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
-import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
 import com.plog.domain.project.dto.ProjectStatusDto;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
@@ -25,11 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProjectStatusService {
 
     private static final long TIMEOUT_DAYS_AFTER_END = 7L;
+    private static final long MIN_MEMBERS_FOR_PEER_EVALUATION = 2L;
 
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final PeerEvaluationRepository peerEvaluationRepository;
-    private final SelfFeedbackRepository selfFeedbackRepository;
     private final ProjectAccessService projectAccessService;
     private final ProjectIntegrationRepository projectIntegrationRepository;
     private final ProjectMemberIntegrationIdentityRepository identityRepository;
@@ -75,12 +74,15 @@ public class ProjectStatusService {
     }
 
     private boolean isAllEvaluationSubmitted(Long projectId, long activeMemberCount) {
-        long requiredPeerEvaluationCount = activeMemberCount * Math.max(activeMemberCount - 1L, 0L);
+        // 활성 멤버가 1명이면 평가할 상대가 없어 필요 건수가 0이 된다.
+        // 이걸 "전원 제출"로 보면 아무 입력 없이 리포트가 발행되므로, 타임아웃 경로에만 맡긴다.
+        if (activeMemberCount < MIN_MEMBERS_FOR_PEER_EVALUATION) {
+            return false;
+        }
+        long requiredPeerEvaluationCount = activeMemberCount * (activeMemberCount - 1L);
         long submittedPeerEvaluationCount = peerEvaluationRepository.countSubmittedByActiveProjectMembers(projectId);
-        long submittedSelfFeedbackCount = selfFeedbackRepository.countSubmittedByActiveProjectMembers(projectId);
 
-        return submittedPeerEvaluationCount >= requiredPeerEvaluationCount
-                && submittedSelfFeedbackCount >= activeMemberCount;
+        return submittedPeerEvaluationCount >= requiredPeerEvaluationCount;
     }
 
     private boolean hasAllActorMappings(Long projectId, long activeMemberCount) {
