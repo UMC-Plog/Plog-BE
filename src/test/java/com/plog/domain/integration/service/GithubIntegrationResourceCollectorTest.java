@@ -209,6 +209,16 @@ class GithubIntegrationResourceCollectorTest {
         assertThat(context.advances).containsExactly("PULL_REQUESTS:3", "ISSUES:7");
     }
 
+    @Test
+    @DisplayName("provider 호출마다 heartbeat를 남겨 잡 회수를 막는다")
+    void reportsHeartbeatPerApiCall() {
+        RecordingContext context = new RecordingContext(CollectionCursor.start());
+
+        collector.collect(resource(null), context);
+
+        assertThat(context.heartbeats).isEqualTo(requestedUris.size());
+    }
+
     private String commitsUri() {
         return requestedUris.stream()
                 .filter(uri -> uri.contains("/commits"))
@@ -256,6 +266,7 @@ class GithubIntegrationResourceCollectorTest {
 
         private final CollectionCursor cursor;
         private final List<String> advances = new ArrayList<>();
+        private int heartbeats;
 
         private RecordingContext(CollectionCursor cursor) {
             this.cursor = cursor;
@@ -275,6 +286,11 @@ class GithubIntegrationResourceCollectorTest {
         @Override
         public void advance(CollectionPhase phase, int itemNumber) {
             advances.add(phase + ":" + itemNumber);
+        }
+
+        @Override
+        public void heartbeat() {
+            heartbeats++;
         }
     }
 }

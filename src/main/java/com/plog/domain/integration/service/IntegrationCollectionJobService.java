@@ -95,6 +95,12 @@ public class IntegrationCollectionJobService {
         entity.heartbeat(job.claimToken(), now);
     }
 
+    /** 커서는 두고 생존 신호만 갱신한다. 긴 페이지네이션 중 잡이 회수되는 것을 막는다. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void heartbeat(ClaimedJob job, Instant now) {
+        locked(job).heartbeat(job.claimToken(), now);
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void succeed(ClaimedJob job, Instant now, int requestedCount, int collectedCount) {
         locked(job).succeed(job.claimToken(), now, requestedCount, collectedCount);

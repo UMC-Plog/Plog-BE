@@ -19,6 +19,14 @@ interface CollectionContext {
     /** 항목 하나를 끝낼 때마다 호출한다. 커서 저장 주기는 구현체가 정한다. */
     void advance(CollectionPhase phase, int itemNumber);
 
+    /**
+     * provider 호출 1건마다 호출한다. 커서는 건드리지 않고 살아있다는 신호만 남긴다.
+     *
+     * <p>commit 페이지네이션처럼 항목 경계 없이 수백 번 호출이 이어지는 구간이 있어서,
+     * {@link #advance}만으로는 heartbeat 공백이 processing timeout을 넘길 수 있다.</p>
+     */
+    void heartbeat();
+
     /** 재개도 진행 보고도 필요 없는 호출자용. 테스트와 Notion webhook 경로가 쓴다. */
     static CollectionContext noop() {
         return new CollectionContext() {
@@ -35,6 +43,11 @@ interface CollectionContext {
             @Override
             public void advance(CollectionPhase phase, int itemNumber) {
                 // 진행 보고를 받을 잡이 없다.
+            }
+
+            @Override
+            public void heartbeat() {
+                // 회수될 잡이 없다.
             }
         };
     }

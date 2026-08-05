@@ -61,6 +61,31 @@ class GithubApiRateLimiterTest {
                         .isAfter(Instant.now().plusSeconds(3_000)));
     }
 
+    @Test
+    @DisplayName("숫자가 아닌 remaining 헤더는 무시하고 통과시킨다")
+    void ignoresNonNumericRemainingHeader() {
+        GithubApiRateLimiter limiter = new GithubApiRateLimiter(properties(100));
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("x-ratelimit-remaining", "unknown");
+
+        assertThatCode(() -> limiter.observe(headers)).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("숫자가 아닌 reset 헤더는 한 시간 뒤로 대체한다")
+    void fallsBackWhenResetHeaderIsNonNumeric() {
+        GithubApiRateLimiter limiter = new GithubApiRateLimiter(properties(100));
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("x-ratelimit-remaining", "0");
+        headers.add("x-ratelimit-reset", "not-a-number");
+
+        assertThatThrownBy(() -> limiter.observe(headers))
+                .isInstanceOf(CollectionRetryableException.class)
+                .extracting(exception -> ((CollectionRetryableException) exception).nextAttemptAt())
+                .satisfies(resetAt -> assertThat((Instant) resetAt)
+                        .isAfter(Instant.now().plusSeconds(3_000)));
+    }
+
     private IntegrationCollectionProperties properties(int minRemaining) {
         return new IntegrationCollectionProperties(
                 5_000L, 5, Duration.ofMinutes(30), 5, 25, Duration.ofHours(1), 0L, minRemaining);

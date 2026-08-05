@@ -80,7 +80,7 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
                 : CollectionCursor.start();
 
         if (!cursor.skipsPhase(CollectionPhase.COMMITS)) {
-            collectCommits(resource, repositoryPath, since, accessToken);
+            collectCommits(resource, repositoryPath, since, accessToken, context);
         }
         if (!cursor.skipsPhase(CollectionPhase.PULL_REQUESTS)) {
             collectPullRequests(resource, repositoryPath, accessToken, watermark, cursor, context);
@@ -98,7 +98,7 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
         Instant since = watermark == null
                 ? resource.getProjectIntegration().getProject().getStartDay()
                         .atStartOfDay(ZoneOffset.UTC).toInstant()
-                : watermark.minus(properties.watermarkOverlap());
+                : collectionFloor(watermark);
         return since.toString();
     }
 
@@ -108,11 +108,17 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
             return true;
         }
         Instant updatedAt = parseInstant(node.path("updated_at").asText(null));
-        return updatedAt == null || !updatedAt.isBefore(watermark.minus(properties.watermarkOverlap()));
+        return updatedAt == null || !updatedAt.isBefore(collectionFloor(watermark));
     }
 
-    private void collectCommits(IntegrationResource resource, String repositoryPath, String since, String token) {
-        for (JsonNode commit : getPages("/repos/" + repositoryPath + "/commits?per_page=100&since=" + since, token)) {
+    /** since 파라미터와 클라이언트 필터가 같은 기준선을 봐야 경계에서 항목이 새지 않는다. */
+    private Instant collectionFloor(Instant watermark) {
+        return watermark.minus(properties.watermarkOverlap());
+    }
+
+    private void collectCommits(IntegrationResource resource, String repositoryPath, String since,
+            String token, CollectionContext context) {
+        for (JsonNode commit : getPages("/repos/" + repositoryPath + "/commits?per_page=100&since=" + since, token, context)) {
             JsonNode author = commit.path("author");
             JsonNode authorCommit = commit.path("commit").path("author");
             activityStoreService.store(resource, IntegrationActivityType.GITHUB_COMMIT,
@@ -133,7 +139,7 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
         // /pulls는 since를 지원하지 않는다. created 오름차순으로 고정해 재개 지점을 안정시키고,
         // 변경 없는 PR은 reviews 호출만 건너뛴다. 리스트 페이지는 100건 단위라 비용이 작다.
         for (JsonNode pullRequest : getPages(
-                "/repos/" + repositoryPath + "/pulls?state=all&per_page=100&sort=created&direction=asc", token)) {
+                "/repos/" + repositoryPath + "/pulls?state=all&per_page=100&sort=created&direction=asc", token, context)) {
             int pullRequestNumber = pullRequest.path("number").asInt();
             if (cursor.skipsItem(CollectionPhase.PULL_REQUESTS, pullRequestNumber)) {
                 continue;
@@ -146,7 +152,7 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
                     pullRequest.toString());
             // 변경 없는 PR은 리뷰도 그대로다. 이미 저장된 것을 다시 가져올 이유가 없다.
             if (isChangedSince(pullRequest, watermark)) {
-                for (JsonNode review : getPages("/repos/" + repositoryPath + "/pulls/" + number + "/reviews?per_page=100", token)) {
+                for (JsonNode review : getPages("/repos/" + repositoryPath + "/pulls/" + number + "/reviews?per_page=100", token, context)) {
                     JsonNode reviewer = review.path("user");
                     activityStoreService.store(resource, IntegrationActivityType.GITHUB_PULL_REQUEST_REVIEW,
                             "pull-request-review:" + review.path("id").asText(), reviewer.path("id").asText(null),
@@ -168,7 +174,7 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
     ) {
         // since는 updated_at 기준으로 서버에서 거른다. created 오름차순 정렬은 재개용이다.
         for (JsonNode issue : getPages("/repos/" + repositoryPath
-                + "/issues?state=all&per_page=100&sort=created&direction=asc&since=" + since, token)) {
+                + "/issues?state=all&per_page=100&sort=created&direction=asc&since=" + since, token, context)) {
             int issueNumber = issue.path("number").asInt();
             if (cursor.skipsItem(CollectionPhase.ISSUES, issueNumber)) {
                 continue;
@@ -184,7 +190,7 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
             // 이슈 payload가 코멘트 수를 알려준다. 0이면 호출 자체가 낭비다.
             if (issue.path("comments").asInt(0) > 0) {
                 for (JsonNode comment : getPages("/repos/" + repositoryPath + "/issues/" + number
-                        + "/comments?per_page=100&since=" + since, token)) {
+                        + "/comments?per_page=100&since=" + since, token, context)) {
                     JsonNode commenter = comment.path("user");
                     activityStoreService.store(resource, IntegrationActivityType.GITHUB_ISSUE_COMMENT,
                             "issue-comment:" + comment.path("id").asText(), commenter.path("id").asText(null),
@@ -192,7 +198,7 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
                             comment.path("html_url").asText(issue.path("html_url").asText(resource.getResourceUrl())), comment.toString());
                 }
             }
-            for (JsonNode event : getPages("/repos/" + repositoryPath + "/issues/" + number + "/events?per_page=100", token)) {
+            for (JsonNode event : getPages("/repos/" + repositoryPath + "/issues/" + number + "/events?per_page=100", token, context)) {
                 JsonNode actor = event.path("actor");
                 activityStoreService.store(resource, IntegrationActivityType.GITHUB_ISSUE_EVENT,
                         "issue-event:" + event.path("id").asText(), actor.path("id").asText(null), actor.path("login").asText(null), null,
@@ -202,10 +208,10 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
         }
     }
 
-    private List<JsonNode> getPages(String pathWithQuery, String token) {
+    private List<JsonNode> getPages(String pathWithQuery, String token, CollectionContext context) {
         List<JsonNode> results = new ArrayList<>();
         for (int page = 1; page <= MAX_API_PAGE_COUNT; page++) {
-            JsonNode body = get(pathWithQuery + "&page=" + page, token);
+            JsonNode body = get(pathWithQuery + "&page=" + page, token, context);
             if (body == null || !body.isArray() || body.isEmpty()) {
                 return results;
             }
@@ -218,7 +224,9 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
         throw new ProviderResourceAccessException(503, null);
     }
 
-    private JsonNode get(String path, String token) {
+    private JsonNode get(String path, String token, CollectionContext context) {
+        // 항목 경계가 없는 페이지네이션 구간에서도 잡이 회수되지 않게 한다.
+        context.heartbeat();
         rateLimiter.acquire();
         try {
             ResponseEntity<JsonNode> response = restClient.get().uri(URI.create(API_BASE_URL + path))

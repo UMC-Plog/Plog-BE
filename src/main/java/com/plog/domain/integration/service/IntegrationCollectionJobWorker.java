@@ -117,6 +117,7 @@ class IntegrationCollectionJobWorker {
         private final IntegrationCollectionJobService.ClaimedJob job;
         private Long currentResourceId;
         private int pendingAdvances;
+        private Instant lastHeartbeatAt = Instant.now();
 
         private WorkerCollectionContext(IntegrationCollectionJobService.ClaimedJob job) {
             this.job = job;
@@ -132,6 +133,7 @@ class IntegrationCollectionJobWorker {
             currentResourceId = resourceId;
             pendingAdvances = 0;
             jobService.saveProgress(job, resourceId, CollectionPhase.COMMITS, null, Instant.now());
+            lastHeartbeatAt = Instant.now();
         }
 
         @Override
@@ -142,6 +144,21 @@ class IntegrationCollectionJobWorker {
             }
             pendingAdvances = 0;
             jobService.saveProgress(job, currentResourceId, phase, itemNumber, Instant.now());
+            lastHeartbeatAt = Instant.now();
+        }
+
+        /**
+         * commit 페이지네이션처럼 항목 경계가 없는 구간에서도 생존 신호를 남긴다.
+         * 간격은 processing timeout에서 유도해, timeout을 줄여도 여유가 유지되게 한다.
+         */
+        @Override
+        public void heartbeat() {
+            Instant now = Instant.now();
+            if (now.isBefore(lastHeartbeatAt.plus(properties.processingTimeout().dividedBy(10)))) {
+                return;
+            }
+            lastHeartbeatAt = now;
+            jobService.heartbeat(job, now);
         }
     }
 }

@@ -9,6 +9,7 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 import com.plog.domain.integration.config.IntegrationCollectionProperties;
 import java.time.Duration;
@@ -124,6 +125,28 @@ class IntegrationCollectionJobWorkerTest {
         worker(5).processDueJobs();
 
         then(collectionService).should(never()).runCollection(any(), any());
+    }
+
+    @Test
+    @DisplayName("한 번에 batch-size 개까지만 처리한다")
+    void processesAtMostBatchSizeJobsPerTick() {
+        given(jobService.claimNext(any())).willReturn(claim(1));
+        given(collectionService.runCollection(eq(7L), any()))
+                .willReturn(new IntegrationDataCollectionService.CollectionOutcome(1, 1, List.of()));
+
+        worker(5).processDueJobs();
+
+        then(collectionService).should(times(5)).runCollection(eq(7L), any());
+    }
+
+    @Test
+    @DisplayName("매 주기마다 좀비 잡 회수를 먼저 시도한다")
+    void reclaimsStaleJobsBeforeClaiming() {
+        given(jobService.claimNext(any())).willReturn(null);
+
+        worker(5).processDueJobs();
+
+        then(jobService).should().reclaimStale(any());
     }
 
     private void givenSingleClaim(IntegrationCollectionJobService.ClaimedJob job) {

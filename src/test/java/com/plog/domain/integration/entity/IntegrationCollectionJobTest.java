@@ -71,6 +71,18 @@ class IntegrationCollectionJobTest {
     }
 
     @Test
+    @DisplayName("재선점된 잡에는 이전 attempt가 커서를 덮어쓸 수 없다")
+    void rejectsCursorSaveFromSupersededAttempt() {
+        IntegrationCollectionJob job = pendingJob();
+        String first = job.begin(NOW);
+        job.retry(first, NOW.plusSeconds(10), NOW.plusSeconds(70), "rate limited");
+        job.begin(NOW.plusSeconds(70));
+
+        assertThatThrownBy(() -> job.saveCursor(first, 7L, CollectionPhase.ISSUES, 42))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     @DisplayName("reclaim은 토큰 없이 RETRYABLE로 회수한다")
     void reclaimRecoversStaleJob() {
         IntegrationCollectionJob job = pendingJob();

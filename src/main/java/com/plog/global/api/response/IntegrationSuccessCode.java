@@ -14,7 +14,7 @@ public enum IntegrationSuccessCode implements BaseCode {
     INTEGRATION_DISCONNECTED(HttpStatus.OK, "INTEGRATION003", "외부 연동을 해제했습니다."),
     INTEGRATION_RESOURCES_RETRIEVED(HttpStatus.OK, "INTEGRATION004", "외부 연동 리소스를 조회했습니다."),
     INTEGRATION_RESOURCE_REGISTERED(HttpStatus.CREATED, "INTEGRATION005", "외부 연동 리소스를 등록했습니다."),
-    INTEGRATION_DATA_COLLECTION_ACCEPTED(HttpStatus.ACCEPTED, "INTEGRATION006", "외부 연동 데이터 수집을 시작했습니다."),
+    INTEGRATION_DATA_COLLECTION_ACCEPTED(HttpStatus.ACCEPTED, "INTEGRATION006", "외부 연동 데이터 수집 요청을 접수했습니다."),
     ACTOR_MAPPINGS_RETRIEVED(HttpStatus.OK, "INTEGRATION019", "프로젝트 멤버 외부 계정 매핑을 조회했습니다."),
     ACTOR_MAPPING_SAVED(HttpStatus.OK, "INTEGRATION020", "현재 멤버의 외부 계정 매핑을 저장했습니다."),
     ACTOR_MAPPING_REMOVED(HttpStatus.OK, "INTEGRATION021", "현재 멤버의 외부 계정 매핑을 해제했습니다."),

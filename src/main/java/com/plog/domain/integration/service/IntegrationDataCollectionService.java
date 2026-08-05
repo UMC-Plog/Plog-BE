@@ -139,10 +139,11 @@ public class IntegrationDataCollectionService {
     }
 
     private CollectionRetryableException rateLimited(ProviderResourceAccessException exception) {
-        Duration resetDelay = ProviderRateLimitSupport.resetDelay(exception, Instant.now());
+        // x-ratelimit-reset이 없으면 Retry-After로 떨어진다. 둘 다 없을 때만 워커 백오프에 맡긴다.
+        Duration delay = retryAfter(exception);
         return new CollectionRetryableException(
                 "provider rate limit exceeded",
-                resetDelay == null ? null : Instant.now().plus(resetDelay));
+                delay == null ? null : Instant.now().plus(delay));
     }
 
     private Map<LinkType, IntegrationResourceCollector> collectorMap(List<IntegrationResourceCollector> collectors) {
@@ -271,7 +272,8 @@ public class IntegrationDataCollectionService {
             Thread.sleep(delay.toMillis());
         } catch (InterruptedException interruptedException) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Integration collection retry was interrupted", interruptedException);
+            // 대개 배포 종료 신호다. 실패로 확정하지 말고 잡을 재큐한다.
+            throw new CollectionRetryableException("collection retry wait was interrupted", null);
         }
     }
 

@@ -31,7 +31,8 @@ class GithubApiRateLimiter {
                 Thread.sleep(waitNanos / 1_000_000L, (int) (waitNanos % 1_000_000L));
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
-                throw new IllegalStateException("GitHub API rate-limit wait was interrupted", exception);
+                // 대개 배포 종료 신호다. 실패로 확정하면 사용자가 수집을 다시 요청해야 한다.
+                throw new CollectionRetryableException("github rate-limit wait was interrupted", null);
             }
         }
         nextRequestAtNanos = System.nanoTime() + properties.githubMinIntervalMs() * 1_000_000L;
