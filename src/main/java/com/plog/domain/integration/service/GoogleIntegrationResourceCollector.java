@@ -10,13 +10,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.HexFormat;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -24,6 +21,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 /** Google Drive Activity, comment/revision과 Docs/Slides 현재 스냅샷을 저장한다. */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 class GoogleIntegrationResourceCollector implements IntegrationResourceCollector {
@@ -38,8 +36,8 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     private final RestClient restClient = ProviderRestClientFactory.create();
 
     @Override
-    public LinkType provider() {
-        return LinkType.GOOGLE;
+    public List<LinkType> providers() {
+        return List.of(LinkType.GOOGLE_DOCS, LinkType.GOOGLE_SLIDES);
     }
 
     @Override
@@ -117,7 +115,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
                                 .asText(activity.path("timeRange").path("endTime").asText(null))),
                         resource.getResourceUrl(), activity.toString());
             }
-            pageToken = nextPageToken(body, requestedPageTokens);
+            pageToken = nextPageToken(body, requestedPageTokens, "drive-activity", fileId);
         } while (pageToken != null && !pageToken.isBlank());
     }
 
@@ -147,7 +145,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
                             reply.toString());
                 }
             }
-            pageToken = nextPageToken(body, requestedPageTokens);
+            pageToken = nextPageToken(body, requestedPageTokens, "drive-comments", fileId);
         } while (pageToken != null && !pageToken.isBlank());
     }
 
@@ -167,16 +165,17 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
                         parseInstant(revision.path("modifiedTime").asText(null)), resource.getResourceUrl(),
                         revision.toString());
             }
-            pageToken = nextPageToken(body, requestedPageTokens);
+            pageToken = nextPageToken(body, requestedPageTokens, "drive-revisions", fileId);
         } while (pageToken != null && !pageToken.isBlank());
     }
 
-    private String nextPageToken(JsonNode response, Set<String> requestedPageTokens) {
+    private String nextPageToken(JsonNode response, Set<String> requestedPageTokens, String context, String fileId) {
         String nextPageToken = response.path("nextPageToken").asText(null);
         if (nextPageToken == null || nextPageToken.isBlank()) {
             return null;
         }
         if (!requestedPageTokens.add(nextPageToken)) {
+            log.warn("Google API pagination loop detected. fileId={}, context={}", fileId, context);
             throw new ProviderResourceAccessException(503, null);
         }
         return nextPageToken;
@@ -254,8 +253,10 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             return restClient.get().uri(uri).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) {
+            logProviderErrorResponse("Google", uri, exception);
             throw new ProviderResourceAccessException(exception.getStatusCode().value(), exception);
         } catch (RestClientException exception) {
+            log.warn("Google API call failed without a response (timeout/connection issue). uri={}", uri, exception);
             throw new ProviderResourceAccessException(503, exception);
         }
     }
@@ -265,10 +266,23 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             return restClient.post().uri(uri).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .body(request).retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) {
+            logProviderErrorResponse("Google", uri, exception);
             throw new ProviderResourceAccessException(exception.getStatusCode().value(), exception);
         } catch (RestClientException exception) {
+            log.warn("Google API call failed without a response (timeout/connection issue). uri={}", uri, exception);
             throw new ProviderResourceAccessException(503, exception);
         }
+    }
+
+    /** 404는 collectOptional에서 정상적으로 무시되는 흐름이 많아 DEBUG로, 그 외는 WARN으로 남긴다. */
+    private void logProviderErrorResponse(String provider, String uri, RestClientResponseException exception) {
+        int status = exception.getStatusCode().value();
+        String sanitizedBody = ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString());
+        if (status == 404) {
+            log.debug("{} API returned 404 (may be expected for optional resources). uri={}", provider, uri);
+            return;
+        }
+        log.warn("{} API returned error response. uri={}, status={}, body={}", provider, uri, status, sanitizedBody);
     }
 
     private Instant parseInstant(String value) {

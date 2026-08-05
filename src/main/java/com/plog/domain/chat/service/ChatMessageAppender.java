@@ -11,6 +11,7 @@ import com.plog.domain.chat.repository.ChatMessageRepository;
 import com.plog.domain.chat.repository.ChatRoomRepository;
 import com.plog.domain.chat.util.ChatMentionParser;
 import com.plog.domain.notification.event.ChatMentionEvent;
+import com.plog.domain.notification.event.ChatMessageNotificationEvent;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
@@ -110,25 +111,38 @@ public class ChatMessageAppender {
         // 멘션 알림은 신규 저장 시에만 발행한다. 멱등 히트(재전송)까지 발행하면
         // 같은 메시지에 대해 알림이 중복 발송된다.
         if (isNewMessage) {
-            publishMentionEventIfAny(room, member, chatMessage, message);
+            List<Long> mentionMemberIds = resolveMentionMemberIds(room, member, message);
+            publishMentionEventIfAny(room, member, chatMessage, message, mentionMemberIds);
+            eventPublisher.publishEvent(new ChatMessageNotificationEvent(
+                    room.getProject().getId(), room.getId(), chatMessage.getId(), member.getId(),
+                    mentionMemberIds, truncatePreview(message)));
         }
         return chatMessage;
     }
 
-    private void publishMentionEventIfAny(ChatRoom room, ProjectMember sender, ChatMessage chatMessage, String message) {
+    private List<Long> resolveMentionMemberIds(ChatRoom room, ProjectMember sender, String message) {
         Set<String> nicknameCandidates = ChatMentionParser.extractNicknameCandidates(message);
         if (nicknameCandidates.isEmpty()) {
-            return;
+            return List.of();
         }
 
         List<ProjectMember> matchedMembers = projectMemberRepository.findActiveMembersByProjectIdAndNicknameIn(
                 room.getProject().getId(), MemberStatus.ACTIVE, nicknameCandidates);
 
-        List<Long> mentionMemberIds = matchedMembers.stream()
+        return matchedMembers.stream()
                 .map(ProjectMember::getId)
                 .filter(id -> !id.equals(sender.getId())) // 자기 자신 멘션 제외
                 .distinct()
                 .toList();
+    }
+
+    private void publishMentionEventIfAny(
+            ChatRoom room,
+            ProjectMember sender,
+            ChatMessage chatMessage,
+            String message,
+            List<Long> mentionMemberIds
+    ) {
         if (mentionMemberIds.isEmpty()) {
             return;
         }

@@ -25,21 +25,19 @@ public class GooglePickerAccessTokenService {
     private final IntegrationVerificationService integrationVerificationService;
     private final ProjectIntegrationService projectIntegrationService;
 
-    public GooglePickerAccessTokenResponse issue(Long projectId, Long userId) {
+    public GooglePickerAccessTokenResponse issue(Long projectId, Long userId, LinkType linkType) {
         if (!projectRepository.existsById(projectId)) {
             throw new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND);
         }
         ProjectMember member = projectAccessService.requireActiveMember(projectId, userId);
         ProjectIntegration connectedIntegration = projectIntegrationRepository
-                .findByProjectIdAndLinkType(projectId, LinkType.GOOGLE)
+                .findByProjectIdAndLinkType(projectId, linkType)
                 .filter(GooglePickerAccessTokenService::canCheckPickerOwner)
                 .orElseThrow(() -> new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND));
         if (!Objects.equals(connectedIntegration.getConnectedByProjectMember().getId(), member.getId())) {
             throw new ApiException(IntegrationErrorCode.GOOGLE_PICKER_TOKEN_PERMISSION_DENIED);
         }
-
-        ProjectIntegration integration = integrationVerificationService
-                .requireVerifiedConnection(projectId, LinkType.GOOGLE);
+        ProjectIntegration integration = integrationVerificationService.requireVerifiedConnection(projectId, linkType);
         return new GooglePickerAccessTokenResponse(
                 projectIntegrationService.decryptAccessToken(integration),
                 integration.getExternalAccountName(),

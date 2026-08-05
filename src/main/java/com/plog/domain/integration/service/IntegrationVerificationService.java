@@ -1,5 +1,6 @@
 package com.plog.domain.integration.service;
 
+import com.plog.domain.integration.entity.IntegrationConnectionStatus;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.ProjectIntegrationRepository;
@@ -22,8 +23,14 @@ public class IntegrationVerificationService {
     /** 리소스 등록·동기화 전에 실제 provider 권한을 확인한다. */
     public ProjectIntegration requireVerifiedConnection(Long projectId, LinkType linkType) {
         ProjectIntegration integration = projectIntegrationRepository.findByProjectIdAndLinkType(projectId, linkType)
-                .filter(ProjectIntegration::isConnected)
                 .orElseThrow(() -> new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND));
+
+        if (integration.getConnectionStatus() == IntegrationConnectionStatus.REAUTH_REQUIRED) {
+            throw new ApiException(IntegrationErrorCode.PROVIDER_REAUTHORIZATION_REQUIRED);
+        }
+        if (!integration.isConnected()) {
+            throw new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND);
+        }
 
         IntegrationVerificationStatus status = verify(integration);
         if (status == IntegrationVerificationStatus.VERIFIED) {
@@ -32,7 +39,7 @@ public class IntegrationVerificationService {
         }
         if (status == IntegrationVerificationStatus.DISCONNECTED) {
             projectIntegrationService.requireReauthorization(integration.getId());
-            throw new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND);
+            throw new ApiException(IntegrationErrorCode.PROVIDER_REAUTHORIZATION_REQUIRED);
         }
         if (status == IntegrationVerificationStatus.UNAVAILABLE) {
             throw new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE);
@@ -48,7 +55,7 @@ public class IntegrationVerificationService {
             case GITHUB -> githubAppClient.verifyInstallation(integration.getProviderConnectionId());
             case FIGMA -> figmaIntegrationService.verifyConnection(integration);
             case NOTION -> notionIntegrationService.verifyConnection(integration);
-            case GOOGLE -> googleIntegrationService.verifyConnection(integration);
+            case GOOGLE_DOCS, GOOGLE_SLIDES -> googleIntegrationService.verifyConnection(integration);
         };
     }
 }

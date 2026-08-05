@@ -71,6 +71,7 @@ public class TaskController {
                     - 생성일(createdAt) 오름차순으로 정렬됩니다.
                     - 각 업무카드의 담당자 정보(담당자 ProjectMember ID, 닉네임, 프로필 url)를 함께 내려줍니다.
                     - 마감일이 지났고 상태가 완료(DONE)가 아니면 overdue = true 로 표시됩니다.
+                    - 완료(DONE) 상태라도 마감일 이후에 완료했다면 overdue = true 로 유지됩니다.
                     - 업무카드가 하나도 없으면 빈 배열을 반환합니다.
                     - 인증 필요(Access Token).
                     """
@@ -97,6 +98,7 @@ public class TaskController {
                   만료되기 때문입니다.
                 - dDay: 마감일까지 남은 일수(음수면 지남).
                 - isOverdue: 마감일이 지났고 완료(DONE)가 아닌 경우 true.
+                             완료(DONE) 상태라도 마감일 이후에 완료했다면 true로 유지
                 - isImminent: 완료되지 않았고 마감일까지 D-3 이내(D-3~D-0)인 경우 true. isOverdue와는 배타적입니다.
                 - completedAt은 상태가 완료(DONE)일 때만 값이 있습니다.
                 - 인증 필요(Access Token).

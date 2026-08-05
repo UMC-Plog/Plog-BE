@@ -10,6 +10,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -17,6 +18,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 /** GitHub App 설치 저장소에서 commit, PR, review, issue 및 issue 활동 원문을 수집한다. */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 class GithubIntegrationResourceCollector implements IntegrationResourceCollector {
@@ -29,8 +31,8 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
     private final RestClient restClient = ProviderRestClientFactory.create();
 
     @Override
-    public LinkType provider() {
-        return LinkType.GITHUB;
+    public List<LinkType> providers() {
+        return List.of(LinkType.GITHUB);
     }
 
     @Override
@@ -112,6 +114,7 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
                 return results;
             }
         }
+        log.warn("GitHub pagination exceeded max page count. path={}, maxPages={}", pathWithQuery, MAX_API_PAGE_COUNT);
         throw new ProviderResourceAccessException(503, null);
     }
 
@@ -122,8 +125,12 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
                     .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
                     .retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) {
+            log.warn("GitHub API returned error response. path={}, status={}, body={}",
+                    path, exception.getStatusCode().value(),
+                    ProviderResponseLogSupport.sanitizeForLog(exception.getResponseBodyAsString()));
             throw new ProviderResourceAccessException(exception.getStatusCode().value(), exception);
         } catch (RestClientException exception) {
+            log.warn("GitHub API call failed without a response (timeout/connection issue). path={}", path, exception);
             throw new ProviderResourceAccessException(503, exception);
         }
     }
