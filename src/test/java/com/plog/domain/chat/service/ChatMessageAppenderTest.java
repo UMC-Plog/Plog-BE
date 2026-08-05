@@ -22,6 +22,7 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.notification.event.ChatMentionEvent;
+import com.plog.domain.notification.event.ChatMessageNotificationEvent;
 import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.UploadedFile;
 import jakarta.persistence.EntityManager;
@@ -167,6 +168,25 @@ class ChatMessageAppenderTest {
         assertThat(event.projectId()).isEqualTo(PROJECT_ID);
         assertThat(event.roomId()).isEqualTo(ROOM_ID);
         assertThat(event.chatId()).isEqualTo(501L);
+    }
+
+    @Test
+    void 신규_메시지는_일반_채팅_알림_이벤트를_한_번_발행한다() {
+        when(member.getProject()).thenReturn(project);
+        when(chatMessageRepository.findByChatRoomIdAndProjectMemberIdAndClientMessageId(ROOM_ID, 200L, "client-7"))
+                .thenReturn(Optional.empty());
+        when(room.issueNextMessageSequence()).thenReturn(1L);
+        ChatMessage savedMessage = mock(ChatMessage.class);
+        when(savedMessage.getId()).thenReturn(507L);
+        when(chatMessageRepository.save(any())).thenReturn(savedMessage);
+
+        chatMessageAppender.appendByUser(ROOM_ID, USER_ID, "client-7", "안녕하세요", List.of());
+
+        ArgumentCaptor<ChatMessageNotificationEvent> captor =
+                ArgumentCaptor.forClass(ChatMessageNotificationEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().chatId()).isEqualTo(507L);
+        assertThat(captor.getValue().mentionMemberIds()).isEmpty();
     }
 
     @Test
