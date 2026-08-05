@@ -10,7 +10,10 @@ import static org.mockito.Mockito.when;
 
 import com.plog.domain.post.dto.PostDto;
 import com.plog.domain.post.entity.AttachmentType;
+import com.plog.domain.post.entity.Comment;
 import com.plog.domain.post.entity.Post;
+import com.plog.domain.post.event.CommentCreatedEvent;
+import com.plog.domain.post.event.PostCreatedEvent;
 import com.plog.domain.post.exception.PostErrorCode;
 import com.plog.domain.post.repository.CommentRepository;
 import com.plog.domain.post.repository.PostAttachmentRepository;
@@ -29,11 +32,16 @@ import com.plog.infrastructure.s3.FileStorageErrorCode;
 import com.plog.global.common.AttachmentDownloadUrlFactory;
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.util.ReflectionTestUtils;
 import com.plog.infrastructure.s3.UploadedFileService;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,6 +55,7 @@ class PostServicePolicyTest {
     @Mock private AttachmentDownloadUrlFactory downloadUrlFactory;
     @Mock private AttachmentPolicy attachmentPolicy;
     @Mock private UploadedFileService uploadedFileService;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     private PostService service;
 
@@ -61,7 +70,8 @@ class PostServicePolicyTest {
                 projectMemberRepository,
                 downloadUrlFactory,
                 attachmentPolicy,
-                uploadedFileService
+                uploadedFileService,
+                eventPublisher
         );
     }
 
@@ -168,6 +178,54 @@ class PostServicePolicyTest {
     }
 
     @Test
+    void 게시글_생성_이벤트는_저장된_원본의_생성시각을_사용한다() {
+        LocalDateTime createdAt = LocalDateTime.of(2026, 8, 4, 10, 30);
+        Project project = project(1L);
+        ProjectMember member = member(3L, project);
+        when(projectRepository.existsById(1L)).thenReturn(true);
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(member));
+        when(postRepository.saveAndFlush(any(Post.class))).thenAnswer(invocation -> {
+            Post saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 11L);
+            ReflectionTestUtils.setField(saved, "createdAt", createdAt);
+            ReflectionTestUtils.setField(saved, "updatedAt", createdAt);
+            return saved;
+        });
+
+        service.createPost(1L, 7L, new PostDto.CreateRequest("제목", "본문", false, List.of()));
+
+        ArgumentCaptor<PostCreatedEvent> captor = ArgumentCaptor.forClass(PostCreatedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue()).isEqualTo(new PostCreatedEvent(11L, 3L, "본문", createdAt));
+    }
+
+    @Test
+    void 댓글_생성_이벤트는_저장된_원본의_생성시각을_사용한다() {
+        LocalDateTime createdAt = LocalDateTime.of(2026, 8, 4, 11, 30);
+        Project project = project(1L);
+        ProjectMember member = member(3L, project);
+        Post post = Post.builder().id(11L).projectMember(member).title("제목").content("본문").build();
+        when(projectRepository.existsById(1L)).thenReturn(true);
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(member));
+        when(postRepository.findByIdAndProjectMemberProjectId(11L, 1L)).thenReturn(Optional.of(post));
+        when(commentRepository.saveAndFlush(any(Comment.class))).thenAnswer(invocation -> {
+            Comment saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 31L);
+            ReflectionTestUtils.setField(saved, "createdAt", createdAt);
+            ReflectionTestUtils.setField(saved, "updatedAt", createdAt);
+            return saved;
+        });
+
+        service.createComment(1L, 11L, 7L, new com.plog.domain.post.dto.CommentDto.CreateRequest(" 댓글 "));
+
+        ArgumentCaptor<CommentCreatedEvent> captor = ArgumentCaptor.forClass(CommentCreatedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue()).isEqualTo(new CommentCreatedEvent(31L, 11L, 3L, "댓글", createdAt));
+    }
+
+    @Test
     void nonAuthorCannotUpdatePost() {
         ProjectMember viewer = ProjectMember.builder()
                 .id(3L).role(ProjectRole.MEMBER).status(MemberStatus.ACTIVE).build();
@@ -182,5 +240,30 @@ class PostServicePolicyTest {
                 1L, 2L, 7L, new com.plog.domain.post.dto.PostDto.UpdateRequest("updated", null)))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(PostErrorCode.POST_UPDATE_PERMISSION_DENIED));
+    }
+
+    private Project project(Long id) {
+        return Project.builder()
+                .id(id)
+                .projectName("Plog")
+                .inviteTokenHash("hash")
+                .inviteTokenEncrypted("encrypted")
+                .projectType(com.plog.domain.project.entity.ProjectType.DEVELOP)
+                .status(com.plog.domain.project.entity.ProjectStatus.IN_PROGRESS)
+                .startDay(LocalDate.of(2026, 8, 1))
+                .endDay(LocalDate.of(2026, 8, 13))
+                .build();
+    }
+
+    private ProjectMember member(Long id, Project project) {
+        com.plog.domain.user.entity.User user = com.plog.domain.user.entity.User.createLocal(
+                "user@example.com", "encoded", "구현모", "현모");
+        return ProjectMember.builder()
+                .id(id)
+                .user(user)
+                .project(project)
+                .role(ProjectRole.MEMBER)
+                .status(MemberStatus.ACTIVE)
+                .build();
     }
 }

@@ -12,14 +12,15 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import java.math.BigDecimal;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-// 세부 컬럼(점수 5개 decimal, strengths, improvements, content, raw_response 등)은
-// 팀 확정 후 추가 예정. 현재 PK/FK만 세팅.
 @Entity
 @Getter
 @Builder
@@ -43,4 +44,56 @@ public class ReportMemberResult extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_member_id", nullable = false)
     private ProjectMember projectMember;
+
+    @Column(name = "internal_score", precision = 5, scale = 2)
+    private BigDecimal internalScore;
+
+    @Column(name = "external_score", precision = 5, scale = 2)
+    private BigDecimal externalScore;
+
+    @Column(name = "peer_score", precision = 5, scale = 2)
+    private BigDecimal peerScore;
+
+    @Column(name = "self_feedback_score", precision = 5, scale = 2)
+    private BigDecimal selfFeedbackScore;
+
+    @Column(name = "final_score", precision = 5, scale = 2)
+    private BigDecimal finalScore;
+
+    @Column(name = "external_tool_connected", nullable = false)
+    private boolean externalToolConnected;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reliability_tier", length = 10)
+    private ReliabilityTier reliabilityTier;
+
+    @Column(name = "caution_text", columnDefinition = "TEXT")
+    private String cautionText;
+
+    public static ReportMemberResult create(Report report, ProjectMember projectMember) {
+        if (report == null || projectMember == null) {
+            throw new IllegalArgumentException("report and projectMember must not be null");
+        }
+        return ReportMemberResult.builder().report(report).projectMember(projectMember).build();
+    }
+
+    public void applyScores(
+            BigDecimal internalScore,
+            BigDecimal externalScore,
+            BigDecimal peerScore,
+            BigDecimal selfFeedbackScore,
+            BigDecimal finalScore,
+            boolean externalToolConnected,
+            ReliabilityTier reliabilityTier,
+            String cautionText
+    ) {
+        this.internalScore = internalScore;
+        this.externalScore = externalScore;
+        this.peerScore = peerScore;
+        this.selfFeedbackScore = selfFeedbackScore;
+        this.finalScore = finalScore;
+        this.externalToolConnected = externalToolConnected;
+        this.reliabilityTier = reliabilityTier;
+        this.cautionText = cautionText;
+    }
 }
