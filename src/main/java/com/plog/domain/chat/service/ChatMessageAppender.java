@@ -6,6 +6,7 @@ import com.plog.domain.chat.entity.ChatAttachment;
 import com.plog.domain.chat.entity.ChatMessage;
 import com.plog.domain.chat.entity.ChatRoom;
 import com.plog.domain.chat.event.ChatMessageSavedEvent;
+import com.plog.domain.chat.event.ChatRoomSummaryUpdatedEvent;
 import com.plog.domain.chat.repository.ChatAttachmentRepository;
 import com.plog.domain.chat.repository.ChatMessageRepository;
 import com.plog.domain.chat.repository.ChatRoomRepository;
@@ -111,12 +112,23 @@ public class ChatMessageAppender {
         // 멘션 알림은 신규 저장 시에만 발행한다. 멱등 히트(재전송)까지 발행하면
         // 같은 메시지에 대해 알림이 중복 발송된다.
         if (isNewMessage) {
+            List<ProjectMember> activeMembers = projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(
+                    room.getProject().getId(), MemberStatus.ACTIVE);
+
             List<Long> mentionMemberIds = resolveMentionMemberIds(room, member, message);
             publishMentionEventIfAny(room, member, chatMessage, message, mentionMemberIds);
-            List<Long> targetMemberIds = resolveChatMessageTargetMemberIds(room, member, mentionMemberIds);
+
+            List<Long> targetMemberIds = resolveChatMessageTargetMemberIds(activeMembers, member, mentionMemberIds);
             eventPublisher.publishEvent(new ChatMessageNotificationEvent(
                     room.getProject().getId(), room.getId(), chatMessage.getId(), member.getId(),
                     targetMemberIds, truncatePreview(message)));
+
+            // 채팅방 목록 실시간 갱신(unreadCount/최신 메시지 미리보기)은 멘션 여부와 무관하게
+            // 발신자를 제외한 참여자 전원에게 간다 — 멘션 알림(위 targetMemberIds)과는 대상 범위가 다르다.
+            List<Long> participantUserIds = resolveRoomParticipantUserIds(activeMembers, member);
+            String latestMessage = resolveLatestMessagePreview(message, attachments);
+            eventPublisher.publishEvent(new ChatRoomSummaryUpdatedEvent(
+                    room.getId(), chatMessage.getMessageSequence(), latestMessage, participantUserIds));
         }
         return chatMessage;
     }
@@ -138,17 +150,39 @@ public class ChatMessageAppender {
     }
 
     private List<Long> resolveChatMessageTargetMemberIds(
-            ChatRoom room,
+            List<ProjectMember> activeMembers,
             ProjectMember sender,
             List<Long> mentionMemberIds
     ) {
         Set<Long> excludedMemberIds = new LinkedHashSet<>(mentionMemberIds);
         excludedMemberIds.add(sender.getId());
-        return projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(
-                        room.getProject().getId(), MemberStatus.ACTIVE).stream()
+        return activeMembers.stream()
                 .map(ProjectMember::getId)
                 .filter(memberId -> !excludedMemberIds.contains(memberId))
                 .toList();
+    }
+
+    // 채팅방 목록 갱신 push 대상. 멘션 여부와 무관하게 발신자만 제외한 참여자 전원이다.
+    private List<Long> resolveRoomParticipantUserIds(List<ProjectMember> activeMembers, ProjectMember sender) {
+        return activeMembers.stream()
+                .filter(activeMember -> !activeMember.getId().equals(sender.getId()))
+                .map(activeMember -> activeMember.getUser().getId())
+                .toList();
+    }
+
+    // 목록 미리보기 텍스트. 텍스트가 있으면 그걸 우선하고(멘션 미리보기와 동일 기준으로 자름),
+    // 텍스트 없이 첨부만 있는 메시지는 첫 첨부 파일명 + (2개 이상이면 "외 N개")로 대체한다.
+    private String resolveLatestMessagePreview(String message, List<ChatMessageAttachmentRequest> attachments) {
+        if (message != null && !message.isBlank()) {
+            return truncatePreview(message);
+        }
+        if (attachments == null || attachments.isEmpty()) {
+            return null;
+        }
+        String firstFileName = attachments.get(0).fileName();
+        return attachments.size() > 1
+                ? firstFileName + " 외 " + (attachments.size() - 1) + "개"
+                : firstFileName;
     }
 
     private void publishMentionEventIfAny(
