@@ -17,10 +17,17 @@ import java.time.LocalDate;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -38,10 +45,38 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequ
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(E2eTestBase.E2eAsyncConfiguration.class)
 public abstract class E2eTestBase {
 
     private static final String JWT_SECRET = "plog-e2e-test-jwt-secret-key-0123456789";
     private static final String INVITE_KEY = Base64.getEncoder().encodeToString(new byte[32]);
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class E2eAsyncConfiguration {
+
+        @Bean(name = "taskExecutor")
+        E2eTaskExecutor taskExecutor() {
+            E2eTaskExecutor executor = new E2eTaskExecutor();
+            executor.setCorePoolSize(1);
+            executor.setMaxPoolSize(1);
+            executor.setThreadNamePrefix("e2e-async-");
+            return executor;
+        }
+    }
+
+    static class E2eTaskExecutor extends ThreadPoolTaskExecutor {
+
+        void awaitIdle() {
+            try {
+                submit(() -> { }).get(10, TimeUnit.SECONDS);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("E2E 비동기 작업 대기가 중단되었습니다.", exception);
+            } catch (ExecutionException | TimeoutException exception) {
+                throw new IllegalStateException("E2E 비동기 작업이 제한 시간 안에 끝나지 않았습니다.", exception);
+            }
+        }
+    }
 
     protected static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>("postgres:16-alpine");
@@ -90,6 +125,9 @@ public abstract class E2eTestBase {
     @Autowired
     private InviteTokenCipher inviteTokenCipher;
 
+    @Autowired
+    private E2eTaskExecutor taskExecutor;
+
     @MockitoBean
     protected S3Client s3Client;
 
@@ -101,6 +139,7 @@ public abstract class E2eTestBase {
 
     @BeforeEach
     void resetDatabaseAndExternalStubs() {
+        taskExecutor.awaitIdle();
         jdbc.execute("TRUNCATE TABLE tb_user RESTART IDENTITY CASCADE");
 
         given(s3Client.headObject(any(software.amazon.awssdk.services.s3.model.HeadObjectRequest.class)))
