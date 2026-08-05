@@ -4,6 +4,7 @@ import com.plog.domain.evaluation.dto.request.SelfFeedbackCreateRequest;
 import com.plog.domain.evaluation.dto.response.SelfFeedbackResponse;
 import com.plog.domain.evaluation.dto.response.SelfFeedbackUpdateResponse;
 import com.plog.domain.evaluation.entity.SelfFeedback;
+import com.plog.domain.evaluation.event.SelfFeedbackSubmittedEvent;
 import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.global.api.error.EvaluationErrorCode;
@@ -11,8 +12,11 @@ import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +25,7 @@ public class SelfFeedbackService {
 
     private final SelfFeedbackRepository selfFeedbackRepository;
     private final EvaluationParticipantResolver participantResolver;
+    private final ApplicationEventPublisher eventPublisher;
 
     public SelfFeedbackResponse getMySelfFeedback(Long projectId, Long userId) {
 
@@ -54,6 +59,8 @@ public class SelfFeedbackService {
         } catch (DataIntegrityViolationException e) {
             throw new ApiException(EvaluationErrorCode.ALREADY_SUBMITTED_SELF_FEEDBACK);
         }
+        eventPublisher.publishEvent(new SelfFeedbackSubmittedEvent(
+                selfFeedback.getId(), projectMember.getId(), LocalDateTime.now(ZoneOffset.UTC)));
 
         return new SelfFeedbackResponse(selfFeedback.getId(), selfFeedback.getContent());
     }

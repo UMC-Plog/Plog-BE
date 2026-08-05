@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class SelfFeedbackServiceTest {
@@ -34,13 +35,17 @@ class SelfFeedbackServiceTest {
     @Mock
     private SelfFeedbackRepository selfFeedbackRepository;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private SelfFeedbackService selfFeedbackService;
 
     @BeforeEach
     void setUp() {
         selfFeedbackService = new SelfFeedbackService(
                 selfFeedbackRepository,
-                new EvaluationParticipantResolver(projectMemberRepository)
+                new EvaluationParticipantResolver(projectMemberRepository),
+                eventPublisher
         );
     }
 

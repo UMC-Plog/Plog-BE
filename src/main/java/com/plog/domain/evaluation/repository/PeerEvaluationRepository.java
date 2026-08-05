@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 import java.util.Set;
+import java.util.List;
 
 public interface PeerEvaluationRepository extends JpaRepository<PeerEvaluation, Long> {
 
@@ -15,6 +16,8 @@ public interface PeerEvaluationRepository extends JpaRepository<PeerEvaluation, 
     Set<Long> findEvaluatedTargetIds(@Param("evaluator") ProjectMember evaluator);
 
     Optional<PeerEvaluation> findByEvaluatorIdAndEvaluateeId(Long evaluatorId, Long evaluateeId);
+
+    List<PeerEvaluation> findAllByEvaluateeProjectId(Long projectId);
 
     @Query("""
             select count(peerEvaluation)
