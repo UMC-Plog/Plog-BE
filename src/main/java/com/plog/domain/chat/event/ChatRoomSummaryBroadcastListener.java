@@ -48,7 +48,7 @@ public class ChatRoomSummaryBroadcastListener {
         for (Long userId : event.targetUserIds()) {
             long unreadCount = unreadCountByUserId.getOrDefault(userId, 0L);
             ChatRoomSummaryMessage payload = ChatRoomSummaryMessage.of(
-                    event.roomId(), event.latestMessage(), unreadCount);
+                    event.roomId(), event.messageSequence(), event.latestMessage(), unreadCount);
             sendWithRetry(String.valueOf(userId), payload);
         }
     }

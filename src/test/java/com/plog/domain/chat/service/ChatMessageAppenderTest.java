@@ -154,6 +154,7 @@ class ChatMessageAppenderTest {
         when(room.issueNextMessageSequence()).thenReturn(1L);
         ChatMessage savedMessage = mock(ChatMessage.class);
         when(savedMessage.getId()).thenReturn(501L);
+        when(savedMessage.getMessageSequence()).thenReturn(5L);
         when(chatMessageRepository.save(any())).thenReturn(savedMessage);
 
         User mentionedUser = mock(User.class);
@@ -198,6 +199,7 @@ class ChatMessageAppenderTest {
                 .filter(ChatRoomSummaryUpdatedEvent.class::isInstance).map(ChatRoomSummaryUpdatedEvent.class::cast)
                 .findFirst().orElseThrow();
         assertThat(summaryEvent.roomId()).isEqualTo(ROOM_ID);
+        assertThat(summaryEvent.messageSequence()).isEqualTo(5L);
         assertThat(summaryEvent.targetUserIds()).containsExactlyInAnyOrder(30L, 40L);
         assertThat(summaryEvent.latestMessage()).isEqualTo("@지현 확인 부탁");
     }
@@ -210,6 +212,7 @@ class ChatMessageAppenderTest {
         when(room.issueNextMessageSequence()).thenReturn(1L);
         ChatMessage savedMessage = mock(ChatMessage.class);
         when(savedMessage.getId()).thenReturn(507L);
+        when(savedMessage.getMessageSequence()).thenReturn(7L);
         when(chatMessageRepository.save(any())).thenReturn(savedMessage);
         User targetUser = mock(User.class);
         when(targetUser.getId()).thenReturn(40L);
@@ -235,6 +238,7 @@ class ChatMessageAppenderTest {
                 .filter(ChatRoomSummaryUpdatedEvent.class::isInstance).map(ChatRoomSummaryUpdatedEvent.class::cast)
                 .findFirst().orElseThrow();
         assertThat(summaryEvent.roomId()).isEqualTo(ROOM_ID);
+        assertThat(summaryEvent.messageSequence()).isEqualTo(7L);
         assertThat(summaryEvent.targetUserIds()).containsExactly(40L);
         assertThat(summaryEvent.latestMessage()).isEqualTo("안녕하세요");
     }
@@ -247,6 +251,7 @@ class ChatMessageAppenderTest {
         when(room.issueNextMessageSequence()).thenReturn(1L);
         ChatMessage savedMessage = mock(ChatMessage.class);
         when(savedMessage.getId()).thenReturn(508L);
+        when(savedMessage.getMessageSequence()).thenReturn(8L);
         when(chatMessageRepository.save(any())).thenReturn(savedMessage);
 
         UploadedFile confirmed = mock(UploadedFile.class);
@@ -273,6 +278,7 @@ class ChatMessageAppenderTest {
         ChatRoomSummaryUpdatedEvent summaryEvent = allEvents.getAllValues().stream()
                 .filter(ChatRoomSummaryUpdatedEvent.class::isInstance).map(ChatRoomSummaryUpdatedEvent.class::cast)
                 .findFirst().orElseThrow();
+        assertThat(summaryEvent.messageSequence()).isEqualTo(8L);
         assertThat(summaryEvent.latestMessage()).isEqualTo("회의록.pdf 외 1개");
     }
 

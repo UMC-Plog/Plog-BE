@@ -127,7 +127,8 @@ public class ChatMessageAppender {
             // 발신자를 제외한 참여자 전원에게 간다 — 멘션 알림(위 targetMemberIds)과는 대상 범위가 다르다.
             List<Long> participantUserIds = resolveRoomParticipantUserIds(activeMembers, member);
             String latestMessage = resolveLatestMessagePreview(message, attachments);
-            eventPublisher.publishEvent(new ChatRoomSummaryUpdatedEvent(room.getId(), latestMessage, participantUserIds));
+            eventPublisher.publishEvent(new ChatRoomSummaryUpdatedEvent(
+                    room.getId(), chatMessage.getMessageSequence(), latestMessage, participantUserIds));
         }
         return chatMessage;
     }

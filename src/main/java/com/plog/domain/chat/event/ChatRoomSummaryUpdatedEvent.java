@@ -4,6 +4,7 @@ import java.util.List;
 
 public record ChatRoomSummaryUpdatedEvent(
         Long roomId,
+        Long messageSequence,
         String latestMessage,
         List<Long> targetUserIds
 ) {

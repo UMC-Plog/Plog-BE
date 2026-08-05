@@ -48,7 +48,7 @@ class ChatRoomSummaryBroadcastListenerTest {
                 .thenReturn(List.of(countForUserA, countForUserB));
 
         listener.onChatRoomSummaryUpdated(
-                new ChatRoomSummaryUpdatedEvent(ROOM_ID, "회의록.pdf", List.of(1L, 2L)));
+                new ChatRoomSummaryUpdatedEvent(ROOM_ID, 5L, "회의록.pdf", List.of(1L, 2L)));
 
         // 참여자 수(2명)와 무관하게 unreadCount 조회는 쿼리 1번(배치)으로 끝난다
         verify(chatRoomReadCursorRepository, times(1))
@@ -58,6 +58,7 @@ class ChatRoomSummaryBroadcastListenerTest {
         verify(messagingTemplate).convertAndSendToUser(eq("1"), eq(CHAT_UPDATE_QUEUE), captor.capture());
         assertThat(captor.getValue().type()).isEqualTo("ROOM_SUMMARY");
         assertThat(captor.getValue().roomId()).isEqualTo(ROOM_ID);
+        assertThat(captor.getValue().messageSequence()).isEqualTo(5L);
         assertThat(captor.getValue().latestMessage()).isEqualTo("회의록.pdf");
         assertThat(captor.getValue().unreadMessageCount()).isEqualTo(3L);
 
@@ -72,7 +73,7 @@ class ChatRoomSummaryBroadcastListenerTest {
         when(chatRoomReadCursorRepository.findUnreadCountsForRoom(ROOM_ID, MemberStatus.ACTIVE))
                 .thenReturn(List.of());
 
-        listener.onChatRoomSummaryUpdated(new ChatRoomSummaryUpdatedEvent(ROOM_ID, "hi", List.of(1L)));
+        listener.onChatRoomSummaryUpdated(new ChatRoomSummaryUpdatedEvent(ROOM_ID, 5L, "hi", List.of(1L)));
 
         ArgumentCaptor<ChatRoomSummaryMessage> captor = ArgumentCaptor.forClass(ChatRoomSummaryMessage.class);
         verify(messagingTemplate).convertAndSendToUser(eq("1"), eq(CHAT_UPDATE_QUEUE), captor.capture());
@@ -84,7 +85,7 @@ class ChatRoomSummaryBroadcastListenerTest {
         ChatRoomSummaryBroadcastListener listener =
                 new ChatRoomSummaryBroadcastListener(messagingTemplate, chatRoomReadCursorRepository);
 
-        listener.onChatRoomSummaryUpdated(new ChatRoomSummaryUpdatedEvent(ROOM_ID, "hi", List.of()));
+        listener.onChatRoomSummaryUpdated(new ChatRoomSummaryUpdatedEvent(ROOM_ID, 5L, "hi", List.of()));
 
         verifyNoInteractions(chatRoomReadCursorRepository, messagingTemplate);
     }
@@ -101,7 +102,7 @@ class ChatRoomSummaryBroadcastListenerTest {
                 .doNothing()
                 .when(messagingTemplate).convertAndSendToUser(any(), any(), any());
 
-        listener.onChatRoomSummaryUpdated(new ChatRoomSummaryUpdatedEvent(ROOM_ID, "hi", List.of(1L)));
+        listener.onChatRoomSummaryUpdated(new ChatRoomSummaryUpdatedEvent(ROOM_ID, 5L, "hi", List.of(1L)));
 
         verify(messagingTemplate, times(3)).convertAndSendToUser(any(), any(), any());
     }
