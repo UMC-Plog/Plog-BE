@@ -29,7 +29,7 @@ public class EvaluationActivityLogService {
         String sourceRefId = "peer-evaluation:" + evaluationId;
         saveIfAbsent(
                 sourceRefId,
-                evaluation.getEvaluatee(),
+                evaluation.getEvaluator(),
                 RawActivityType.PEER_EVALUATION_SUBMIT,
                 evaluation.getFeedback(),
                 occurredAt,
