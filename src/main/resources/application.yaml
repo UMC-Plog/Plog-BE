@@ -99,6 +99,23 @@ plog:
     redirect:
       success-url: ${INTEGRATION_SUCCESS_REDIRECT_URL:http://localhost:5173/integrations/callback}
       failure-url: ${INTEGRATION_FAILURE_REDIRECT_URL:http://localhost:5173/integrations/callback}
+    # 수집 1건은 GitHub 리포지토리 하나당 수백 회의 API 호출이 필요해 수 분이 걸린다.
+    # HTTP 요청 스레드에서 처리하면 ALB 타임아웃에 끊기고, 끊긴 뒤에도 서버는 계속 호출해
+    # rate limit만 태운다. 그래서 DB 큐 + @Scheduled 워커로 돌린다.
+    collection:
+      poll-delay-ms: 5000
+      batch-size: 5
+      # heartbeat가 이 시간 넘게 끊기면 재배포 등으로 죽은 잡으로 보고 회수한다.
+      processing-timeout: 30m
+      max-attempts: 5
+      # 항목 이 개수마다 커서를 저장한다. 작을수록 재개가 정확하지만 DB 쓰기가 늘어난다.
+      cursor-flush-interval: 25
+      # 워터마크에서 이만큼 앞당겨 수집한다. 시계 오차와 provider 반영 지연을 흡수한다.
+      # 겹쳐 가져와도 activity 저장이 멱등이라 안전하다.
+      watermark-overlap: 1h
+      github-min-interval-ms: 100
+      # 남은 rate limit이 이 아래로 떨어지면 잡을 중단하고 reset 이후로 재큐한다.
+      rate-limit-min-remaining: 100
     github:
       app-id: ${GITHUB_APP_ID:}
       app-slug: ${GITHUB_APP_SLUG:}

@@ -38,7 +38,7 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
     }
 
     @Override
-    public void collect(IntegrationResource resource) {
+    public void collect(IntegrationResource resource, CollectionContext context) {
         String token = projectIntegrationService.decryptAccessToken(resource.getProjectIntegration());
         collect(resource, token);
     }

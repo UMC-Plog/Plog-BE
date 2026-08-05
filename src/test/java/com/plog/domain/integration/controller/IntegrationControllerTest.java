@@ -17,8 +17,6 @@ import com.plog.domain.integration.dto.NotionResourceType;
 import com.plog.domain.integration.dto.request.FigmaResourceRegisterRequest;
 import com.plog.domain.integration.dto.request.GoogleResourceRegisterRequest;
 import com.plog.domain.integration.dto.request.NotionResourceRegisterRequest;
-import com.plog.domain.integration.dto.response.IntegrationCollectionFailureResponse;
-import com.plog.domain.integration.dto.response.IntegrationCollectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationActorMappingListResponse;
 import com.plog.domain.integration.dto.response.IntegrationActorMappingResponse;
 import com.plog.domain.integration.dto.response.IntegrationProviderActorResponse;
@@ -27,6 +25,8 @@ import com.plog.domain.integration.dto.response.IntegrationResourceCandidateResp
 import com.plog.domain.integration.dto.response.IntegrationResourceListResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceResponse;
 import com.plog.domain.integration.dto.response.IntegrationStatusResponse;
+import com.plog.domain.integration.entity.IntegrationCollectionJob;
+import com.plog.domain.integration.entity.IntegrationCollectionJobStatus;
 import com.plog.domain.integration.entity.IntegrationResourceStatus;
 import com.plog.domain.integration.entity.IntegrationResourceType;
 import com.plog.domain.integration.entity.LinkType;
@@ -57,6 +57,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(IntegrationController.class)
@@ -584,35 +585,27 @@ class IntegrationControllerTest {
     }
 
     @Test
-    @DisplayName("외부 연동 데이터 수동 수집 결과에 성공 수와 실패 리소스 정보를 반환한다")
-    void collectIntegrationDataReturnsCollectionResult() throws Exception {
+    @DisplayName("외부 연동 수집 요청은 202와 잡 ID를 반환한다")
+    void collectIntegrationDataReturnsAcceptedJob() throws Exception {
         Long projectId = 1L;
         Long userId = 10L;
         authenticate(userId);
-        given(integrationDataCollectionService.collectNow(eq(projectId), eq(userId)))
-                .willReturn(new IntegrationCollectionResponse(
-                        projectId,
-                        3,
-                        2,
-                        List.of(new IntegrationCollectionFailureResponse(
-                                12L,
-                                LinkType.GOOGLE_DOCS,
-                                "캡스톤 발표자료",
-                                "provider resource access denied"
-                        ))
-                ));
+        IntegrationCollectionJob job = IntegrationCollectionJob.builder()
+                .status(IntegrationCollectionJobStatus.PENDING)
+                .availableAt(Instant.now())
+                .attemptCount(0)
+                .build();
+        ReflectionTestUtils.setField(job, "id", 42L);
+        given(integrationDataCollectionService.enqueueCollection(eq(projectId), eq(userId)))
+                .willReturn(job);
 
         mockMvc.perform(post("/api/projects/{projectId}/integrations/collect", projectId))
-                .andExpect(status().isOk())
+                .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.code").value("INTEGRATION006"))
                 .andExpect(jsonPath("$.result.projectId").value(projectId))
-                .andExpect(jsonPath("$.result.requestedResourceCount").value(3))
-                .andExpect(jsonPath("$.result.collectedResourceCount").value(2))
-                .andExpect(jsonPath("$.result.failures[0].resourceId").value(12L))
-                .andExpect(jsonPath("$.result.failures[0].linkType").value("GOOGLE_DOCS"))
-                .andExpect(jsonPath("$.result.failures[0].resourceName").value("캡스톤 발표자료"))
-                .andExpect(jsonPath("$.result.failures[0].reason").value("provider resource access denied"));
+                .andExpect(jsonPath("$.result.jobId").value(42))
+                .andExpect(jsonPath("$.result.status").value("PENDING"));
     }
 
     @Test
@@ -621,7 +614,7 @@ class IntegrationControllerTest {
         Long projectId = 999L;
         Long userId = 10L;
         authenticate(userId);
-        given(integrationDataCollectionService.collectNow(projectId, userId))
+        given(integrationDataCollectionService.enqueueCollection(projectId, userId))
                 .willThrow(new ApiException(ProjectErrorCode.PROJECT_NOT_FOUND));
 
         mockMvc.perform(post("/api/projects/{projectId}/integrations/collect", projectId))
@@ -635,7 +628,7 @@ class IntegrationControllerTest {
         Long projectId = 1L;
         Long userId = 10L;
         authenticate(userId);
-        given(integrationDataCollectionService.collectNow(projectId, userId))
+        given(integrationDataCollectionService.enqueueCollection(projectId, userId))
                 .willThrow(new ApiException(ProjectErrorCode.PROJECT_MEMBER_REQUIRED));
 
         mockMvc.perform(post("/api/projects/{projectId}/integrations/collect", projectId))

@@ -3,6 +3,7 @@ package com.plog.global.config;
 import com.plog.domain.integration.config.FigmaIntegrationProperties;
 import com.plog.domain.integration.config.GithubIntegrationProperties;
 import com.plog.domain.integration.config.GoogleIntegrationProperties;
+import com.plog.domain.integration.config.IntegrationCollectionProperties;
 import com.plog.domain.integration.config.IntegrationRedirectProperties;
 import com.plog.domain.integration.config.NotionIntegrationProperties;
 import com.plog.domain.integration.config.NotionWebhookProperties;
@@ -28,6 +29,7 @@ import org.springframework.context.annotation.Configuration;
         NotionIntegrationProperties.class,
         NotionWebhookProperties.class,
         GoogleIntegrationProperties.class,
+        IntegrationCollectionProperties.class,
         IntegrationRedirectProperties.class,
         KakaoOAuthProperties.class,
         GoogleOAuthProperties.class,
