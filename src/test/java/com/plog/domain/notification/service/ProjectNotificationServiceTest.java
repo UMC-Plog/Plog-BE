@@ -51,12 +51,15 @@ class ProjectNotificationServiceTest {
     @Test
     void 일반_채팅은_발신자와_멘션_대상을_제외한_활성_멤버에게만_저장한다() {
         Project project = mock(Project.class);
+        when(project.getProjectName()).thenReturn("Plog");
         ProjectMember sender = member(1L, 101L, project, "보낸이");
         ProjectMember mentioned = member(2L, 102L, project, "멘션됨");
         ProjectMember target = member(3L, 103L, project, "수신자");
         when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(10L, MemberStatus.ACTIVE))
                 .thenReturn(List.of(sender, mentioned, target));
-        when(fcmTokenRepository.findAllByUserIdIn(anyCollection())).thenReturn(List.of());
+        FcmToken token = mock(FcmToken.class);
+        when(token.getToken()).thenReturn("target-token");
+        when(fcmTokenRepository.findAllByUserIdIn(anyCollection())).thenReturn(List.of(token));
 
         service.sendChatMessage(new ChatMessageNotificationEvent(
                 10L, 20L, 30L, 1L, List.of(2L), "확인 부탁"));
@@ -69,6 +72,14 @@ class ProjectNotificationServiceTest {
             assertThat(notification.getType()).isEqualTo(NotificationType.CHAT_MESSAGE);
             assertThat(notification.getResourceId()).isEqualTo(30L);
         });
+
+        ArgumentCaptor<FcmMessage> messageCaptor = ArgumentCaptor.forClass(FcmMessage.class);
+        verify(fcmGateway).send(messageCaptor.capture());
+        assertThat(messageCaptor.getValue().token()).isEqualTo("target-token");
+        assertThat(messageCaptor.getValue().data()).containsEntry("type", "CHAT_MESSAGE")
+                .containsEntry("projectId", "10")
+                .containsEntry("roomId", "20")
+                .containsEntry("resourceId", "30");
     }
 
     @Test
@@ -139,6 +150,30 @@ class ProjectNotificationServiceTest {
 
         verify(fcmGateway).send(any(FcmMessage.class));
         verify(fcmTokenRepository).deleteByToken("invalid-token");
+    }
+
+    @Test
+    void FCM_재시도_대기가_중단되어도_예외를_전파하지_않고_저장한_알림을_유지한다() {
+        Project project = mock(Project.class);
+        when(project.getProjectName()).thenReturn("Plog");
+        ProjectMember target = member(1L, 101L, project, "수신자");
+        FcmToken token = mock(FcmToken.class);
+        when(token.getToken()).thenReturn("retry-token");
+        when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(10L, MemberStatus.ACTIVE))
+                .thenReturn(List.of(target));
+        when(fcmTokenRepository.findAllByUserIdIn(anyCollection())).thenReturn(List.of(token));
+        doThrow(new FcmDeliveryException(false, new RuntimeException("temporary")))
+                .when(fcmGateway).send(any(FcmMessage.class));
+
+        Thread.currentThread().interrupt();
+        try {
+            service.sendReportPublished(new ReportPublishedEvent(10L, 20L));
+        } finally {
+            Thread.interrupted();
+        }
+
+        verify(notificationRepository).saveAll(anyCollection());
+        verify(fcmGateway).send(any(FcmMessage.class));
     }
 
     private void assertSavedNotifications(NotificationType type, Long resourceId, int size) {

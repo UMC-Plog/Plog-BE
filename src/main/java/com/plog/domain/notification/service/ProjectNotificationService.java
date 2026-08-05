@@ -66,6 +66,8 @@ public class ProjectNotificationService {
         if (event == null || event.projectId() == null) {
             return;
         }
+        notificationRepository.acquireDedupeLock(
+                event.projectId() + ":" + NotificationType.PEER_EVALUATION_STARTED.name());
         if (notificationRepository.existsByProjectIdAndType(
                 event.projectId(), NotificationType.PEER_EVALUATION_STARTED)) {
             return;
@@ -89,6 +91,8 @@ public class ProjectNotificationService {
         if (event == null || event.projectId() == null || event.reportId() == null) {
             return;
         }
+        notificationRepository.acquireDedupeLock(event.projectId() + ":"
+                + NotificationType.REPORT_PUBLISHED.name() + ":" + event.reportId());
         if (notificationRepository.existsByProjectIdAndTypeAndResourceId(
                 event.projectId(), NotificationType.REPORT_PUBLISHED, event.reportId())) {
             return;
@@ -150,23 +154,29 @@ public class ProjectNotificationService {
                     log.error("project_notification_delivery_failed type={} attempts={}", type, attempt, exception);
                     return;
                 }
-                backoff(attempt);
+                if (!backoff(attempt)) {
+                    return;
+                }
             } catch (RuntimeException exception) {
                 if (attempt > MAX_RETRIES) {
                     log.error("project_notification_delivery_failed type={} attempts={}", type, attempt, exception);
                     return;
                 }
-                backoff(attempt);
+                if (!backoff(attempt)) {
+                    return;
+                }
             }
         }
     }
 
-    private void backoff(int attempt) {
+    private boolean backoff(int attempt) {
         try {
             Thread.sleep(200L * (1L << (attempt - 1)));
+            return true;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("FCM 재시도 대기가 중단되었습니다.", exception);
+            log.warn("project_notification_retry_interrupted attempt={}", attempt);
+            return false;
         }
     }
 

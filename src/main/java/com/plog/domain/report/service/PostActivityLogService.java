@@ -41,6 +41,7 @@ public class PostActivityLogService {
             String sourceRefId,
             String metadata
     ) {
+        activityLogRepository.acquireSourceLock(SourceDomain.POST.name() + ":" + sourceRefId);
         if (activityLogRepository.existsBySourceDomainAndSourceRefId(SourceDomain.POST, sourceRefId)) {
             return;
         }

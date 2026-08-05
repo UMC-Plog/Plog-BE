@@ -41,6 +41,7 @@ class PostActivityLogServiceTest {
 
         service.collectPostCreated(11L, 7L, "첫 게시글", LocalDateTime.of(2026, 8, 4, 10, 0));
 
+        verify(activityLogRepository).acquireSourceLock("POST:post:11");
         ArgumentCaptor<ReportActivityLog> captor = ArgumentCaptor.forClass(ReportActivityLog.class);
         verify(activityLogRepository).save(captor.capture());
         ReportActivityLog saved = captor.getValue();
@@ -58,6 +59,7 @@ class PostActivityLogServiceTest {
 
         service.collectCommentCreated(31L, 11L, 7L, "댓글", LocalDateTime.now());
 
+        verify(activityLogRepository).acquireSourceLock("POST:comment:31");
         verify(projectMemberRepository, never()).findById(7L);
         verify(activityLogRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }

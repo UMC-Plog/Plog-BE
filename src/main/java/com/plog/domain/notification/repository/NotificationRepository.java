@@ -11,6 +11,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
+    @Query(value = "select pg_advisory_xact_lock(hashtextextended(:dedupeKey, 0))", nativeQuery = true)
+    void acquireDedupeLock(@Param("dedupeKey") String dedupeKey);
+
     boolean existsByProjectIdAndType(Long projectId, NotificationType type);
 
     boolean existsByProjectIdAndTypeAndResourceId(Long projectId, NotificationType type, Long resourceId);

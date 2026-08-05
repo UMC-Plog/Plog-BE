@@ -4,8 +4,13 @@ import com.plog.domain.report.entity.ReportActivityLog;
 import com.plog.domain.report.entity.SourceDomain;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface ReportActivityLogRepository extends JpaRepository<ReportActivityLog, Long> {
+
+    @Query(value = "select pg_advisory_xact_lock(hashtextextended(:sourceKey, 0))", nativeQuery = true)
+    void acquireSourceLock(@Param("sourceKey") String sourceKey);
 
     boolean existsBySourceDomainAndSourceRefId(SourceDomain sourceDomain, String sourceRefId);
 
