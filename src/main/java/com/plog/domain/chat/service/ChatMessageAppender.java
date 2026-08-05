@@ -21,15 +21,15 @@ import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.AttachmentUsage;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.QueryTimeoutException;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -113,9 +113,10 @@ public class ChatMessageAppender {
         if (isNewMessage) {
             List<Long> mentionMemberIds = resolveMentionMemberIds(room, member, message);
             publishMentionEventIfAny(room, member, chatMessage, message, mentionMemberIds);
+            List<Long> targetMemberIds = resolveChatMessageTargetMemberIds(room, member, mentionMemberIds);
             eventPublisher.publishEvent(new ChatMessageNotificationEvent(
                     room.getProject().getId(), room.getId(), chatMessage.getId(), member.getId(),
-                    mentionMemberIds, truncatePreview(message)));
+                    targetMemberIds, truncatePreview(message)));
         }
         return chatMessage;
     }
@@ -133,6 +134,20 @@ public class ChatMessageAppender {
                 .map(ProjectMember::getId)
                 .filter(id -> !id.equals(sender.getId())) // 자기 자신 멘션 제외
                 .distinct()
+                .toList();
+    }
+
+    private List<Long> resolveChatMessageTargetMemberIds(
+            ChatRoom room,
+            ProjectMember sender,
+            List<Long> mentionMemberIds
+    ) {
+        Set<Long> excludedMemberIds = new LinkedHashSet<>(mentionMemberIds);
+        excludedMemberIds.add(sender.getId());
+        return projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(
+                        room.getProject().getId(), MemberStatus.ACTIVE).stream()
+                .map(ProjectMember::getId)
+                .filter(memberId -> !excludedMemberIds.contains(memberId))
                 .toList();
     }
 
