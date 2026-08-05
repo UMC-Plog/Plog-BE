@@ -6,6 +6,8 @@ import com.plog.domain.post.entity.AttachmentType;
 import com.plog.domain.post.entity.Comment;
 import com.plog.domain.post.entity.Post;
 import com.plog.domain.post.entity.PostAttachment;
+import com.plog.domain.post.event.CommentCreatedEvent;
+import com.plog.domain.post.event.PostCreatedEvent;
 import com.plog.domain.post.exception.PostErrorCode;
 import com.plog.domain.post.repository.CommentRepository;
 import com.plog.domain.post.repository.PostAttachmentRepository;
@@ -38,6 +40,7 @@ import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -53,6 +56,7 @@ public class PostService {
     private final AttachmentDownloadUrlFactory downloadUrlFactory;
     private final AttachmentPolicy attachmentPolicy;
     private final UploadedFileService uploadedFileService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public PostDto.CreateResponse createPost(Long projectId, Long userId, PostDto.CreateRequest request) {
@@ -74,6 +78,8 @@ public class PostService {
                 .projectMember(member).title(title).content(content).isNotice(request.isNotice())
                 .noticedAt(request.isNotice() ? LocalDateTime.now(ZoneOffset.UTC) : null).build());
         List<PostAttachment> savedAttachments = saveAttachments(post, attachments, resolvedFiles);
+        eventPublisher.publishEvent(new PostCreatedEvent(
+                post.getId(), member.getId(), content, post.getCreatedAt()));
         return toCreateResponse(post, member, savedAttachments);
     }
 
@@ -216,6 +222,8 @@ public class PostService {
         String content = requireContent(request.content(), 1000);
         Comment comment = commentRepository.saveAndFlush(Comment.builder()
                 .post(post).projectMember(member).content(content).build());
+        eventPublisher.publishEvent(new CommentCreatedEvent(
+                comment.getId(), post.getId(), member.getId(), content, comment.getCreatedAt()));
         return toCommentResponse(comment);
     }
 
