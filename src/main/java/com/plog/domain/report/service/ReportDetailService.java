@@ -1,6 +1,9 @@
 package com.plog.domain.report.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.report.llm.MemberReportText;
 import com.plog.domain.report.dto.response.ReportDetailResponse;
 import com.plog.domain.report.dto.response.ReportMemberResultResponse;
 import com.plog.domain.report.dto.response.ReportMemberSummaryResponse;
@@ -15,16 +18,23 @@ import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReportDetailService {
 
+    private static final TypeReference<List<MemberReportText.StrengthCard>> STRENGTH_LIST =
+            new TypeReference<>() {
+            };
+
     private final ReportRepository reportRepository;
     private final ReportMemberResultRepository memberResultRepository;
     private final ProjectAccessService projectAccessService;
+    private final ObjectMapper objectMapper;
 
     /**
      * 리포트 1건의 상태와 멤버 요약. 발행 전(GENERATING/FAILED)에도 404 가 아니라 200 으로
@@ -77,6 +87,8 @@ public class ReportDetailService {
                 report.getStatus(),
                 TimeUtil.toInstant(report.getCompletedAt()),
                 isPdfAvailable(report),
+                report.getTeamStrength(),
+                report.getTeamSuggestion(),
                 members
         );
     }
@@ -93,7 +105,8 @@ public class ReportDetailService {
                 summary.getProjectMemberId(),
                 summary.getMemberName(),
                 summary.getFinalScore(),
-                summary.getReliabilityTier()
+                summary.getReliabilityTier(),
+                summary.getHeadline()
         );
     }
 
@@ -109,7 +122,43 @@ public class ReportDetailService {
                 result.getFinalScore(),
                 result.isExternalToolConnected(),
                 result.getReliabilityTier(),
-                result.getCautionText()
+                result.getCautionText(),
+                result.getHeadline(),
+                readJson(result.getStrengths(), STRENGTH_LIST),
+                readJson(result.getWeakness(), MemberReportText.Weakness.class),
+                readJson(result.getGrowth(), MemberReportText.GrowthInsight.class),
+                readJson(result.getWriting(), MemberReportText.WritingSuggestion.class)
         );
+    }
+
+    /**
+     * jsonb 컬럼은 문자열로 들고 있으므로 응답에 그대로 실으면 이스케이프된 문자열이 나간다.
+     * 프론트가 한 번 더 파싱하지 않도록 여기서 객체로 되돌린다.
+     * <p>
+     * 파싱이 깨져도 조회 전체를 실패시키지 않는다 — 저장된 텍스트가 손상된 경우라도
+     * 점수와 나머지 섹션은 보여줄 수 있어야 한다.
+     */
+    private <T> T readJson(String json, Class<T> type) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, type);
+        } catch (Exception e) {
+            log.warn("리포트 텍스트 역직렬화 실패, 해당 섹션을 비웁니다: type={}", type.getSimpleName(), e);
+            return null;
+        }
+    }
+
+    private List<MemberReportText.StrengthCard> readJson(String json, TypeReference<List<MemberReportText.StrengthCard>> type) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, type);
+        } catch (Exception e) {
+            log.warn("리포트 강점 카드 역직렬화 실패, 빈 목록으로 대체합니다", e);
+            return List.of();
+        }
     }
 }

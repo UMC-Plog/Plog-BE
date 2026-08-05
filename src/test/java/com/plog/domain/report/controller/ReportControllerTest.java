@@ -16,6 +16,7 @@ import com.plog.domain.report.dto.response.ReportSearchResponse;
 import com.plog.domain.report.dto.response.ReportPdfDownloadResponse;
 import com.plog.domain.report.entity.ReliabilityTier;
 import com.plog.domain.report.entity.ReportStatus;
+import com.plog.domain.report.llm.MemberReportText;
 import com.plog.domain.report.service.ReportDetailService;
 import com.plog.domain.report.service.ReportGenerationLauncher;
 import com.plog.domain.report.service.ReportPdfDownloadService;
@@ -259,11 +260,14 @@ class ReportControllerTest {
                 ReportStatus.COMPLETED,
                 Instant.parse("2026-07-20T12:00:00Z"),
                 true,
+                "팀이 잘한 점",
+                "앞으로는 이렇게 해보세요",
                 List.of(new ReportMemberSummaryResponse(
                         7L,
                         "창훈",
                         new BigDecimal("82.50"),
-                        ReliabilityTier.P1
+                        ReliabilityTier.P1,
+                        "적극적인 리더십으로 팀의 방향을 잡았어요"
                 ))
         ));
 
@@ -278,7 +282,12 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$.result.members[0].projectMemberId").value(7L))
                 .andExpect(jsonPath("$.result.members[0].memberName").value("창훈"))
                 .andExpect(jsonPath("$.result.members[0].finalScore").value(82.50))
-                .andExpect(jsonPath("$.result.members[0].reliabilityTier").value("P1"));
+                .andExpect(jsonPath("$.result.members[0].reliabilityTier").value("P1"))
+                // 팀 리포트 화면이 필요한 AI 텍스트가 실제로 내려가는지
+                .andExpect(jsonPath("$.result.teamStrength").value("팀이 잘한 점"))
+                .andExpect(jsonPath("$.result.teamSuggestion").value("앞으로는 이렇게 해보세요"))
+                .andExpect(jsonPath("$.result.members[0].headline")
+                        .value("적극적인 리더십으로 팀의 방향을 잡았어요"));
     }
 
     // 발행 전에도 404가 아니라 200 + 상태다 — 프론트가 "생성 중" 화면을 그리고 폴링할 수 있어야 한다.
@@ -286,7 +295,7 @@ class ReportControllerTest {
     void returnsGeneratingReportWithEmptyMembersInsteadOfNotFound() throws Exception {
         authenticate(1L);
         given(detailService.getReport(1L, 20L)).willReturn(new ReportDetailResponse(
-                20L, 10L, "Plog", ReportStatus.GENERATING, null, false, List.of()
+                20L, 10L, "Plog", ReportStatus.GENERATING, null, false, null, null, List.of()
         ));
 
         mockMvc.perform(get("/api/dashboard/reports/20"))
@@ -312,7 +321,12 @@ class ReportControllerTest {
                 new BigDecimal("82.50"),
                 false,
                 ReliabilityTier.P2,
-                "Notion이 연동되지 않아 일부 작업 과정은 반영되지 않았을 수 있습니다."
+                "Notion이 연동되지 않아 일부 작업 과정은 반영되지 않았을 수 있습니다.",
+                "적극적인 리더십으로 팀의 방향을 잡았어요",
+                List.of(new MemberReportText.StrengthCard("주도성", "일정을 주도적으로 관리하고 실행해요")),
+                new MemberReportText.Weakness("의견 제시 빈도가 낮음", List.of("의견 제시를 늘려보세요")),
+                new MemberReportText.GrowthInsight("성장", "유지", "액션"),
+                new MemberReportText.WritingSuggestion("자소서 문장", "포트폴리오 문장")
         ));
 
         mockMvc.perform(get("/api/dashboard/reports/20/members/7/result"))
@@ -324,7 +338,13 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$.result.externalToolConnected").value(false))
                 .andExpect(jsonPath("$.result.reliabilityTier").value("P2"))
                 // 미연동이면 externalScore 는 아예 내려가지 않는다 (0점으로 오해되면 안 된다)
-                .andExpect(jsonPath("$.result.externalScore").doesNotExist());
+                .andExpect(jsonPath("$.result.externalScore").doesNotExist())
+                // 개인 리포트 ②③④⑤ — 이스케이프된 문자열이 아니라 객체로 나가야 한다
+                .andExpect(jsonPath("$.result.headline").value("적극적인 리더십으로 팀의 방향을 잡았어요"))
+                .andExpect(jsonPath("$.result.strengths[0].title").value("주도성"))
+                .andExpect(jsonPath("$.result.weakness.suggestions[0]").value("의견 제시를 늘려보세요"))
+                .andExpect(jsonPath("$.result.growth.nextAction").value("액션"))
+                .andExpect(jsonPath("$.result.writing.portfolio").value("포트폴리오 문장"));
     }
 
     @Test

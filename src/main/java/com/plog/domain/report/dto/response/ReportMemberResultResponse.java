@@ -1,8 +1,10 @@
 package com.plog.domain.report.dto.response;
 
 import com.plog.domain.report.entity.ReliabilityTier;
+import com.plog.domain.report.llm.MemberReportText;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
+import java.util.List;
 
 @Schema(description = "리포트 멤버별 결과 응답")
 public record ReportMemberResultResponse(
@@ -28,6 +30,21 @@ public record ReportMemberResultResponse(
         ReliabilityTier reliabilityTier,
         @Schema(description = "분석 한계 안내 문구. 없으면 null",
                 example = "Notion이 연동되지 않아 일부 작업 과정은 반영되지 않았을 수 있습니다.")
-        String cautionText
+        String cautionText,
+
+        @Schema(description = "AI 한줄 평가. 개인 리포트 상단에 노출됩니다",
+                example = "적극적인 리더십으로 팀의 방향을 잡고, 구성원들이 원활하게 협업할 수 있도록 분위기를 주도했어요")
+        String headline,
+        @Schema(description = "강점 분석 카드. 아이콘은 프론트가 순서대로 매핑합니다. 근거 부족 시 빈 배열")
+        List<MemberReportText.StrengthCard> strengths,
+        @Schema(description = "취약점 진단. 근거 부족 시 null")
+        MemberReportText.Weakness weakness,
+        @Schema(description = "AI 개인 성장 인사이트. 근거 부족 시 null")
+        MemberReportText.GrowthInsight growth,
+        @Schema(description = "AI 문장 변환(자기소개서/포트폴리오). 근거 부족 시 null")
+        MemberReportText.WritingSuggestion writing
 ) {
+    public ReportMemberResultResponse {
+        strengths = strengths == null ? List.of() : List.copyOf(strengths);
+    }
 }
