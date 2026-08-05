@@ -107,13 +107,25 @@ public class ProjectIntegrationService {
 
         Long integrationId = integration.getId();
 
-        if (linkType == LinkType.NOTION && integration.getExternalAccountId() != null) {
-            notionWebhookEventRepository.deleteAllByWorkspaceId(integration.getExternalAccountId());
+        if (linkType == LinkType.NOTION && integration.getProviderConnectionId() != null) {
+            notionWebhookEventRepository.deleteAllByNotionIntegrationId(integration.getProviderConnectionId());
         }
+
         integrationActivityRepository.deleteAllByIntegrationResourceProjectIntegrationId(integrationId);
+
         integrationResourceRepository.deleteAllByProjectIntegrationId(integrationId);
-        integrationCollectionRunRepository.deleteByProjectId(projectId);
+
         projectIntegrationRepository.delete(integration);
+
+        boolean hasOtherActiveIntegrations = projectIntegrationRepository
+                .findAllByProjectIdOrderByLinkTypeAsc(projectId)
+                .stream()
+                .filter(other -> !other.getId().equals(integrationId))
+                .anyMatch(ProjectIntegration::canDisconnect);
+
+        if (!hasOtherActiveIntegrations) {
+            integrationCollectionRunRepository.deleteByProjectId(projectId);
+        }
     }
 
     /** 상위 트랜잭션이 이후 예외로 롤백되더라도 재인증 필요 상태는 반드시 반영되어야 하므로 별도 트랜잭션으로 커밋한다. */

@@ -149,13 +149,12 @@ class ProjectIntegrationServiceTest {
         service.disconnect(1L, linkType);
 
         if (linkType == LinkType.NOTION) {
-            verify(notionWebhookEventRepository).deleteAllByWorkspaceId("ext-account-id");
+            verify(notionWebhookEventRepository).deleteAllByNotionIntegrationId("installation-1");
         } else {
-            verify(notionWebhookEventRepository, never()).deleteAllByWorkspaceId(any());
+            verify(notionWebhookEventRepository, never()).deleteAllByNotionIntegrationId(any());
         }
         verify(integrationActivityRepository).deleteAllByIntegrationResourceProjectIntegrationId(10L);
         verify(integrationResourceRepository).deleteAllByProjectIntegrationId(10L);
-        verify(integrationCollectionRunRepository).deleteByProjectId(1L);
         verify(projectIntegrationRepository).delete(integration);
     }
 
@@ -194,6 +193,39 @@ class ProjectIntegrationServiceTest {
         verify(credentialCipher, never()).encrypt("new-access-token");
         verify(credentialCipher, never()).encrypt("new-refresh-token");
     }
+
+    @Test
+    void preservesCollectionRunWhenOtherActiveIntegrationsRemain() {
+        ProjectIntegrationService service = service();
+        ProjectIntegration targetIntegration = ProjectIntegration.builder()
+                .id(10L)
+                .linkType(LinkType.GITHUB)
+                .providerConnectionId("installation-1")
+                .connectionStatus(IntegrationConnectionStatus.ACTIVE)
+                .build();
+
+        ProjectIntegration otherIntegration = ProjectIntegration.builder()
+                .id(20L)
+                .linkType(LinkType.NOTION)
+                .providerConnectionId("bot-1")
+                .connectionStatus(IntegrationConnectionStatus.ACTIVE)
+                .build();
+
+        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GITHUB))
+                .willReturn(Optional.of(targetIntegration));
+        given(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(1L))
+                .willReturn(List.of(targetIntegration, otherIntegration));
+
+        service.disconnect(1L, LinkType.GITHUB);
+
+        verify(integrationActivityRepository).deleteAllByIntegrationResourceProjectIntegrationId(10L);
+        verify(integrationResourceRepository).deleteAllByProjectIntegrationId(10L);
+        verify(projectIntegrationRepository).delete(targetIntegration);
+
+        verify(integrationCollectionRunRepository, never()).deleteByProjectId(1L);
+    }
+
+
 
     private ProjectIntegrationService service() {
         return new ProjectIntegrationService(

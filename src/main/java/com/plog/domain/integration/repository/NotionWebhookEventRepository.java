@@ -100,7 +100,7 @@ public interface NotionWebhookEventRepository extends JpaRepository<NotionWebhoo
     );
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("delete from NotionWebhookEvent event where event.workspaceId = :workspaceId")
-    int deleteAllByWorkspaceId(@Param("workspaceId") String workspaceId);
+    @Query("delete from NotionWebhookEvent event where event.notionIntegrationId = :notionIntegrationId")
+    int deleteAllByNotionIntegrationId(@Param("notionIntegrationId") String notionIntegrationId);
 
 }
