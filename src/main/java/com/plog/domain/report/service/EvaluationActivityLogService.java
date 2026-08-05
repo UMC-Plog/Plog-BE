@@ -29,17 +29,17 @@ public class EvaluationActivityLogService {
         String sourceRefId = "peer-evaluation:" + evaluationId;
         saveIfAbsent(
                 sourceRefId,
-                evaluation.getEvaluatee(),
+                evaluation.getEvaluator(),
                 RawActivityType.PEER_EVALUATION_SUBMIT,
                 evaluation.getFeedback(),
                 occurredAt,
                 "{\"evaluationId\":" + evaluationId
-                        + ",\"evaluatorId\":" + evaluation.getEvaluator().getId()
-                        + ",\"evaluateeId\":" + evaluation.getEvaluatee().getId()
-                        + ",\"collaborationScore\":" + evaluation.getCollaborationScore()
-                        + ",\"initiativeScore\":" + evaluation.getInitiativeScore()
-                        + ",\"communicationScore\":" + evaluation.getCommunicationScore()
-                        + ",\"outputScore\":" + evaluation.getOutputScore() + "}");
+                         ",\"evaluatorId\":" + evaluation.getEvaluator().getId()
+                        ",\"evaluateeId\":" + evaluation.getEvaluatee().getId()
+                        ",\"collaborationScore\":" + evaluation.getCollaborationScore()
+                        ",\"initiativeScore\":" + evaluation.getInitiativeScore()
+                        ",\"communicationScore\":" + evaluation.getCommunicationScore()
+                        ",\"outputScore\":" + evaluation.getOutputScore() + "}");
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

@@ -96,6 +96,9 @@ public class EvaluationScoreCalculationService {
                 continue;
             }
             String normalizedTitle = normalize(task.getTitle());
+            if (normalizedTitle.isBlank()) {
+                continue;
+            }
             Mention mention = findMention(normalizedFeedback, normalizedTitle);
             if (mention == Mention.NONE) {
                 continue;
