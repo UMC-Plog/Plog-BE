@@ -49,20 +49,19 @@ class ProjectNotificationServiceTest {
     }
 
     @Test
-    void 일반_채팅은_발신자와_멘션_대상을_제외한_활성_멤버에게만_저장한다() {
+    void 일반_채팅은_메시지_저장_시점에_확정된_활성_멤버에게만_저장한다() {
         Project project = mock(Project.class);
+        when(project.getId()).thenReturn(10L);
         when(project.getProjectName()).thenReturn("Plog");
         ProjectMember sender = member(1L, 101L, project, "보낸이");
-        ProjectMember mentioned = member(2L, 102L, project, "멘션됨");
         ProjectMember target = member(3L, 103L, project, "수신자");
-        when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(10L, MemberStatus.ACTIVE))
-                .thenReturn(List.of(sender, mentioned, target));
+        when(projectMemberRepository.findAllByIdIn(anyCollection())).thenReturn(List.of(sender, target));
         FcmToken token = mock(FcmToken.class);
         when(token.getToken()).thenReturn("target-token");
         when(fcmTokenRepository.findAllByUserIdIn(anyCollection())).thenReturn(List.of(token));
 
         service.sendChatMessage(new ChatMessageNotificationEvent(
-                10L, 20L, 30L, 1L, List.of(2L), "확인 부탁"));
+                10L, 20L, 30L, 1L, List.of(3L), "확인 부탁"));
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<Notification>> captor = ArgumentCaptor.forClass(List.class);

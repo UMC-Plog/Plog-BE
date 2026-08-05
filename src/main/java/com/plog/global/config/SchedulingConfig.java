@@ -5,7 +5,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * @Scheduled 활성화. 사용처는 탈퇴 계정 개인정보 파기(WithdrawnUserPurgeScheduler),
- * S3 태깅·회수(UploadedFileTagScheduler), 썸네일 아웃박스(ThumbnailScheduler)다.
+ * S3 태깅·회수(UploadedFileTagScheduler), 썸네일 아웃박스(ThumbnailScheduler),
+ * 리포트 자동 생성(ReportGenerationScheduler)이다.
  * <p>
  * 스레드풀 크기는 application.yaml 의 spring.task.scheduling.pool.size 에서 정한다.
  * 기본값 1로 두면 3초 주기 썸네일 확인이 200~400회 S3 호출을 하는 태깅 배치 뒤에

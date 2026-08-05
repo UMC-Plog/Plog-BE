@@ -1,5 +1,6 @@
 package com.plog.domain.integration.dto.response;
 
+import com.plog.domain.integration.entity.IntegrationCollectionJobStatus;
 import com.plog.domain.integration.entity.IntegrationCollectionRunStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
@@ -16,13 +17,23 @@ public record IntegrationStatusResponse(
                 allowableValues = {"PENDING", "RUNNING", "RETRYABLE", "SUCCEEDED", "PARTIAL_FAILED"})
         IntegrationCollectionRunStatus finalCollectionStatus,
         @Schema(description = "최종 수집의 최근 실패 요약. 실패가 없으면 null")
-        String finalCollectionFailure
+        String finalCollectionFailure,
+        @Schema(description = "가장 최근 수동 수집 잡의 상태. 요청한 적이 없으면 null",
+                allowableValues = {
+                        "PENDING", "RUNNING", "RETRYABLE", "SUCCEEDED", "PARTIAL_FAILED", "FAILED"})
+        IntegrationCollectionJobStatus collectionJobStatus,
+        @Schema(description = "가장 최근 수집 잡의 실패 요약. 실패가 없으면 null")
+        String collectionJobFailure,
+        @Schema(description = "가장 최근 수집 잡이 시도한 리소스 수. 아직 끝나지 않았으면 null")
+        Integer requestedResourceCount,
+        @Schema(description = "가장 최근 수집 잡이 성공한 리소스 수. 아직 끝나지 않았으면 null")
+        Integer collectedResourceCount
 ) {
     public IntegrationStatusResponse(
             Long projectId,
             Long projectMemberId,
             List<IntegrationItemResponse> integrations
     ) {
-        this(projectId, projectMemberId, integrations, null, null);
+        this(projectId, projectMemberId, integrations, null, null, null, null, null, null);
     }
 }

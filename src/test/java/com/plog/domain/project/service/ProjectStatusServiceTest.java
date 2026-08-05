@@ -3,6 +3,7 @@ package com.plog.domain.project.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.plog.domain.integration.entity.ProjectIntegration;
@@ -16,6 +17,7 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.domain.report.service.ReportLifecycleService;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
@@ -51,6 +53,9 @@ class ProjectStatusServiceTest {
     @Mock
     private ProjectMemberIntegrationIdentityRepository identityRepository;
 
+    @Mock
+    private ReportLifecycleService reportLifecycleService;
+
     @InjectMocks
     private ProjectStatusService projectStatusService;
 
@@ -72,6 +77,7 @@ class ProjectStatusServiceTest {
         assertThat(response.isPublished()).isTrue();
         assertThat(response.isTimeoutApplied()).isFalse();
         verify(projectRepository).saveAndFlush(project);
+        verify(reportLifecycleService).startFor(project);
     }
 
     @Test
@@ -87,8 +93,10 @@ class ProjectStatusServiceTest {
         assertThat(response.isPublished()).isTrue();
         assertThat(response.isTimeoutApplied()).isTrue();
         verify(projectRepository).saveAndFlush(project);
+        verify(reportLifecycleService).startFor(project);
     }
 
+    // 평가가 아직 안 닫혔으면 리포트도 시작되면 안 된다 — 완료 전환과 리포트 시작은 한 몸이다.
     @Test
     void checkAndUpdateStatusKeepsInProgressBeforeAllSubmittedAndTimeout() {
         Project project = projectEndedDaysAgo(1);
@@ -101,6 +109,7 @@ class ProjectStatusServiceTest {
         assertThat(response.currentStatus()).isEqualTo(ProjectStatus.IN_PROGRESS);
         assertThat(response.isPublished()).isFalse();
         assertThat(response.isTimeoutApplied()).isFalse();
+        verifyNoInteractions(reportLifecycleService);
     }
 
     @Test

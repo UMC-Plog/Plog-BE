@@ -9,7 +9,7 @@ import com.plog.domain.integration.dto.request.NotionResourceRegisterRequest;
 import com.plog.domain.integration.dto.response.IntegrationActorMappingListResponse;
 import com.plog.domain.integration.dto.response.IntegrationActorMappingResponse;
 import com.plog.domain.integration.dto.response.IntegrationAuthorizationResponse;
-import com.plog.domain.integration.dto.response.IntegrationCollectionResponse;
+import com.plog.domain.integration.dto.response.IntegrationCollectionAcceptedResponse;
 import com.plog.domain.integration.dto.response.IntegrationConnectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationDisconnectionResponse;
 import com.plog.domain.integration.dto.response.GooglePickerAccessTokenResponse;
@@ -18,6 +18,7 @@ import com.plog.domain.integration.dto.response.IntegrationResourceListResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceRemovalResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceResponse;
 import com.plog.domain.integration.dto.response.IntegrationStatusResponse;
+import com.plog.domain.integration.entity.IntegrationCollectionJob;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.service.FigmaIntegrationService;
 import com.plog.domain.integration.service.GithubIntegrationService;
@@ -238,12 +239,16 @@ public class IntegrationController implements IntegrationControllerDoc {
 
     @Override
     @PostMapping("/projects/{projectId}/integrations/collect")
-    public ResponseEntity<ApiResponse<IntegrationCollectionResponse>> collectIntegrationData(
+    public ResponseEntity<ApiResponse<IntegrationCollectionAcceptedResponse>> collectIntegrationData(
             @PathVariable Long projectId,
             @AuthenticationPrincipal Long userId
     ) {
-        IntegrationCollectionResponse response = integrationDataCollectionService.collectNow(projectId, userId);
-        return ResponseEntity.ok(ApiResponse.success(IntegrationSuccessCode.INTEGRATION_DATA_COLLECTED, response));
+        IntegrationCollectionJob job = integrationDataCollectionService.enqueueCollection(projectId, userId);
+        IntegrationCollectionAcceptedResponse response = new IntegrationCollectionAcceptedResponse(
+                projectId, job.getId(), job.getStatus());
+        return ResponseEntity.status(IntegrationSuccessCode.INTEGRATION_DATA_COLLECTION_ACCEPTED.getHttpStatus())
+                .body(ApiResponse.success(
+                        IntegrationSuccessCode.INTEGRATION_DATA_COLLECTION_ACCEPTED, response));
     }
 
     @Override

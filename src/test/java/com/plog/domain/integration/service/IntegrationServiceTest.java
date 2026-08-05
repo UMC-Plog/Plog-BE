@@ -16,6 +16,8 @@ import com.plog.domain.integration.entity.IntegrationCredentialType;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.IntegrationResourceStatus;
 import com.plog.domain.integration.entity.IntegrationResourceType;
+import com.plog.domain.integration.entity.IntegrationCollectionJob;
+import com.plog.domain.integration.entity.IntegrationCollectionJobStatus;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.IntegrationCollectionRunRepository;
@@ -61,6 +63,9 @@ class IntegrationServiceTest {
     @Mock
     private ProjectIntegrationService projectIntegrationService;
 
+    @Mock
+    private IntegrationCollectionJobService integrationCollectionJobService;
+
     @InjectMocks
     private IntegrationService integrationService;
 
@@ -89,6 +94,53 @@ class IntegrationServiceTest {
         assertThat(response.integrations()).extracting("connectedAccountName")
                 .containsExactly("github-user", null, "notion-user", null, null);
         verify(projectIntegrationRepository).findAllByProjectIdOrderByLinkTypeAsc(projectId);
+    }
+
+    @Test
+    @DisplayName("최근 수집 잡이 있으면 상태와 집계를 함께 반환한다")
+    void getProjectIntegrationsIncludesLatestCollectionJob() {
+        Long projectId = 1L;
+        Long userId = 10L;
+        IntegrationCollectionJob job = IntegrationCollectionJob.builder()
+                .status(IntegrationCollectionJobStatus.PARTIAL_FAILED)
+                .availableAt(Instant.now())
+                .attemptCount(1)
+                .requestedResourceCount(3)
+                .collectedResourceCount(2)
+                .failureSummary("Plog-FE: provider resource not found")
+                .build();
+        given(projectRepository.existsById(projectId)).willReturn(true);
+        given(projectAccessService.requireActiveMember(projectId, userId)).willReturn(projectMember());
+        given(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId))
+                .willReturn(List.of());
+        given(integrationCollectionJobService.findLatest(projectId)).willReturn(Optional.of(job));
+
+        IntegrationStatusResponse response = integrationService.getProjectIntegrations(projectId, userId);
+
+        assertThat(response.collectionJobStatus())
+                .isEqualTo(IntegrationCollectionJobStatus.PARTIAL_FAILED);
+        assertThat(response.collectionJobFailure()).isEqualTo("Plog-FE: provider resource not found");
+        assertThat(response.requestedResourceCount()).isEqualTo(3);
+        assertThat(response.collectedResourceCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("수집을 요청한 적이 없으면 잡 관련 필드는 null이다")
+    void getProjectIntegrationsLeavesCollectionJobFieldsNullWhenNeverRequested() {
+        Long projectId = 1L;
+        Long userId = 10L;
+        given(projectRepository.existsById(projectId)).willReturn(true);
+        given(projectAccessService.requireActiveMember(projectId, userId)).willReturn(projectMember());
+        given(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId))
+                .willReturn(List.of());
+        given(integrationCollectionJobService.findLatest(projectId)).willReturn(Optional.empty());
+
+        IntegrationStatusResponse response = integrationService.getProjectIntegrations(projectId, userId);
+
+        assertThat(response.collectionJobStatus()).isNull();
+        assertThat(response.collectionJobFailure()).isNull();
+        assertThat(response.requestedResourceCount()).isNull();
+        assertThat(response.collectedResourceCount()).isNull();
     }
 
     @Test

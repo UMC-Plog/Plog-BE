@@ -14,8 +14,7 @@ import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.IntegrationResourceStatus;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
-import com.plog.domain.integration.repository.IntegrationResourceRepository;
-import com.plog.domain.integration.repository.ProjectIntegrationRepository;
+import com.plog.domain.integration.repository.*;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectRepository;
@@ -40,6 +39,15 @@ class ProjectIntegrationServiceTest {
     private IntegrationResourceRepository integrationResourceRepository;
 
     @Mock
+    private IntegrationActivityRepository integrationActivityRepository;
+
+    @Mock
+    private NotionWebhookEventRepository notionWebhookEventRepository;
+
+    @Mock
+    private IntegrationCollectionRunRepository integrationCollectionRunRepository;
+
+    @Mock
     private IntegrationCredentialCipher credentialCipher;
 
     @Mock
@@ -47,12 +55,7 @@ class ProjectIntegrationServiceTest {
 
     @Test
     void rejectsStartingWorkspaceIntegrationAfterProjectCompletion() {
-        ProjectIntegrationService service = new ProjectIntegrationService(
-                projectIntegrationRepository,
-                integrationResourceRepository,
-                credentialCipher,
-                projectRepository
-        );
+        ProjectIntegrationService service = service();
         Project project = mock(Project.class);
         given(projectRepository.findById(1L)).willReturn(Optional.of(project));
         given(project.isCompleted()).willReturn(true);
@@ -134,27 +137,25 @@ class ProjectIntegrationServiceTest {
         ProjectIntegrationService service = service();
         ProjectIntegration integration = ProjectIntegration.builder()
                 .id(10L)
+                .externalAccountId("ext-account-id")
                 .providerConnectionId("installation-1")
                 .accessTokenEncrypted("encrypted-access-token")
                 .refreshTokenEncrypted("encrypted-refresh-token")
                 .connectionStatus(IntegrationConnectionStatus.ACTIVE)
                 .build();
-        IntegrationResource resource = IntegrationResource.builder()
-                .resourceStatus(IntegrationResourceStatus.ACTIVE)
-                .build();
         given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, linkType))
                 .willReturn(Optional.of(integration));
-        given(integrationResourceRepository.findAllByProjectIntegrationIdOrderByIdAsc(10L))
-                .willReturn(List.of(resource));
 
         service.disconnect(1L, linkType);
 
-        assertThat(integration.getConnectionStatus()).isEqualTo(IntegrationConnectionStatus.REVOKED);
-        assertThat(integration.isConnected()).isFalse();
-        assertThat(integration.getAccessTokenEncrypted()).isNull();
-        assertThat(integration.getRefreshTokenEncrypted()).isNull();
-        assertThat(resource.getResourceStatus()).isEqualTo(IntegrationResourceStatus.DISABLED);
-        verify(projectIntegrationRepository, never()).delete(any(ProjectIntegration.class));
+        if (linkType == LinkType.NOTION) {
+            verify(notionWebhookEventRepository).deleteAllByNotionIntegrationId("installation-1");
+        } else {
+            verify(notionWebhookEventRepository, never()).deleteAllByNotionIntegrationId(any());
+        }
+        verify(integrationActivityRepository).deleteAllByIntegrationResourceProjectIntegrationId(10L);
+        verify(integrationResourceRepository).deleteAllByProjectIntegrationId(10L);
+        verify(projectIntegrationRepository).delete(integration);
     }
 
     @Test
@@ -165,18 +166,15 @@ class ProjectIntegrationServiceTest {
                 .providerConnectionId("provider-connection")
                 .connectionStatus(IntegrationConnectionStatus.REAUTH_REQUIRED)
                 .build();
-        IntegrationResource resource = IntegrationResource.builder()
-                .resourceStatus(IntegrationResourceStatus.REAUTH_REQUIRED)
-                .build();
         given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GOOGLE_DOCS))
                 .willReturn(Optional.of(integration));
-        given(integrationResourceRepository.findAllByProjectIntegrationIdOrderByIdAsc(10L))
-                .willReturn(List.of(resource));
 
         service.disconnect(1L, LinkType.GOOGLE_DOCS);
 
-        assertThat(integration.getConnectionStatus()).isEqualTo(IntegrationConnectionStatus.REVOKED);
-        assertThat(resource.getResourceStatus()).isEqualTo(IntegrationResourceStatus.DISABLED);
+        verify(integrationActivityRepository).deleteAllByIntegrationResourceProjectIntegrationId(10L);
+        verify(integrationResourceRepository).deleteAllByProjectIntegrationId(10L);
+        verify(integrationCollectionRunRepository).deleteByProjectId(1L);
+        verify(projectIntegrationRepository).delete(integration);
     }
 
     @Test
@@ -196,9 +194,45 @@ class ProjectIntegrationServiceTest {
         verify(credentialCipher, never()).encrypt("new-refresh-token");
     }
 
+    @Test
+    void preservesCollectionRunWhenOtherActiveIntegrationsRemain() {
+        ProjectIntegrationService service = service();
+        ProjectIntegration targetIntegration = ProjectIntegration.builder()
+                .id(10L)
+                .linkType(LinkType.GITHUB)
+                .providerConnectionId("installation-1")
+                .connectionStatus(IntegrationConnectionStatus.ACTIVE)
+                .build();
+
+        ProjectIntegration otherIntegration = ProjectIntegration.builder()
+                .id(20L)
+                .linkType(LinkType.NOTION)
+                .providerConnectionId("bot-1")
+                .connectionStatus(IntegrationConnectionStatus.ACTIVE)
+                .build();
+
+        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GITHUB))
+                .willReturn(Optional.of(targetIntegration));
+        given(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(1L))
+                .willReturn(List.of(targetIntegration, otherIntegration));
+
+        service.disconnect(1L, LinkType.GITHUB);
+
+        verify(integrationActivityRepository).deleteAllByIntegrationResourceProjectIntegrationId(10L);
+        verify(integrationResourceRepository).deleteAllByProjectIntegrationId(10L);
+        verify(projectIntegrationRepository).delete(targetIntegration);
+
+        verify(integrationCollectionRunRepository, never()).deleteByProjectId(1L);
+    }
+
+
+
     private ProjectIntegrationService service() {
         return new ProjectIntegrationService(
                 projectIntegrationRepository,
+                integrationActivityRepository,
+                notionWebhookEventRepository,
+                integrationCollectionRunRepository,
                 integrationResourceRepository,
                 credentialCipher,
                 projectRepository

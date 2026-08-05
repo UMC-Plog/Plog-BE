@@ -3,12 +3,14 @@ package com.plog.global.config;
 import com.plog.domain.integration.config.FigmaIntegrationProperties;
 import com.plog.domain.integration.config.GithubIntegrationProperties;
 import com.plog.domain.integration.config.GoogleIntegrationProperties;
+import com.plog.domain.integration.config.IntegrationCollectionProperties;
 import com.plog.domain.integration.config.IntegrationRedirectProperties;
 import com.plog.domain.integration.config.NotionIntegrationProperties;
 import com.plog.domain.integration.config.NotionWebhookProperties;
 import com.plog.domain.user.config.GoogleOAuthProperties;
 import com.plog.domain.user.config.KakaoOAuthProperties;
 import com.plog.global.security.jwt.JwtProperties;
+import com.plog.infrastructure.ai.LlmProperties;
 import com.plog.infrastructure.s3.ThumbnailProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -27,11 +29,13 @@ import org.springframework.context.annotation.Configuration;
         NotionIntegrationProperties.class,
         NotionWebhookProperties.class,
         GoogleIntegrationProperties.class,
+        IntegrationCollectionProperties.class,
         IntegrationRedirectProperties.class,
         KakaoOAuthProperties.class,
         GoogleOAuthProperties.class,
         SocialSignupProperties.class,
-        ThumbnailProperties.class
+        ThumbnailProperties.class,
+        LlmProperties.class
 })
 public class PropertiesConfig {
 }

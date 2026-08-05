@@ -80,6 +80,16 @@ jobs:
             #  - Firebase 서비스 계정 JSON은 이미지나 .env에 넣지 않고 GitHub Secret의 base64 값을
             #    EC2 전용 파일로 복원한 뒤 컨테이너에 read-only로 마운트한다.
             #  - 다음 배포가 파일을 교체하므로 EC2에서 직접 수정하지 않는다.
+            #
+            # 리포트 LLM(Gemini):
+            #  - Gemini Developer API(AI Studio) 키 하나로 호출한다. Vertex AI가 아니므로
+            #    GCP 서비스 계정·IAM은 필요 없다.
+            #  - 위 GOOGLE_APPLICATION_CREDENTIALS(Firebase용 ADC)를 이 호출에 쓰면 안 된다.
+            #    그래서 Google GenAI SDK 대신 RestClient + API 키 헤더로 직접 호출한다
+            #    (SDK를 쓰면 ADC를 자동으로 집어가 Firebase 계정으로 인증을 시도한다).
+            #  - GEMINI_API_KEY 가 비면 앱은 죽지 않고 StubLlmClient 로 폴백한다 → 필수 검증이
+            #    아니라 아래 optional 경고 루프에 둔다. 리포트 텍스트만 더미가 된다.
+            #  - GEMINI_MODEL 은 비밀값이 아니라 여기 직접 적는다. 모델 교체는 이 한 줄만 바꾸면 된다.
             cat > .env <<'EOF'
             DOCKER_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/plog-be:latest
             DB_URL=${{ secrets.DB_URL }}
@@ -122,6 +132,9 @@ jobs:
             FCM_ENABLED=true
             FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
             GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/firebase-service-account.json
+            LLM_PROVIDER=gemini
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            GEMINI_MODEL=gemini-2.5-flash
             EOF
             chmod 600 .env
 
@@ -161,7 +174,8 @@ jobs:
                             NOTION_CLIENT_ID NOTION_CLIENT_SECRET NOTION_WEBHOOK_VERIFICATION_TOKEN \
                             GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
                             KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET \
-                            SOCIAL_GOOGLE_CLIENT_ID SOCIAL_GOOGLE_CLIENT_SECRET; do
+                            SOCIAL_GOOGLE_CLIENT_ID SOCIAL_GOOGLE_CLIENT_SECRET \
+                            GEMINI_API_KEY; do
               if ! grep -q "^${optional}=." .env; then
                 echo "⚠️ 연동 설정이 비어 있습니다(해당 provider 연동 비활성): ${optional}"
               fi

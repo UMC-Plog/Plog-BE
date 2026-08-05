@@ -1,16 +1,27 @@
 package com.plog.domain.report.controller;
 
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.plog.domain.report.dto.response.ReportDetailResponse;
+import com.plog.domain.report.dto.response.ReportMemberResultResponse;
+import com.plog.domain.report.dto.response.ReportMemberSummaryResponse;
 import com.plog.domain.report.dto.response.ReportSearchResponse;
 import com.plog.domain.report.dto.response.ReportPdfDownloadResponse;
+import com.plog.domain.report.entity.ReliabilityTier;
 import com.plog.domain.report.entity.ReportStatus;
+import com.plog.domain.report.llm.MemberReportText;
+import com.plog.domain.report.service.ReportDetailService;
+import com.plog.domain.report.service.ReportGenerationLauncher;
 import com.plog.domain.report.service.ReportPdfDownloadService;
 import com.plog.domain.report.service.ReportSearchService;
+import java.math.BigDecimal;
 import com.plog.global.api.error.ReportErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.SliceResponse;
@@ -41,6 +52,12 @@ class ReportControllerTest {
 
     @MockitoBean
     private ReportSearchService service;
+
+    @MockitoBean
+    private ReportDetailService detailService;
+
+    @MockitoBean
+    private ReportGenerationLauncher generationLauncher;
 
     @MockitoBean
     private ReportPdfDownloadService pdfDownloadService;
@@ -231,6 +248,163 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$.code").value("COMMON400"));
 
         verifyNoInteractions(service);
+    }
+
+    @Test
+    void getsReportDetailWithMemberSummaries() throws Exception {
+        authenticate(1L);
+        given(detailService.getReport(1L, 20L)).willReturn(new ReportDetailResponse(
+                20L,
+                10L,
+                "Plog",
+                ReportStatus.COMPLETED,
+                Instant.parse("2026-07-20T12:00:00Z"),
+                true,
+                "팀이 잘한 점",
+                "앞으로는 이렇게 해보세요",
+                List.of(new ReportMemberSummaryResponse(
+                        7L,
+                        "창훈",
+                        new BigDecimal("82.50"),
+                        ReliabilityTier.P1,
+                        "적극적인 리더십으로 팀의 방향을 잡았어요"
+                ))
+        ));
+
+        mockMvc.perform(get("/api/dashboard/reports/20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("REPORT003"))
+                .andExpect(jsonPath("$.result.reportId").value(20L))
+                .andExpect(jsonPath("$.result.projectName").value("Plog"))
+                .andExpect(jsonPath("$.result.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.result.completedAt").value("2026-07-20T12:00:00Z"))
+                .andExpect(jsonPath("$.result.pdfAvailable").value(true))
+                .andExpect(jsonPath("$.result.members[0].projectMemberId").value(7L))
+                .andExpect(jsonPath("$.result.members[0].memberName").value("창훈"))
+                .andExpect(jsonPath("$.result.members[0].finalScore").value(82.50))
+                .andExpect(jsonPath("$.result.members[0].reliabilityTier").value("P1"))
+                // 팀 리포트 화면이 필요한 AI 텍스트가 실제로 내려가는지
+                .andExpect(jsonPath("$.result.teamStrength").value("팀이 잘한 점"))
+                .andExpect(jsonPath("$.result.teamSuggestion").value("앞으로는 이렇게 해보세요"))
+                .andExpect(jsonPath("$.result.members[0].headline")
+                        .value("적극적인 리더십으로 팀의 방향을 잡았어요"));
+    }
+
+    // 발행 전에도 404가 아니라 200 + 상태다 — 프론트가 "생성 중" 화면을 그리고 폴링할 수 있어야 한다.
+    @Test
+    void returnsGeneratingReportWithEmptyMembersInsteadOfNotFound() throws Exception {
+        authenticate(1L);
+        given(detailService.getReport(1L, 20L)).willReturn(new ReportDetailResponse(
+                20L, 10L, "Plog", ReportStatus.GENERATING, null, false, null, null, List.of()
+        ));
+
+        mockMvc.perform(get("/api/dashboard/reports/20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("REPORT003"))
+                .andExpect(jsonPath("$.result.status").value("GENERATING"))
+                .andExpect(jsonPath("$.result.pdfAvailable").value(false))
+                .andExpect(jsonPath("$.result.members").isEmpty())
+                .andExpect(jsonPath("$.result.completedAt").doesNotExist());
+    }
+
+    @Test
+    void getsMemberResult() throws Exception {
+        authenticate(1L);
+        given(detailService.getMemberResult(1L, 20L, 7L)).willReturn(new ReportMemberResultResponse(
+                20L,
+                7L,
+                "창훈",
+                new BigDecimal("88.00"),
+                null,
+                new BigDecimal("80.00"),
+                new BigDecimal("70.00"),
+                new BigDecimal("82.50"),
+                false,
+                ReliabilityTier.P2,
+                "Notion이 연동되지 않아 일부 작업 과정은 반영되지 않았을 수 있습니다.",
+                "적극적인 리더십으로 팀의 방향을 잡았어요",
+                List.of(new MemberReportText.StrengthCard("주도성", "일정을 주도적으로 관리하고 실행해요")),
+                new MemberReportText.Weakness("의견 제시 빈도가 낮음", List.of("의견 제시를 늘려보세요")),
+                new MemberReportText.GrowthInsight("성장", "유지", "액션"),
+                new MemberReportText.WritingSuggestion("자소서 문장", "포트폴리오 문장")
+        ));
+
+        mockMvc.perform(get("/api/dashboard/reports/20/members/7/result"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("REPORT004"))
+                .andExpect(jsonPath("$.result.projectMemberId").value(7L))
+                .andExpect(jsonPath("$.result.memberName").value("창훈"))
+                .andExpect(jsonPath("$.result.finalScore").value(82.50))
+                .andExpect(jsonPath("$.result.externalToolConnected").value(false))
+                .andExpect(jsonPath("$.result.reliabilityTier").value("P2"))
+                // 미연동이면 externalScore 는 아예 내려가지 않는다 (0점으로 오해되면 안 된다)
+                .andExpect(jsonPath("$.result.externalScore").doesNotExist())
+                // 개인 리포트 ②③④⑤ — 이스케이프된 문자열이 아니라 객체로 나가야 한다
+                .andExpect(jsonPath("$.result.headline").value("적극적인 리더십으로 팀의 방향을 잡았어요"))
+                .andExpect(jsonPath("$.result.strengths[0].title").value("주도성"))
+                .andExpect(jsonPath("$.result.weakness.suggestions[0]").value("의견 제시를 늘려보세요"))
+                .andExpect(jsonPath("$.result.growth.nextAction").value("액션"))
+                .andExpect(jsonPath("$.result.writing.portfolio").value("포트폴리오 문장"));
+    }
+
+    @Test
+    void returnsTheMemberResultNotFoundError() throws Exception {
+        authenticate(1L);
+        given(detailService.getMemberResult(1L, 20L, 999L))
+                .willThrow(new ApiException(ReportErrorCode.REPORT_MEMBER_RESULT_NOT_FOUND));
+
+        mockMvc.perform(get("/api/dashboard/reports/20/members/999/result"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("REPORT006"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "-1"})
+    void rejectsAnInvalidReportIdOnDetailBeforeCallingTheService(String reportId) throws Exception {
+        authenticate(1L);
+
+        mockMvc.perform(get("/api/dashboard/reports/{reportId}", reportId))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON400"));
+
+        verifyNoInteractions(detailService);
+    }
+
+    // /search 는 /{reportId} 보다 먼저 매칭되어야 한다 — 상세 API 추가로 검색이 가려지면 안 된다.
+    @Test
+    void keepsTheSearchPathRoutedToTheSearchService() throws Exception {
+        authenticate(1L);
+        given(service.search(1L, "", null, null, 0, 20)).willReturn(
+                new SliceResponse<>(List.of(), 0, 20, false));
+
+        mockMvc.perform(get("/api/dashboard/reports/search"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("REPORT002"));
+
+        verifyNoInteractions(detailService);
+    }
+
+    @Test
+    void acceptsReportGenerationWithoutWaitingForCompletion() throws Exception {
+        authenticate(1L);
+
+        mockMvc.perform(post("/api/dashboard/reports/20/generate").with(csrf()))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.code").value("REPORT005"))
+                .andExpect(jsonPath("$.isSuccess").value(true));
+
+        verify(generationLauncher).launch(1L, 20L);
+    }
+
+    @Test
+    void returnsConflictWhenReportIsAlreadyResolved() throws Exception {
+        authenticate(1L);
+        org.mockito.BDDMockito.willThrow(new ApiException(ReportErrorCode.REPORT_ALREADY_RESOLVED))
+                .given(generationLauncher).launch(1L, 20L);
+
+        mockMvc.perform(post("/api/dashboard/reports/20/generate").with(csrf()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REPORT007"));
     }
 
     private void authenticate(Long userId) {

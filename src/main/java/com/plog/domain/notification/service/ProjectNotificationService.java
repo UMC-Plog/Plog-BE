@@ -19,6 +19,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,20 +41,30 @@ public class ProjectNotificationService {
     public void sendChatMessage(ChatMessageNotificationEvent event) {
         if (event == null || event.projectId() == null || event.roomId() == null || event.chatId() == null
                 || event.senderMemberId() == null) {
+            log.warn("chat_message_notification_rejected projectId={} roomId={} chatId={} senderMemberId={}",
+                    event == null ? null : event.projectId(),
+                    event == null ? null : event.roomId(),
+                    event == null ? null : event.chatId(),
+                    event == null ? null : event.senderMemberId());
             return;
         }
-        List<ProjectMember> activeMembers = activeMembers(event.projectId());
-        ProjectMember sender = activeMembers.stream()
-                .filter(member -> event.senderMemberId().equals(member.getId()))
-                .findFirst().orElse(null);
-        if (sender == null) {
+        Set<Long> requestedMemberIds = new LinkedHashSet<>(event.targetMemberIds());
+        requestedMemberIds.add(event.senderMemberId());
+        Map<Long, ProjectMember> membersById = projectMemberRepository.findAllByIdIn(requestedMemberIds).stream()
+                .collect(Collectors.toMap(ProjectMember::getId, Function.identity()));
+        ProjectMember sender = membersById.get(event.senderMemberId());
+        if (!isActiveProjectMember(sender, event.projectId())) {
+            log.warn("chat_message_notification_sender_rejected projectId={} roomId={} chatId={} senderMemberId={}",
+                    event.projectId(), event.roomId(), event.chatId(), event.senderMemberId());
             return;
         }
-        Set<Long> excluded = new LinkedHashSet<>(event.mentionMemberIds());
-        excluded.add(event.senderMemberId());
-        List<ProjectMember> targets = activeMembers.stream()
-                .filter(member -> !excluded.contains(member.getId()))
+        List<ProjectMember> targets = event.targetMemberIds().stream()
+                .distinct()
+                .map(membersById::get)
+                .filter(member -> isActiveProjectMember(member, event.projectId()))
                 .toList();
+        log.info("chat_message_notification_targets projectId={} roomId={} chatId={} targetCount={}",
+                event.projectId(), event.roomId(), event.chatId(), targets.size());
         String body = senderName(sender) + "님이 새 메시지를 보냈습니다.";
         deliver(targets, sender.getProject(), NotificationType.CHAT_MESSAGE, body, event.chatId(), Map.of(
                 "projectId", event.projectId().toString(),
@@ -128,8 +140,11 @@ public class ProjectNotificationService {
                 .map(member -> Notification.create(member.getUser(), project, type, body, resourceId))
                 .toList());
         Set<Long> userIds = targets.stream().map(member -> member.getUser().getId())
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
-        for (FcmToken token : fcmTokenRepository.findAllByUserIdIn(userIds)) {
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        List<FcmToken> tokens = fcmTokenRepository.findAllByUserIdIn(userIds);
+        log.info("project_notification_delivery type={} projectId={} targetCount={} tokenCount={}",
+                type, project.getId(), targets.size(), tokens.size());
+        for (FcmToken token : tokens) {
             sendWithRetry(token.getToken(), project.getProjectName(), body, data, type);
         }
     }
@@ -186,5 +201,10 @@ public class ProjectNotificationService {
         }
         String nickname = sender.getUser().getNickname();
         return nickname == null || nickname.isBlank() ? "프로젝트 멤버" : nickname;
+    }
+
+    private boolean isActiveProjectMember(ProjectMember member, Long projectId) {
+        return member != null && member.getStatus() == MemberStatus.ACTIVE
+                && member.getProject() != null && projectId.equals(member.getProject().getId());
     }
 }

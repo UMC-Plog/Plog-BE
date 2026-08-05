@@ -4,8 +4,7 @@ import com.plog.domain.integration.entity.IntegrationCredentialType;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
-import com.plog.domain.integration.repository.IntegrationResourceRepository;
-import com.plog.domain.integration.repository.ProjectIntegrationRepository;
+import com.plog.domain.integration.repository.*;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectRepository;
@@ -23,6 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ProjectIntegrationService {
     private final ProjectIntegrationRepository projectIntegrationRepository;
+    private final IntegrationActivityRepository integrationActivityRepository;
+    private final NotionWebhookEventRepository notionWebhookEventRepository;
+    private final IntegrationCollectionRunRepository integrationCollectionRunRepository;
     private final IntegrationResourceRepository integrationResourceRepository;
     private final IntegrationCredentialCipher credentialCipher;
     private final ProjectRepository projectRepository;
@@ -102,10 +104,28 @@ public class ProjectIntegrationService {
                 .findByProjectIdAndLinkTypeForUpdate(projectId, linkType)
                 .filter(ProjectIntegration::canDisconnect)
                 .orElseThrow(() -> new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND));
-        integration.disconnect();
-        Instant now = Instant.now();
-        integrationResourceRepository.findAllByProjectIntegrationIdOrderByIdAsc(integration.getId())
-                .forEach(resource -> resource.disable(now));
+
+        Long integrationId = integration.getId();
+
+        if (linkType == LinkType.NOTION && integration.getProviderConnectionId() != null) {
+            notionWebhookEventRepository.deleteAllByNotionIntegrationId(integration.getProviderConnectionId());
+        }
+
+        integrationActivityRepository.deleteAllByIntegrationResourceProjectIntegrationId(integrationId);
+
+        integrationResourceRepository.deleteAllByProjectIntegrationId(integrationId);
+
+        projectIntegrationRepository.delete(integration);
+
+        boolean hasOtherActiveIntegrations = projectIntegrationRepository
+                .findAllByProjectIdOrderByLinkTypeAsc(projectId)
+                .stream()
+                .filter(other -> !other.getId().equals(integrationId))
+                .anyMatch(ProjectIntegration::canDisconnect);
+
+        if (!hasOtherActiveIntegrations) {
+            integrationCollectionRunRepository.deleteByProjectId(projectId);
+        }
     }
 
     /** 상위 트랜잭션이 이후 예외로 롤백되더라도 재인증 필요 상태는 반드시 반영되어야 하므로 별도 트랜잭션으로 커밋한다. */

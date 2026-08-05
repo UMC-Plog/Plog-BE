@@ -21,6 +21,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.ColumnDefault;
 
+/**
+ * 프로젝트 리포트 1건. 상태 전이 규칙은 {@link ReportStatus} 의 표에 정리돼 있고,
+ * 그 규칙을 강제하는 코드가 이 클래스의 start/complete/fail/attachPdf 다.
+ * status 를 밖에서 바꿀 수 있는 통로(setter)는 두지 않는다.
+ */
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -51,6 +56,14 @@ public class Report extends BaseEntity {
     @Column(name = "pdf_file_name")
     private String pdfFileName;
 
+    // 팀 리포트 상단 "AI 인사이트". 프로젝트 단위 텍스트라 멤버별 테이블에 둘 수 없다
+    // (ReportMemberResult 에 넣으면 같은 문장이 멤버 수만큼 중복 저장된다).
+    @Column(name = "team_strength", columnDefinition = "TEXT")
+    private String teamStrength;
+
+    @Column(name = "team_suggestion", columnDefinition = "TEXT")
+    private String teamSuggestion;
+
     private Report(Project project) {
         if (project == null) {
             throw new IllegalArgumentException("project must not be null");
@@ -70,6 +83,19 @@ public class Report extends BaseEntity {
         }
         this.status = ReportStatus.COMPLETED;
         this.completedAt = completedAt;
+    }
+
+    /**
+     * 팀 인사이트 기록. 생성 중인 리포트에만 쓸 수 있다 — 발행 후 문구가 바뀌면
+     * 이미 내려간 리포트의 내용이 사후에 달라진다.
+     * <p>
+     * 팀 인사이트 생성 실패는 리포트 발행을 막지 않는다(멤버별 결과가 본체다).
+     * 그래서 null 을 허용하고, 화면은 비어 있으면 섹션을 숨긴다.
+     */
+    public void applyTeamInsight(String strength, String suggestion) {
+        requireGenerating();
+        this.teamStrength = strength;
+        this.teamSuggestion = suggestion;
     }
 
     public void attachPdf(String objectKey, String fileName) {
@@ -98,8 +124,9 @@ public class Report extends BaseEntity {
     }
 
     private void requireGenerating() {
-        if (status != ReportStatus.GENERATING) {
-            throw new IllegalStateException("only a generating report can transition state");
+        if (status.isTerminal()) {
+            throw new IllegalStateException(
+                    "only a generating report can transition state, but status=" + status);
         }
     }
 

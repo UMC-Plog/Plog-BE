@@ -6,6 +6,7 @@ import com.plog.domain.evaluation.dto.response.PeerEvaluationCreateResponse;
 import com.plog.domain.evaluation.dto.response.PeerEvaluationDetailResponse;
 import com.plog.domain.evaluation.dto.response.TargetMemberDto;
 import com.plog.domain.evaluation.entity.PeerEvaluation;
+import com.plog.domain.evaluation.event.PeerEvaluationSubmittedEvent;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
@@ -16,11 +17,14 @@ import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Set;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +35,7 @@ public class EvaluationService {
     private final ProjectMemberRepository projectMemberRepository;
     private final PeerEvaluationRepository peerEvaluationRepository;
     private final EvaluationParticipantResolver participantResolver;
+    private final ApplicationEventPublisher eventPublisher;
 
     public EvaluationTargetResponse getEvaluationTargets(Long projectId, Long userId) {
 
@@ -105,6 +110,8 @@ public class EvaluationService {
                 .build();
 
         peerEvaluationRepository.save(evaluation);
+        eventPublisher.publishEvent(new PeerEvaluationSubmittedEvent(
+                evaluation.getId(), evaluator.getId(), evaluatee.getId(), LocalDateTime.now(ZoneOffset.UTC)));
 
         return new PeerEvaluationCreateResponse(evaluation.getId(), hasUniformScores(request));
     }

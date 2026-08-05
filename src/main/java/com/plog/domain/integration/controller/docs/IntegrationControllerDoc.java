@@ -7,7 +7,7 @@ import com.plog.domain.integration.dto.request.NotionResourceRegisterRequest;
 import com.plog.domain.integration.dto.response.IntegrationActorMappingListResponse;
 import com.plog.domain.integration.dto.response.IntegrationActorMappingResponse;
 import com.plog.domain.integration.dto.response.IntegrationAuthorizationResponse;
-import com.plog.domain.integration.dto.response.IntegrationCollectionResponse;
+import com.plog.domain.integration.dto.response.IntegrationCollectionAcceptedResponse;
 import com.plog.domain.integration.dto.response.IntegrationDisconnectionResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceCandidateResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceListResponse;
@@ -551,16 +551,17 @@ public interface IntegrationControllerDoc {
             tags = "Integration",
             summary = "4. 외부 연동 데이터 수동 수집",
             description = """
-                    프로젝트에 ACTIVE 상태로 등록된 GitHub, Notion, Google, Figma 리소스의 활동 원문을 수집합니다.
-                    프로젝트가 완료 상태로 전환될 때 내부 로직으로 자동 수집되며, 이 API는 수집 장애 복구나 재동기화가 필요할 때 사용할 수 있습니다.
+                    프로젝트에 ACTIVE 상태로 등록된 GitHub, Notion, Google, Figma 리소스의 활동 원문 수집을 요청합니다.
+                    수집은 백그라운드 잡으로 실행되며 이 API는 즉시 202와 jobId를 반환합니다.
+                    진행 상황과 결과는 GET /api/projects/{projectId}/integrations 의 collectionJobStatus 와
+                    provider별 리소스의 collectionStatus 로 확인합니다.
+                    이미 진행 중인 수집이 있으면 새 잡을 만들지 않고 그 잡의 ID를 반환합니다.
                     프로젝트가 진행 중이어도 ACTIVE 멤버가 실행할 수 있으며 프로젝트 상태는 변경하지 않습니다.
-                    일부 리소스 수집에 실패해도 가능한 리소스는 계속 수집하고 failures에 resourceId, linkType, resourceName과 원인을 반환합니다.
-                    requestedResourceCount는 시도한 리소스 수, collectedResourceCount는 성공한 리소스 수입니다.
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
-                    description = "수집 실행 완료. 부분 실패 정보는 failures에 포함"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202",
+                    description = "수집 요청 접수. 진행 상황은 연동 상태 조회 API로 확인"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
                     description = "인증이 없거나 유효하지 않은 사용자",
                     content = @Content(mediaType = "application/json",
@@ -572,13 +573,9 @@ public interface IntegrationControllerDoc {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
                     description = "프로젝트 없음",
                     content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = ApiResponse.class))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503",
-                    description = "GitHub 리소스 동기화 또는 provider 일시 장애",
-                    content = @Content(mediaType = "application/json",
                             schema = @Schema(implementation = ApiResponse.class)))
     })
-    ResponseEntity<ApiResponse<IntegrationCollectionResponse>> collectIntegrationData(
+    ResponseEntity<ApiResponse<IntegrationCollectionAcceptedResponse>> collectIntegrationData(
             @Parameter(description = "프로젝트 ID", example = "1") Long projectId,
             Long userId
     );
