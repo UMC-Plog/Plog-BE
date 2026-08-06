@@ -12,9 +12,10 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.*;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -23,7 +24,6 @@ import org.springframework.web.client.RestClientResponseException;
 /** Google Drive Activity, comment/revision과 Docs/Slides 현재 스냅샷을 저장한다. */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 class GoogleIntegrationResourceCollector implements IntegrationResourceCollector {
 
     private static final String DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -33,7 +33,27 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
 
     private final ProjectIntegrationService projectIntegrationService;
     private final IntegrationActivityStoreService activityStoreService;
-    private final RestClient restClient = ProviderRestClientFactory.create();
+    private final RestClient restClient;
+
+    /** 생성자가 둘이라 Spring이 주입 대상을 고를 수 없다. 이쪽이 운영용이다. */
+    @Autowired
+    GoogleIntegrationResourceCollector(
+            ProjectIntegrationService projectIntegrationService,
+            IntegrationActivityStoreService activityStoreService
+    ) {
+        this(projectIntegrationService, activityStoreService, ProviderRestClientFactory.create());
+    }
+
+    /** 테스트에서 MockRestServiceServer를 물리기 위한 생성자다. */
+    GoogleIntegrationResourceCollector(
+            ProjectIntegrationService projectIntegrationService,
+            IntegrationActivityStoreService activityStoreService,
+            RestClient restClient
+    ) {
+        this.projectIntegrationService = projectIntegrationService;
+        this.activityStoreService = activityStoreService;
+        this.restClient = restClient;
+    }
 
     @Override
     public List<LinkType> providers() {
@@ -264,6 +284,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     private JsonNode post(String uri, String token, Object request) {
         try {
             return restClient.post().uri(uri).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
                     .body(request).retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) {
             logProviderErrorResponse("Google", uri, exception);
