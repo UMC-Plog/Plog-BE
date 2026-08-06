@@ -107,7 +107,7 @@ class NotionWebhookCollectionWorker {
             }
             IntegrationResource resource;
             try {
-                resource = notionCollector.findContainingResource(resources, latest.target());
+                resource = notionCollector.findContainingResource(resources, latest.target(), CollectionContext.noop());
             } catch (ProviderResourceAccessException exception) {
                 FailureResult result = handleProviderFailure(
                         integration, null, latest, exception, failures);
@@ -123,7 +123,7 @@ class NotionWebhookCollectionWorker {
             activityStoreService.beginResourceCollection();
             try {
                 storeWebhookActivities(resource, batch.events());
-                notionCollector.collectChangedEntity(resource, latest.target());
+                notionCollector.collectChangedEntity(resource, latest.target(), CollectionContext.noop());
                 resourceStateService.markCollected(resource.getId(), Instant.now());
                 collectedResources++;
             } catch (ProviderResourceAccessException exception) {
