@@ -48,6 +48,17 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
             @Param("projectIntegrationId") Long projectIntegrationId
     );
 
+    @Query("select count(activity) > 0 "
+            + "from IntegrationActivity activity "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "
+            + "and activity.projectMember is null "
+            + "and ((activity.actorProviderId is not null and trim(activity.actorProviderId) <> '') "
+            + "or (activity.actorLogin is not null and trim(activity.actorLogin) <> '') "
+            + "or (activity.actorEmail is not null and trim(activity.actorEmail) <> ''))")
+    boolean existsUnassignedActivityActorByProjectIntegrationId(
+            @Param("projectIntegrationId") Long projectIntegrationId
+    );
+
     @Modifying(flushAutomatically = true)
     @Query("update IntegrationActivity activity set activity.projectMember = :projectMember "
             + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "

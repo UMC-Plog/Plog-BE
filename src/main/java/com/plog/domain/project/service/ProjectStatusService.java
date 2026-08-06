@@ -1,8 +1,8 @@
 package com.plog.domain.project.service;
 
 import com.plog.domain.integration.entity.ProjectIntegration;
+import com.plog.domain.integration.repository.IntegrationActivityRepository;
 import com.plog.domain.integration.repository.ProjectIntegrationRepository;
-import com.plog.domain.integration.repository.ProjectMemberIntegrationIdentityRepository;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
 import com.plog.domain.project.dto.ProjectStatusDto;
 import com.plog.domain.project.entity.MemberStatus;
@@ -31,7 +31,7 @@ public class ProjectStatusService {
     private final PeerEvaluationRepository peerEvaluationRepository;
     private final ProjectAccessService projectAccessService;
     private final ProjectIntegrationRepository projectIntegrationRepository;
-    private final ProjectMemberIntegrationIdentityRepository identityRepository;
+    private final IntegrationActivityRepository integrationActivityRepository;
     private final ReportLifecycleService reportLifecycleService;
 
     @Transactional
@@ -53,7 +53,7 @@ public class ProjectStatusService {
 
         long activeMemberCount = projectMemberRepository.countByProjectIdAndStatus(projectId, MemberStatus.ACTIVE);
         boolean allEvaluationsSubmitted = isAllEvaluationSubmitted(projectId, activeMemberCount);
-        if (allEvaluationsSubmitted && !hasAllActorMappings(projectId, activeMemberCount)) {
+        if (allEvaluationsSubmitted && hasUnmappedActivityActors(projectId)) {
             throw new ApiException(ProjectErrorCode.ACTOR_MAPPING_REQUIRED);
         }
         boolean allSubmitted = allEvaluationsSubmitted;
@@ -89,12 +89,11 @@ public class ProjectStatusService {
         return submittedPeerEvaluationCount >= requiredPeerEvaluationCount;
     }
 
-    private boolean hasAllActorMappings(Long projectId, long activeMemberCount) {
+    private boolean hasUnmappedActivityActors(Long projectId) {
         return projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId).stream()
                 .filter(ProjectIntegration::isConnected)
-                .allMatch(integration -> identityRepository
-                        .countByProjectIntegrationIdAndProjectMemberStatus(
-                                integration.getId(), MemberStatus.ACTIVE) >= activeMemberCount);
+                .anyMatch(integration -> integrationActivityRepository
+                        .existsUnassignedActivityActorByProjectIntegrationId(integration.getId()));
     }
 
     private ProjectStatusDto.Response toResponse(Project project, boolean timeoutApplied) {
