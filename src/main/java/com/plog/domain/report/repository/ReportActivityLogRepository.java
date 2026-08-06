@@ -44,8 +44,9 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
     List<EvaluationLogRecoveryTarget> findSelfFeedbacksMissingActivityLog(
             @Param("threshold") LocalDateTime threshold, Limit limit);
 
-    // 1단계 정제 대상 조회용 — 아직 정제를 거치지 않은 내부 도메인 행
-    List<ReportActivityLog> findBySourceDomainInAndNoiseFilteredIsNull(List<SourceDomain> sourceDomains);
+    // 1단계 정제 대상 조회용 — 아직 정제를 거치지 않은 내부 도메인 행.
+    // limit은 ActivityRefinementService가 한 배치에서 처리할 상한(EvaluationActivityLogRecoveryScheduler와 동일한 관례).
+    List<ReportActivityLog> findBySourceDomainInAndNoiseFilteredIsNull(List<SourceDomain> sourceDomains, Limit limit);
 
     // 4단계 정량계산에서 멤버별로 묶어서 집계할 때 사용
     List<ReportActivityLog> findByProjectMember_IdAndSourceDomainIn(
