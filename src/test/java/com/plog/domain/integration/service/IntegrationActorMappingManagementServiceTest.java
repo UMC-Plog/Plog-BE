@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.lenient;
 
 import com.plog.domain.integration.dto.request.IntegrationActorMappingRequest;
@@ -204,6 +205,121 @@ class IntegrationActorMappingManagementServiceTest {
                 5L, currentMember, "figma-user-1");
         verify(activityRepository, never()).assignProjectMemberByLogin(any(), any(), any());
         verify(aliasRepository).saveAll(List.of());
+    }
+
+    @Test
+    void returnsGoogleDocsAndSlidesMappingsFromDistinctProjectIntegrations() {
+        given(currentMember.getUser().getName()).willReturn("유상완");
+        given(currentMember.getUser().getNickname()).willReturn("바나");
+        ProjectIntegration docsIntegration = projectIntegration(20L, LinkType.GOOGLE_DOCS);
+        ProjectIntegration slidesIntegration = projectIntegration(21L, LinkType.GOOGLE_SLIDES);
+        IntegrationActorObservation docsObservation = observation(
+                "docs-actor", "shared-google-name", "shared@example.com", 1L);
+        IntegrationActorObservation slidesObservation = observation(
+                "slides-actor", "shared-google-name", "shared@example.com", 1L);
+        ProjectMemberIntegrationIdentity docsIdentity = ProjectMemberIntegrationIdentity.builder()
+                .id(40L)
+                .projectIntegration(docsIntegration)
+                .projectMember(currentMember)
+                .providerActorId("docs-actor")
+                .providerLogin("shared-google-name")
+                .providerEmail("shared@example.com")
+                .build();
+        ProjectMemberIntegrationIdentity slidesIdentity = ProjectMemberIntegrationIdentity.builder()
+                .id(41L)
+                .projectIntegration(slidesIntegration)
+                .projectMember(currentMember)
+                .providerActorId("slides-actor")
+                .providerLogin("shared-google-name")
+                .providerEmail("shared@example.com")
+                .build();
+        given(projectIntegrationRepository.findByProjectIdAndLinkType(1L, LinkType.GOOGLE_DOCS))
+                .willReturn(Optional.of(docsIntegration));
+        given(projectIntegrationRepository.findByProjectIdAndLinkType(1L, LinkType.GOOGLE_SLIDES))
+                .willReturn(Optional.of(slidesIntegration));
+        given(identityRepository.findAllByProjectIntegrationId(20L)).willReturn(List.of(docsIdentity));
+        given(identityRepository.findAllByProjectIntegrationId(21L)).willReturn(List.of(slidesIdentity));
+        given(aliasRepository.findAllByProjectIntegrationId(20L)).willReturn(List.of());
+        given(aliasRepository.findAllByProjectIntegrationId(21L)).willReturn(List.of());
+        given(activityRepository.findActorObservations(20L)).willReturn(List.of(docsObservation));
+        given(activityRepository.findActorObservations(21L)).willReturn(List.of(slidesObservation));
+
+        IntegrationActorMappingListResponse docsResponse = service.getMappings(1L, 10L, LinkType.GOOGLE_DOCS);
+        IntegrationActorMappingListResponse slidesResponse = service.getMappings(1L, 10L, LinkType.GOOGLE_SLIDES);
+
+        assertThat(docsResponse.linkType()).isEqualTo(LinkType.GOOGLE_DOCS);
+        assertThat(docsResponse.mappings()).extracting(IntegrationActorMappingResponse::actorKey)
+                .containsExactly(ProviderActorKey.providerId("docs-actor").selectionKey());
+        assertThat(docsResponse.availableProviderActors())
+                .extracting(providerActor -> providerActor.actorKey())
+                .doesNotContain(ProviderActorKey.providerId("slides-actor").selectionKey());
+        assertThat(slidesResponse.linkType()).isEqualTo(LinkType.GOOGLE_SLIDES);
+        assertThat(slidesResponse.mappings()).extracting(IntegrationActorMappingResponse::actorKey)
+                .containsExactly(ProviderActorKey.providerId("slides-actor").selectionKey());
+        assertThat(slidesResponse.availableProviderActors())
+                .extracting(providerActor -> providerActor.actorKey())
+                .doesNotContain(ProviderActorKey.providerId("docs-actor").selectionKey());
+    }
+
+    @Test
+    void savesGoogleDocsMappingAndAssignsOnlyGoogleDocsActivities() {
+        given(currentMember.getUser().getName()).willReturn("유상완");
+        given(currentMember.getUser().getNickname()).willReturn("바나");
+        ProjectIntegration docsIntegration = projectIntegration(20L, LinkType.GOOGLE_DOCS);
+        IntegrationActorObservation docsObservation = observation(
+                "google-user-1", "shared-google-name", "shared@example.com", 2L);
+        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GOOGLE_DOCS))
+                .willReturn(Optional.of(docsIntegration));
+        given(activityRepository.findActorObservations(20L)).willReturn(List.of(docsObservation));
+        given(identityRepository.findAllByProjectIntegrationId(20L)).willReturn(List.of());
+        given(aliasRepository.findAllByProjectIntegrationId(20L)).willReturn(List.of());
+        given(identityRepository.findByProjectIntegrationIdAndProjectMemberId(20L, 3L))
+                .willReturn(Optional.empty());
+        given(identityRepository.saveAndFlush(any(ProjectMemberIntegrationIdentity.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        IntegrationActorMappingResponse response = service.saveMyMapping(
+                1L,
+                10L,
+                LinkType.GOOGLE_DOCS,
+                new IntegrationActorMappingRequest(
+                        ProviderActorKey.providerId("google-user-1").selectionKey())
+        );
+
+        assertThat(response.actorKey())
+                .isEqualTo(ProviderActorKey.providerId("google-user-1").selectionKey());
+        verify(activityRepository).findActorObservations(20L);
+        verify(activityRepository).assignProjectMemberByProviderId(20L, currentMember, "google-user-1");
+        verify(activityRepository).assignProjectMemberByEmail(20L, currentMember, "shared@example.com");
+        verifyNoMoreInteractions(activityRepository);
+    }
+
+    @Test
+    void removesGoogleDocsMappingAndClearsOnlyGoogleDocsActivities() {
+        given(currentMember.getUser().getName()).willReturn("유상완");
+        given(currentMember.getUser().getNickname()).willReturn("바나");
+        ProjectIntegration docsIntegration = projectIntegration(20L, LinkType.GOOGLE_DOCS);
+        ProjectMemberIntegrationIdentity identity = ProjectMemberIntegrationIdentity.builder()
+                .id(42L)
+                .projectIntegration(docsIntegration)
+                .projectMember(currentMember)
+                .providerActorId("google-user-1")
+                .providerLogin("shared-google-name")
+                .providerEmail("shared@example.com")
+                .build();
+        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GOOGLE_DOCS))
+                .willReturn(Optional.of(docsIntegration));
+        given(identityRepository.findByProjectIntegrationIdAndProjectMemberId(20L, 3L))
+                .willReturn(Optional.of(identity));
+
+        IntegrationActorMappingResponse response = service.removeMyMapping(1L, 10L, LinkType.GOOGLE_DOCS);
+
+        assertThat(response.mappingId()).isEqualTo(42L);
+        verify(aliasRepository).deleteAllByIdentityId(42L);
+        verify(identityRepository).delete(identity);
+        verify(activityRepository).clearProjectMemberByProviderId(20L, currentMember, "google-user-1");
+        verify(activityRepository).clearProjectMemberByEmail(20L, currentMember, "shared@example.com");
+        verifyNoMoreInteractions(activityRepository);
     }
 
     @Test
@@ -426,6 +542,14 @@ class IntegrationActorMappingManagementServiceTest {
         given(aliasRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of());
         given(identityRepository.findByProjectIntegrationIdAndProjectMemberId(5L, 3L))
                 .willReturn(Optional.empty());
+    }
+
+    private ProjectIntegration projectIntegration(Long id, LinkType linkType) {
+        return ProjectIntegration.builder()
+                .id(id)
+                .linkType(linkType)
+                .providerConnectionId("connection-" + id)
+                .build();
     }
 
     private DataIntegrityViolationException constraintViolation(String constraintName) {
