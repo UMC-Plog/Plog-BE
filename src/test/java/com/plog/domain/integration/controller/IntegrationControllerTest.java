@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -46,9 +47,13 @@ import com.plog.global.security.jwt.JwtProvider;
 import com.plog.global.security.jwt.MediaTokenProvider;
 import java.time.Instant;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -323,6 +328,99 @@ class IntegrationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("INTEGRATION021"))
                 .andExpect(jsonPath("$.result.mappingId").value(20L));
+    }
+
+    @ParameterizedTest(name = "{0} actor mapping list routes to {1}")
+    @MethodSource("googleProviderLinkTypes")
+    @DisplayName("Google provider별 actor 매핑 조회는 정확한 LinkType으로 라우팅한다")
+    void getGoogleActorMappingsRoutesByProvider(String provider, LinkType linkType) throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationActorMappingManagementService.getMappings(projectId, userId, linkType))
+                .willReturn(new IntegrationActorMappingListResponse(
+                        projectId,
+                        linkType,
+                        100L,
+                        List.of(),
+                        List.of()
+                ));
+
+        mockMvc.perform(get(
+                        "/api/projects/{projectId}/integrations/{provider}/actor-mappings",
+                        projectId,
+                        provider
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("INTEGRATION019"))
+                .andExpect(jsonPath("$.result.linkType").value(linkType.name()));
+
+        verify(integrationActorMappingManagementService).getMappings(projectId, userId, linkType);
+    }
+
+    @ParameterizedTest(name = "{0} actor mapping save routes to {1}")
+    @MethodSource("googleProviderLinkTypes")
+    @DisplayName("Google provider별 actor 매핑 저장은 정확한 LinkType으로 라우팅한다")
+    void saveGoogleActorMappingRoutesByProvider(String provider, LinkType linkType) throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationActorMappingManagementService.saveMyMapping(
+                eq(projectId), eq(userId), eq(linkType), any()
+        )).willReturn(new IntegrationActorMappingResponse(
+                20L, 100L, "유상완", "바나", null,
+                "actor:google-123", "123", "google-user", "user@example.com"
+        ));
+
+        mockMvc.perform(put(
+                        "/api/projects/{projectId}/integrations/{provider}/actor-mappings/me",
+                        projectId,
+                        provider
+                )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "actorKey": "actor:google-123"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("INTEGRATION020"))
+                .andExpect(jsonPath("$.result.actorKey").value("actor:google-123"));
+
+        verify(integrationActorMappingManagementService)
+                .saveMyMapping(eq(projectId), eq(userId), eq(linkType), any());
+    }
+
+    @ParameterizedTest(name = "{0} actor mapping delete routes to {1}")
+    @MethodSource("googleProviderLinkTypes")
+    @DisplayName("Google provider별 actor 매핑 해제는 정확한 LinkType으로 라우팅한다")
+    void removeGoogleActorMappingRoutesByProvider(String provider, LinkType linkType) throws Exception {
+        Long projectId = 1L;
+        Long userId = 10L;
+        authenticate(userId);
+        given(integrationActorMappingManagementService.removeMyMapping(projectId, userId, linkType))
+                .willReturn(new IntegrationActorMappingResponse(
+                        20L, 100L, "유상완", "바나", null,
+                        "actor:google-123", "123", "google-user", "user@example.com"
+                ));
+
+        mockMvc.perform(delete(
+                        "/api/projects/{projectId}/integrations/{provider}/actor-mappings/me",
+                        projectId,
+                        provider
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("INTEGRATION021"))
+                .andExpect(jsonPath("$.result.mappingId").value(20L));
+
+        verify(integrationActorMappingManagementService).removeMyMapping(projectId, userId, linkType);
+    }
+
+    private static Stream<Arguments> googleProviderLinkTypes() {
+        return Stream.of(
+                Arguments.of("google-docs", LinkType.GOOGLE_DOCS),
+                Arguments.of("google-slides", LinkType.GOOGLE_SLIDES)
+        );
     }
 
     @Test
