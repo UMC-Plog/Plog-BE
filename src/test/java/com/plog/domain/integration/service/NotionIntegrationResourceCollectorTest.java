@@ -43,6 +43,8 @@ class NotionIntegrationResourceCollectorTest {
                 .withBean(ProjectIntegrationService.class, () -> projectIntegrationService)
                 .withBean(IntegrationActivityStoreService.class, () -> activityStoreService)
                 .withBean(NotionApiRateLimiter.class, () -> rateLimiter)
+                .withBean(NotionUserResolver.class,
+                        () -> mock(NotionUserResolver.class))
                 .withUserConfiguration(NotionIntegrationResourceCollector.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
@@ -86,7 +88,8 @@ class NotionIntegrationResourceCollectorTest {
         expectBlockChildren(fixture.server, "root-page", """
                 {"results":[{"id":"child-block","has_children":true,
                   "created_time":"2026-08-01T10:00:00Z","last_edited_time":"2026-08-01T10:00:00Z",
-                  "created_by":{"id":"actor-1","name":"Editor"},"last_edited_by":{"id":"actor-1","name":"Editor"}}],
+                  "created_by":{"id":"actor-1","name":"Editor","person":{"email":"editor@example.com"}},
+                  "last_edited_by":{"id":"actor-1","name":"Editor","person":{"email":"editor@example.com"}}}],
                  "has_more":true,"next_cursor":"root-cursor-2"}
                 """);
         expectBlockChildren(fixture.server, "root-page", "root-cursor-2", """
@@ -98,7 +101,8 @@ class NotionIntegrationResourceCollectorTest {
         expectBlockChildren(fixture.server, "child-block", """
                 {"results":[{"id":"grandchild-block","has_children":false,
                   "created_time":"2026-08-01T11:00:00Z","last_edited_time":"2026-08-01T11:00:00Z",
-                  "created_by":{"id":"actor-2","name":"Editor2"},"last_edited_by":{"id":"actor-2","name":"Editor2"}}],
+                  "created_by":{"id":"actor-2","name":"Editor2","person":{"email":"editor2@example.com"}},
+                  "last_edited_by":{"id":"actor-2","name":"Editor2","person":{"email":"editor2@example.com"}}}],
                  "has_more":false}
                 """);
         expectComments(fixture.server, "grandchild-block", """
@@ -120,6 +124,61 @@ class NotionIntegrationResourceCollectorTest {
                 eq(resource), eq(IntegrationActivityType.NOTION_BLOCK_SNAPSHOT),
                 eq("block:grandchild-block:2026-08-01T11:00:00Z"),
                 any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("page·block·comment의 같은 partial user는 한 번 조회해 표시 정보를 공유한다")
+    void enrichesRepeatedPartialUserOnceAcrossPageBlockAndComment() {
+        Fixture fixture = fixture();
+        IntegrationResource resource = resource(IntegrationResourceType.NOTION_PAGE, "root-page");
+        CountingContext context = new CountingContext();
+
+        fixture.server.expect(requestTo("https://api.notion.com/v1/pages/root-page"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("""
+                        {"id":"root-page","last_edited_time":"2026-08-01T09:30:00Z",
+                         "url":"https://notion.so/root-page",
+                         "created_by":{"id":"user-1"},"last_edited_by":{"id":"user-1"}}
+                        """, MediaType.APPLICATION_JSON));
+        fixture.server.expect(requestTo("https://api.notion.com/v1/users/user-1"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN))
+                .andExpect(header("Notion-Version", "2026-03-11"))
+                .andRespond(withSuccess("""
+                        {"object":"user","id":"user-1","type":"person","name":"Sangwan",
+                         "person":{"email":"sangwan@example.com"}}
+                        """, MediaType.APPLICATION_JSON));
+        expectBlockChildren(fixture.server, "root-page", """
+                {"results":[{"id":"block-1","has_children":false,
+                  "last_edited_time":"2026-08-01T10:00:00Z",
+                  "created_by":{"id":"user-1"},"last_edited_by":{"id":"user-1"}}],
+                 "has_more":false}
+                """);
+        expectComments(fixture.server, "block-1", """
+                {"results":[{"id":"comment-1","created_time":"2026-08-01T10:10:00Z",
+                  "created_by":{"id":"user-1"}}],"has_more":false}
+                """);
+        expectComments(fixture.server, "root-page", """
+                {"results":[],"has_more":false}
+                """);
+
+        fixture.collector.collect(resource, context);
+
+        fixture.server.verify();
+        assertThat(context.heartbeats).isEqualTo(5);
+        verify(activityStoreService).backfillActorDisplayInfo(
+                10L, "user-1", "Sangwan", "sangwan@example.com");
+        verify(activityStoreService).store(
+                eq(resource), eq(IntegrationActivityType.NOTION_PAGE_SNAPSHOT),
+                eq("page:root-page:2026-08-01T09:30:00Z"),
+                eq("user-1"), eq("Sangwan"), eq("sangwan@example.com"), any(), any(), any());
+        verify(activityStoreService).store(
+                eq(resource), eq(IntegrationActivityType.NOTION_BLOCK_SNAPSHOT),
+                eq("block:block-1:2026-08-01T10:00:00Z"),
+                eq("user-1"), eq("Sangwan"), eq("sangwan@example.com"), any(), any(), any());
+        verify(activityStoreService).store(
+                eq(resource), eq(IntegrationActivityType.NOTION_COMMENT), eq("comment:comment-1"),
+                eq("user-1"), eq("Sangwan"), eq("sangwan@example.com"), any(), any(), any());
     }
 
     @Test
@@ -192,6 +251,7 @@ class NotionIntegrationResourceCollectorTest {
     private IntegrationResource resource(IntegrationResourceType type, String providerResourceId) {
         ProjectIntegration integration = mock(ProjectIntegration.class);
         IntegrationResource resource = mock(IntegrationResource.class);
+        given(integration.getId()).willReturn(10L);
         given(resource.getProjectIntegration()).willReturn(integration);
         given(resource.getResourceType()).willReturn(type);
         given(resource.getProviderResourceId()).willReturn(providerResourceId);
@@ -206,7 +266,9 @@ class NotionIntegrationResourceCollectorTest {
                 .andExpect(header("Notion-Version", "2026-03-11"))
                 .andRespond(withSuccess("""
                         {"id":"data-source-1","last_edited_time":"2026-08-01T09:00:00Z",
-                         "last_edited_by":{"id":"editor-1","name":"Editor"},"url":"https://notion.so/data-source-1"}
+                         "last_edited_by":{"id":"editor-1","name":"Editor",
+                           "person":{"email":"editor@example.com"}},
+                         "url":"https://notion.so/data-source-1"}
                         """, MediaType.APPLICATION_JSON));
     }
 
@@ -227,8 +289,10 @@ class NotionIntegrationResourceCollectorTest {
                 .andRespond(withSuccess("""
                         {"id":"%s","created_time":"2026-08-01T09:00:00Z",
                          "last_edited_time":"2026-08-01T09:30:00Z","url":"https://notion.so/%s",
-                         "created_by":{"id":"creator-1","name":"Creator"},
-                         "last_edited_by":{"id":"editor-1","name":"Editor"}}
+                         "created_by":{"id":"creator-1","name":"Creator",
+                           "person":{"email":"creator@example.com"}},
+                         "last_edited_by":{"id":"editor-1","name":"Editor",
+                           "person":{"email":"editor@example.com"}}}
                         """.formatted(pageId, pageId), MediaType.APPLICATION_JSON));
     }
 

@@ -1,10 +1,13 @@
 package com.plog.domain.integration.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.plog.domain.integration.entity.IntegrationActivityType;
 import com.plog.domain.integration.entity.IntegrationCredentialType;
@@ -74,6 +77,37 @@ class IntegrationActivityStoreServiceTest {
         verify(integrationActivityRepository, never()).insertIfAbsent(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
         );
+    }
+
+    @Test
+    void backfillsActorSnapshotThroughRepository() {
+        given(integrationActivityRepository.backfillActorSnapshotByProviderId(
+                1L, "actor-1", "vana", "vana@plog.test"
+        )).willReturn(3);
+
+        int updated = integrationActivityStoreService.backfillActorDisplayInfo(
+                1L, "actor-1", "vana", "vana@plog.test"
+        );
+
+        assertThat(updated).isEqualTo(3);
+        verify(integrationActivityRepository).backfillActorSnapshotByProviderId(
+                1L, "actor-1", "vana", "vana@plog.test"
+        );
+    }
+
+    @Test
+    void skipsActorSnapshotBackfillWithoutUsableLookupOrSnapshot() {
+        assertThat(integrationActivityStoreService.backfillActorDisplayInfo(1L, " ", "vana", "vana@plog.test"))
+                .isZero();
+        assertThat(integrationActivityStoreService.backfillActorDisplayInfo(1L, "actor-1", " ", null))
+                .isZero();
+        assertThat(integrationActivityStoreService.backfillActorDisplayInfo(null, "actor-1", "vana", "vana@plog.test"))
+                .isZero();
+
+        verify(integrationActivityRepository, never()).backfillActorSnapshotByProviderId(
+                anyLong(), any(), any(), any()
+        );
+        verifyNoInteractions(integrationActorMappingService);
     }
 
     private IntegrationResource resource() {
