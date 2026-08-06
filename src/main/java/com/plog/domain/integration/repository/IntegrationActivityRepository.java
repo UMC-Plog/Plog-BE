@@ -129,6 +129,29 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
             @Param("actorLogin") String actorLogin
     );
 
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update IntegrationActivity activity "
+            + "set activity.actorLogin = case "
+            + "when (activity.actorLogin is null or trim(activity.actorLogin) = '') "
+            + "and :actorLogin is not null and trim(:actorLogin) <> '' "
+            + "then :actorLogin else activity.actorLogin end, "
+            + "activity.actorEmail = case "
+            + "when (activity.actorEmail is null or trim(activity.actorEmail) = '') "
+            + "and :actorEmail is not null and trim(:actorEmail) <> '' "
+            + "then :actorEmail else activity.actorEmail end "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "
+            + "and activity.actorProviderId = :actorProviderId "
+            + "and (((activity.actorLogin is null or trim(activity.actorLogin) = '') "
+            + "and :actorLogin is not null and trim(:actorLogin) <> '') "
+            + "or ((activity.actorEmail is null or trim(activity.actorEmail) = '') "
+            + "and :actorEmail is not null and trim(:actorEmail) <> ''))")
+    int backfillActorSnapshotByProviderId(
+            @Param("projectIntegrationId") Long projectIntegrationId,
+            @Param("actorProviderId") String actorProviderId,
+            @Param("actorLogin") String actorLogin,
+            @Param("actorEmail") String actorEmail
+    );
+
     void deleteAllByIntegrationResourceProjectIntegrationId(Long projectIntegrationId);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)

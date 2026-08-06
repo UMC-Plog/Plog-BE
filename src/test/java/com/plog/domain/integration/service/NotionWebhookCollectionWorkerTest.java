@@ -41,6 +41,10 @@ class NotionWebhookCollectionWorkerTest {
     @Mock
     private NotionIntegrationResourceCollector notionCollector;
     @Mock
+    private NotionUserResolver notionUserResolver;
+    @Mock
+    private NotionUserResolver.Session userSession;
+    @Mock
     private IntegrationActivityStoreService activityStoreService;
     @Mock
     private IntegrationResourceCollectionStateService resourceStateService;
@@ -63,6 +67,7 @@ class NotionWebhookCollectionWorkerTest {
                 projectIntegrationRepository,
                 integrationResourceRepository,
                 notionCollector,
+                notionUserResolver,
                 activityStoreService,
                 resourceStateService,
                 projectIntegrationService,
@@ -117,6 +122,7 @@ class NotionWebhookCollectionWorkerTest {
 
     @Test
     void storesWebhookActorAndCollectsChangedEntityWithinRegisteredRoot() {
+        givenUserResolution();
         given(notionCollector.findContainingResource(any(), any(), any())).willReturn(resource);
 
         worker.processDueEvents();
@@ -126,15 +132,17 @@ class NotionWebhookCollectionWorkerTest {
                 eq(com.plog.domain.integration.entity.IntegrationActivityType.NOTION_WEBHOOK_EVENT),
                 eq("webhook:event-1:actor-1"),
                 eq("actor-1"),
-                any(),
-                any(),
+                eq("Notion User"),
+                eq("notion-user@example.com"),
                 eq(Instant.parse("2026-08-02T10:00:00Z")),
                 eq("https://notion.so/root-page"),
                 eq("{\"id\":\"event-1\"}")
         );
         ArgumentCaptor<CollectionContext> contextCaptor = ArgumentCaptor.forClass(CollectionContext.class);
         verify(notionCollector).findContainingResource(any(), any(), contextCaptor.capture());
-        verify(notionCollector).collectChangedEntity(eq(resource), any(), contextCaptor.capture());
+        verify(notionCollector).collectChangedEntity(
+                eq(resource), any(), contextCaptor.capture(), eq(userSession));
+        verify(notionUserResolver).resolve(eq(userSession), any());
         assertThat(contextCaptor.getAllValues())
                 .allSatisfy(context -> assertThat(context.cursor()).isEqualTo(CollectionCursor.start()));
         verify(resourceStateService).markCollected(eq(20L), any());
@@ -143,9 +151,10 @@ class NotionWebhookCollectionWorkerTest {
 
     @Test
     void unauthorizedProviderResponseRequiresProjectReauthorization() {
+        givenUserResolution();
         given(notionCollector.findContainingResource(any(), any(), any())).willReturn(resource);
         org.mockito.Mockito.doThrow(new ProviderResourceAccessException(401, null))
-                .when(notionCollector).collectChangedEntity(eq(resource), any(), any());
+                .when(notionCollector).collectChangedEntity(eq(resource), any(), any(), eq(userSession));
 
         worker.processDueEvents();
 
@@ -156,9 +165,10 @@ class NotionWebhookCollectionWorkerTest {
 
     @Test
     void temporaryProviderFailureSchedulesBoundedRetry() {
+        givenUserResolution();
         given(notionCollector.findContainingResource(any(), any(), any())).willReturn(resource);
         org.mockito.Mockito.doThrow(new ProviderResourceAccessException(429, null))
-                .when(notionCollector).collectChangedEntity(eq(resource), any(), any());
+                .when(notionCollector).collectChangedEntity(eq(resource), any(), any(), eq(userSession));
 
         worker.processDueEvents();
 
@@ -191,6 +201,14 @@ class NotionWebhookCollectionWorkerTest {
         worker.processDueEvents();
 
         verify(queueService).ignore(eq(batch), any(), eq("event is outside registered project resources"));
-        verify(notionCollector, never()).collectChangedEntity(any(), any(), any());
+        verify(notionCollector, never()).collectChangedEntity(any(), any(), any(), any());
+    }
+
+    private void givenUserResolution() {
+        given(projectIntegrationService.decryptAccessToken(integration)).willReturn("notion-token");
+        given(notionUserResolver.begin(eq(10L), eq("notion-token"), any())).willReturn(userSession);
+        given(notionUserResolver.resolve(eq(userSession), any()))
+                .willReturn(new NotionUserResolver.Actor(
+                        "actor-1", "Notion User", "notion-user@example.com"));
     }
 }
