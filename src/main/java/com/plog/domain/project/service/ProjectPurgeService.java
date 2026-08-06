@@ -28,12 +28,7 @@ public class ProjectPurgeService {
         delete("delete from ChatRoom room where room.project.id = :projectId", projectId);
         // ddl-auto:update는 레거시 integration 테이블을 제거하지 않는다.
         // 명시적 DB migration 전까지 기존 FK 행도 함께 정리한다.
-        delete("delete from ActivityLog activity "
-                + "where activity.resource.connection.projectMember.project.id = :projectId", projectId);
-        delete("delete from ExternalResource resource "
-                + "where resource.connection.projectMember.project.id = :projectId", projectId);
-        delete("delete from ExternalConnection connection "
-                + "where connection.projectMember.project.id = :projectId", projectId);
+        deleteLegacyIntegrationRows(projectId);
         delete("delete from IntegrationActivity activity "
                 + "where activity.integrationResource.projectIntegration.project.id = :projectId", projectId);
         delete("delete from ProjectMemberIntegrationIdentityAlias alias "
@@ -94,5 +89,75 @@ public class ProjectPurgeService {
         entityManager.createQuery(query)
                 .setParameter("projectId", projectId)
                 .executeUpdate();
+    }
+
+    private void deleteLegacyIntegrationRows(Long projectId) {
+        LegacyIntegrationTables tables = legacyIntegrationTables();
+
+        if (tables.activityLog()) {
+            nativeDelete("""
+                    delete from activity_log activity
+                    using project_members member
+                    where activity.project_member_id = member.project_member_id
+                    and member.project_id = ?1
+                    """, projectId);
+        }
+
+        if (tables.activityLog() && tables.externalResource() && tables.externalConnection()) {
+            nativeDelete("""
+                    delete from activity_log activity
+                    using external_resource resource, external_connection connection, project_members member
+                    where activity.resource_id = resource.resource_id
+                    and resource.connection_id = connection.connection_id
+                    and connection.project_member_id = member.project_member_id
+                    and member.project_id = ?1
+                    """, projectId);
+        }
+
+        if (tables.externalResource() && tables.externalConnection()) {
+            nativeDelete("""
+                    delete from external_resource resource
+                    using external_connection connection, project_members member
+                    where resource.connection_id = connection.connection_id
+                    and connection.project_member_id = member.project_member_id
+                    and member.project_id = ?1
+                    """, projectId);
+        }
+
+        if (tables.externalConnection()) {
+            nativeDelete("""
+                    delete from external_connection connection
+                    using project_members member
+                    where connection.project_member_id = member.project_member_id
+                    and member.project_id = ?1
+                    """, projectId);
+        }
+    }
+
+    private LegacyIntegrationTables legacyIntegrationTables() {
+        Object[] result = (Object[]) entityManager.createNativeQuery("""
+                        select to_regclass('activity_log') is not null,
+                               to_regclass('external_resource') is not null,
+                               to_regclass('external_connection') is not null
+                        """)
+                .getSingleResult();
+        return new LegacyIntegrationTables(
+                Boolean.TRUE.equals(result[0]),
+                Boolean.TRUE.equals(result[1]),
+                Boolean.TRUE.equals(result[2])
+        );
+    }
+
+    private void nativeDelete(String query, Long projectId) {
+        entityManager.createNativeQuery(query)
+                .setParameter(1, projectId)
+                .executeUpdate();
+    }
+
+    private record LegacyIntegrationTables(
+            boolean activityLog,
+            boolean externalResource,
+            boolean externalConnection
+    ) {
     }
 }
