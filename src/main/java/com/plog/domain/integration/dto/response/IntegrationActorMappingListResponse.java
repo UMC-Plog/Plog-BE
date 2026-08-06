@@ -8,9 +8,9 @@ import java.util.List;
 public record IntegrationActorMappingListResponse(
         @Schema(description = "프로젝트 ID", example = "1")
         Long projectId,
-        @Schema(description = "외부 provider: GITHUB, FIGMA, NOTION, GOOGLE",
+        @Schema(description = "외부 provider: GITHUB, FIGMA, NOTION, GOOGLE_DOCS, GOOGLE_SLIDES",
                 example = "GITHUB",
-                allowableValues = {"GITHUB", "FIGMA", "NOTION", "GOOGLE"})
+                allowableValues = {"GITHUB", "FIGMA", "NOTION", "GOOGLE_DOCS", "GOOGLE_SLIDES"})
         LinkType linkType,
         @Schema(description = "현재 로그인 사용자의 프로젝트 멤버 ID", example = "3")
         Long currentProjectMemberId,
