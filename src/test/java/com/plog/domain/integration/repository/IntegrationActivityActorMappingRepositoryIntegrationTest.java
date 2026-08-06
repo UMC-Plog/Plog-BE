@@ -36,6 +36,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -101,11 +103,15 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
         entityManager.flush();
         entityManager.clear();
 
+        assertThat(activityRepository.existsUnassignedActivityActorByProjectIntegrationId(integration.getId()))
+                .isTrue();
         assertThat(activityRepository.assignProjectMemberByEmail(
                 integration.getId(), currentMember, "shared@example.com"
         )).isOne();
         entityManager.clear();
 
+        assertThat(activityRepository.existsUnassignedActivityActorByProjectIntegrationId(integration.getId()))
+                .isFalse();
         assertThat(activityRepository.findById(unassigned.getId()).orElseThrow().getProjectMember().getId())
                 .isEqualTo(currentMember.getId());
         assertThat(activityRepository.findById(ownedByAnother.getId()).orElseThrow().getProjectMember().getId())
@@ -116,6 +122,8 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
         )).isOne();
         entityManager.clear();
 
+        assertThat(activityRepository.existsUnassignedActivityActorByProjectIntegrationId(integration.getId()))
+                .isTrue();
         assertThat(activityRepository.findById(unassigned.getId()).orElseThrow().getProjectMember()).isNull();
         assertThat(activityRepository.findById(ownedByAnother.getId()).orElseThrow().getProjectMember().getId())
                 .isEqualTo(anotherMember.getId());
@@ -143,6 +151,97 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
             assertThat(observation.getActorEmail()).isEqualTo("actor@example.com");
             assertThat(observation.getActivityCount()).isEqualTo(2L);
         });
+    }
+
+    @ParameterizedTest
+    @CsvSource(nullValues = "NULL", textBlock = """
+            provider-actor,NULL,NULL
+            NULL,actor-login,NULL
+            NULL,NULL,actor@example.com
+            """)
+    void existsUnassignedActivityActorByProjectIntegrationIdReturnsTrueWhenAnyActorSnapshotIsNonblank(
+            String actorProviderId,
+            String actorLogin,
+            String actorEmail
+    ) {
+        Project project = entityManager.persist(project());
+        ProjectMember member = entityManager.persist(member(
+                project,
+                User.createLocal("unassigned@example.com", "encoded", "미매핑", "unassigned"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration integration = entityManager.persist(integration(project, member));
+        IntegrationResource resource = entityManager.persist(resource(integration, member));
+        entityManager.persist(activity(resource, null, "event-unassigned", actorProviderId, actorLogin, actorEmail));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(activityRepository.existsUnassignedActivityActorByProjectIntegrationId(integration.getId()))
+                .isTrue();
+    }
+
+    @Test
+    void existsUnassignedActivityActorByProjectIntegrationIdReturnsFalseWhenUnassignedActorSnapshotIsBlank() {
+        Project project = entityManager.persist(project());
+        ProjectMember member = entityManager.persist(member(
+                project,
+                User.createLocal("blank@example.com", "encoded", "공백", "blank"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration integration = entityManager.persist(integration(project, member));
+        IntegrationResource resource = entityManager.persist(resource(integration, member));
+        entityManager.persist(activity(resource, null, "event-blank", " ", " ", " "));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(activityRepository.existsUnassignedActivityActorByProjectIntegrationId(integration.getId()))
+                .isFalse();
+    }
+
+    @Test
+    void existsUnassignedActivityActorByProjectIntegrationIdIgnoresActorsOutsideRequestedIntegration() {
+        Project targetProject = entityManager.persist(project());
+        ProjectMember targetMember = entityManager.persist(member(
+                targetProject,
+                User.createLocal("target@example.com", "encoded", "대상", "target"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration targetIntegration = entityManager.persist(integration(targetProject, targetMember));
+
+        Project otherProject = entityManager.persist(project("other"));
+        ProjectMember otherMember = entityManager.persist(member(
+                otherProject,
+                User.createLocal("other@example.com", "encoded", "다른", "other"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration otherIntegration = entityManager.persist(integration(otherProject, otherMember));
+        IntegrationResource otherResource = entityManager.persist(resource(otherIntegration, otherMember));
+        entityManager.persist(activity(otherResource, null, "event-other", "provider-other", null, null));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(activityRepository.existsUnassignedActivityActorByProjectIntegrationId(targetIntegration.getId()))
+                .isFalse();
+        assertThat(activityRepository.existsUnassignedActivityActorByProjectIntegrationId(otherIntegration.getId()))
+                .isTrue();
+    }
+
+    @Test
+    void existsUnassignedActivityActorByProjectIntegrationIdIgnoresAlreadyAssignedActors() {
+        Project project = entityManager.persist(project());
+        ProjectMember member = entityManager.persist(member(
+                project,
+                User.createLocal("assigned@example.com", "encoded", "매핑", "assigned"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration integration = entityManager.persist(integration(project, member));
+        IntegrationResource resource = entityManager.persist(resource(integration, member));
+        entityManager.persist(activity(resource, member, "event-assigned", "provider-assigned", null, null));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(activityRepository.existsUnassignedActivityActorByProjectIntegrationId(integration.getId()))
+                .isFalse();
     }
 
     @Test
@@ -225,11 +324,15 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
     }
 
     private Project project() {
+        return project("actor-mapping");
+    }
+
+    private Project project(String name) {
         LocalDate today = LocalDate.now();
         return Project.builder()
-                .projectName("actor-mapping")
-                .inviteTokenHash("actor-mapping-hash")
-                .inviteTokenEncrypted("actor-mapping-encrypted")
+                .projectName(name)
+                .inviteTokenHash(name + "-hash")
+                .inviteTokenEncrypted(name + "-encrypted")
                 .projectType(ProjectType.DEVELOP)
                 .status(ProjectStatus.IN_PROGRESS)
                 .startDay(today)
@@ -278,13 +381,24 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
             String actorProviderId,
             String actorEmail
     ) {
+        return activity(resource, projectMember, eventKey, actorProviderId, actorEmail, actorEmail);
+    }
+
+    private IntegrationActivity activity(
+            IntegrationResource resource,
+            ProjectMember projectMember,
+            String eventKey,
+            String actorProviderId,
+            String actorLogin,
+            String actorEmail
+    ) {
         return IntegrationActivity.builder()
                 .integrationResource(resource)
                 .projectMember(projectMember)
                 .activityType(IntegrationActivityType.GITHUB_COMMIT)
                 .providerEventKey(eventKey)
                 .actorProviderId(actorProviderId)
-                .actorLogin(actorEmail)
+                .actorLogin(actorLogin)
                 .actorEmail(actorEmail)
                 .occurredAt(Instant.parse("2026-07-28T00:00:00Z"))
                 .providerPayload("{}")
