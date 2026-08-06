@@ -64,28 +64,30 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     public void collect(IntegrationResource resource, CollectionContext context) {
         String token = projectIntegrationService.decryptAccessToken(resource.getProjectIntegration());
         String fileId = resource.getProviderResourceId();
-        collectFileMetadata(resource, fileId, token);
-        collectOptional(() -> collectDriveActivity(resource, fileId, token));
-        collectOptional(() -> collectComments(resource, fileId, token));
-        collectOptional(() -> collectRevisions(resource, fileId, token));
+        collectFileMetadata(resource, fileId, token, context);
+        collectOptional(() -> collectDriveActivity(resource, fileId, token, context));
+        collectOptional(() -> collectComments(resource, fileId, token, context));
+        collectOptional(() -> collectRevisions(resource, fileId, token, context));
         if (resource.getResourceType() == IntegrationResourceType.GOOGLE_DOCUMENT) {
-            collectOptional(() -> collectDocumentSnapshot(resource, fileId, token));
+            collectOptional(() -> collectDocumentSnapshot(resource, fileId, token, context));
         }
         if (resource.getResourceType() == IntegrationResourceType.GOOGLE_PRESENTATION) {
-            collectOptional(() -> collectPresentationSnapshot(resource, fileId, token));
+            collectOptional(() -> collectPresentationSnapshot(resource, fileId, token, context));
         }
     }
 
-    private void collectDocumentSnapshot(IntegrationResource resource, String fileId, String token) {
+    private void collectDocumentSnapshot(IntegrationResource resource, String fileId, String token,
+            CollectionContext context) {
         JsonNode document = get(DOCS_API + "/documents/" + fileId
-                + "?suggestionsViewMode=SUGGESTIONS_INLINE&includeTabsContent=true", token);
+                + "?suggestionsViewMode=SUGGESTIONS_INLINE&includeTabsContent=true", token, context);
         activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DOCUMENT_SUGGESTION,
                 "document-snapshot:" + fileId + ":" + snapshotVersion(document), null, null, null,
                 null, resource.getResourceUrl(), document.toString());
     }
 
-    private void collectPresentationSnapshot(IntegrationResource resource, String fileId, String token) {
-        JsonNode presentation = get(SLIDES_API + "/presentations/" + fileId, token);
+    private void collectPresentationSnapshot(IntegrationResource resource, String fileId, String token,
+            CollectionContext context) {
+        JsonNode presentation = get(SLIDES_API + "/presentations/" + fileId, token, context);
         activityStoreService.store(resource, IntegrationActivityType.GOOGLE_PRESENTATION_SNAPSHOT,
                 "presentation-snapshot:" + fileId + ":" + snapshotVersion(presentation), null, null, null, null,
                 resource.getResourceUrl(), presentation.toString());
@@ -102,9 +104,11 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
         }
     }
 
-    private void collectFileMetadata(IntegrationResource resource, String fileId, String token) {
+    private void collectFileMetadata(IntegrationResource resource, String fileId, String token,
+            CollectionContext context) {
         JsonNode file = get(DRIVE_API + "/files/" + fileId
-                + "?fields=id,name,mimeType,createdTime,modifiedTime,lastModifyingUser,owners,webViewLink", token);
+                + "?fields=id,name,mimeType,createdTime,modifiedTime,lastModifyingUser,owners,webViewLink",
+                token, context);
         JsonNode actor = file.path("lastModifyingUser");
         activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DRIVE_FILE_SNAPSHOT,
                 "drive-file:" + fileId + ":" + file.path("modifiedTime").asText("current"),
@@ -114,14 +118,16 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
                 file.path("webViewLink").asText(resource.getResourceUrl()), file.toString());
     }
 
-    private void collectDriveActivity(IntegrationResource resource, String fileId, String token) {
+    private void collectDriveActivity(IntegrationResource resource, String fileId, String token,
+            CollectionContext context) {
         String pageToken = null;
         Set<String> requestedPageTokens = new HashSet<>();
         do {
             JsonNode body = post(DRIVE_ACTIVITY_API + "/activity:query", token,
                     pageToken == null
                             ? Map.of("itemName", "items/" + fileId, "pageSize", 100)
-                            : Map.of("itemName", "items/" + fileId, "pageSize", 100, "pageToken", pageToken));
+                            : Map.of("itemName", "items/" + fileId, "pageSize", 100, "pageToken", pageToken),
+                    context);
             for (JsonNode activity : body.path("activities")) {
                 JsonNode actor = activity.path("actors").isArray() && !activity.path("actors").isEmpty()
                         ? activity.path("actors").get(0)
@@ -139,14 +145,15 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
         } while (pageToken != null && !pageToken.isBlank());
     }
 
-    private void collectComments(IntegrationResource resource, String fileId, String token) {
+    private void collectComments(IntegrationResource resource, String fileId, String token,
+            CollectionContext context) {
         String pageToken = null;
         Set<String> requestedPageTokens = new HashSet<>();
         do {
             String url = DRIVE_API + "/files/" + fileId
                     + "/comments?pageSize=100&fields=nextPageToken,comments(id,createdTime,modifiedTime,author,content,resolved,replies)"
                     + (pageToken == null ? "" : "&pageToken=" + pageToken);
-            JsonNode body = get(url, token);
+            JsonNode body = get(url, token, context);
             for (JsonNode comment : body.path("comments")) {
                 JsonNode author = comment.path("author");
                 activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
@@ -169,14 +176,15 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
         } while (pageToken != null && !pageToken.isBlank());
     }
 
-    private void collectRevisions(IntegrationResource resource, String fileId, String token) {
+    private void collectRevisions(IntegrationResource resource, String fileId, String token,
+            CollectionContext context) {
         String pageToken = null;
         Set<String> requestedPageTokens = new HashSet<>();
         do {
             String url = DRIVE_API + "/files/" + fileId
                     + "/revisions?pageSize=100&fields=nextPageToken,revisions(id,modifiedTime,lastModifyingUser,originalFilename,mimeType)"
                     + (pageToken == null ? "" : "&pageToken=" + pageToken);
-            JsonNode body = get(url, token);
+            JsonNode body = get(url, token, context);
             for (JsonNode revision : body.path("revisions")) {
                 JsonNode author = revision.path("lastModifyingUser");
                 activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DRIVE_REVISION,
@@ -268,8 +276,9 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
         return node.toString();
     }
 
-    private JsonNode get(String uri, String token) {
+    private JsonNode get(String uri, String token, CollectionContext context) {
         try {
+            context.heartbeat();
             return restClient.get().uri(uri).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .retrieve().body(JsonNode.class);
         } catch (RestClientResponseException exception) {
@@ -281,8 +290,9 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
         }
     }
 
-    private JsonNode post(String uri, String token, Object request) {
+    private JsonNode post(String uri, String token, Object request, CollectionContext context) {
         try {
+            context.heartbeat();
             return restClient.post().uri(uri).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request).retrieve().body(JsonNode.class);
