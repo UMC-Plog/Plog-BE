@@ -136,6 +136,35 @@ class GoogleIntegrationResourceCollectorTest {
     }
 
     @Test
+    @DisplayName("Google provider 호출마다 heartbeat를 남기고 pagination 요청도 포함한다")
+    void reportsHeartbeatPerProviderRequestAcrossPagination() {
+        Fixture fixture = fixture();
+        IntegrationResource resource = resource(IntegrationResourceType.GOOGLE_DOCUMENT);
+        RecordingContext context = new RecordingContext();
+
+        expectFileMetadata(fixture.server);
+        expectDriveActivity(fixture.server, """
+                {"itemName":"items/google-file-1","pageSize":100}
+                """, """
+                {"activities":[],"nextPageToken":"page-2"}
+                """);
+        expectDriveActivity(fixture.server, """
+                {"itemName":"items/google-file-1","pageSize":100,"pageToken":"page-2"}
+                """, """
+                {"activities":[]}
+                """);
+        expectComments(fixture.server, "{}");
+        expectRevisions(fixture.server, "{}");
+        expectDocumentSnapshot(fixture.server);
+
+        fixture.collector.collect(resource, context);
+
+        fixture.server.verify();
+        assertThat(fixture.requestedUris).hasSize(6);
+        assertThat(context.heartbeats).isEqualTo(fixture.requestedUris.size());
+    }
+
+    @Test
     @DisplayName("Drive Activity 400은 실패로 전파하고 이후 optional API를 호출하지 않는다")
     void propagatesDriveActivityBadRequestAndStopsDownstreamCalls() {
         Fixture fixture = fixture();
@@ -230,11 +259,17 @@ class GoogleIntegrationResourceCollectorTest {
 
     private Fixture fixture() {
         RestClient.Builder builder = RestClient.builder();
+        List<String> requestedUris = new ArrayList<>();
+        builder.requestInterceptor((request, body, execution) -> {
+            requestedUris.add(request.getURI().toString());
+            return execution.execute(request, body);
+        });
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         given(projectIntegrationService.decryptAccessToken(any(ProjectIntegration.class))).willReturn(TOKEN);
         return new Fixture(
                 server,
-                new GoogleIntegrationResourceCollector(projectIntegrationService, activityStoreService, builder.build())
+                new GoogleIntegrationResourceCollector(projectIntegrationService, activityStoreService, builder.build()),
+                requestedUris
         );
     }
 
@@ -327,6 +362,35 @@ class GoogleIntegrationResourceCollectorTest {
         return new ArrayList<>(captor.getAllValues());
     }
 
-    private record Fixture(MockRestServiceServer server, GoogleIntegrationResourceCollector collector) {
+    private record Fixture(
+            MockRestServiceServer server,
+            GoogleIntegrationResourceCollector collector,
+            List<String> requestedUris
+    ) {
+    }
+
+    private static final class RecordingContext implements CollectionContext {
+
+        private int heartbeats;
+
+        @Override
+        public CollectionCursor cursor() {
+            return CollectionCursor.start();
+        }
+
+        @Override
+        public void enterResource(Long resourceId) {
+            throw new AssertionError("collector must not call enterResource");
+        }
+
+        @Override
+        public void advance(com.plog.domain.integration.entity.CollectionPhase phase, int itemNumber) {
+            throw new AssertionError("collector must not call advance");
+        }
+
+        @Override
+        public void heartbeat() {
+            heartbeats++;
+        }
     }
 }

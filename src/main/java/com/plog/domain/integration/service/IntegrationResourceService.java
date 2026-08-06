@@ -32,10 +32,11 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
@@ -45,7 +46,6 @@ import org.springframework.web.client.RestClientResponseException;
 /** 선택 리소스의 provider 검증·등록만 담당한다. 활동 수집과 기여도 계산은 별도 서비스 책임이다. */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class IntegrationResourceService {
 
     private static final String NOTION_VERSION = "2026-03-11";
@@ -61,7 +61,55 @@ public class IntegrationResourceService {
     private final IntegrationResourceRepository integrationResourceRepository;
     private final IntegrationActivityRepository integrationActivityRepository;
     private final GithubAppClient githubAppClient;
-    private final RestClient restClient = ProviderRestClientFactory.create();
+    private final RestClient restClient;
+
+    /** 생성자가 둘이라 Spring이 주입 대상을 고를 수 없다. 이쪽이 운영용이다. */
+    @Autowired
+    public IntegrationResourceService(
+            ProjectRepository projectRepository,
+            ProjectAccessService projectAccessService,
+            ProjectIntegrationRepository projectIntegrationRepository,
+            ProjectIntegrationService projectIntegrationService,
+            IntegrationVerificationService integrationVerificationService,
+            IntegrationResourceRepository integrationResourceRepository,
+            IntegrationActivityRepository integrationActivityRepository,
+            GithubAppClient githubAppClient
+    ) {
+        this(
+                projectRepository,
+                projectAccessService,
+                projectIntegrationRepository,
+                projectIntegrationService,
+                integrationVerificationService,
+                integrationResourceRepository,
+                integrationActivityRepository,
+                githubAppClient,
+                ProviderRestClientFactory.create()
+        );
+    }
+
+    /** 테스트에서 MockRestServiceServer를 물리기 위한 생성자다. */
+    IntegrationResourceService(
+            ProjectRepository projectRepository,
+            ProjectAccessService projectAccessService,
+            ProjectIntegrationRepository projectIntegrationRepository,
+            ProjectIntegrationService projectIntegrationService,
+            IntegrationVerificationService integrationVerificationService,
+            IntegrationResourceRepository integrationResourceRepository,
+            IntegrationActivityRepository integrationActivityRepository,
+            GithubAppClient githubAppClient,
+            RestClient restClient
+    ) {
+        this.projectRepository = projectRepository;
+        this.projectAccessService = projectAccessService;
+        this.projectIntegrationRepository = projectIntegrationRepository;
+        this.projectIntegrationService = projectIntegrationService;
+        this.integrationVerificationService = integrationVerificationService;
+        this.integrationResourceRepository = integrationResourceRepository;
+        this.integrationActivityRepository = integrationActivityRepository;
+        this.githubAppClient = githubAppClient;
+        this.restClient = restClient;
+    }
 
     @Transactional(readOnly = true)
     public IntegrationResourceListResponse getResources(Long projectId, Long userId, LinkType linkType) {
@@ -215,6 +263,7 @@ public class IntegrationResourceService {
                     .uri("https://api.notion.com/v1/search")
                     .header("Notion-Version", NOTION_VERSION)
                     .headers(headers -> headers.setBearerAuth(projectIntegrationService.decryptAccessToken(integration)))
+                    .contentType(MediaType.APPLICATION_JSON)
                     .body(Map.of("query", query == null ? "" : query.trim(), "page_size", 100))
                     .retrieve()
                     .body(JsonNode.class);
