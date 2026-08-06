@@ -169,6 +169,32 @@ class ChatRoomReadCursorRepositoryIntegrationTest {
     }
 
     @Test
+    void batchQueriesUnreadCountsForAllRoomParticipantsAtOnce() {
+        Project project = saveProject("cursor-unread-batch");
+        ProjectMember reader = saveMember(project, "cursor-unread-batch-reader", MemberStatus.ACTIVE);
+        ProjectMember lurker = saveMember(project, "cursor-unread-batch-lurker", MemberStatus.ACTIVE);
+        ChatRoom room = chatRoomRepository.save(ChatRoom.create(project));
+        cursorRepository.saveAndFlush(ChatRoomReadCursor.create(room, reader));
+        cursorRepository.saveAndFlush(ChatRoomReadCursor.create(room, lurker));
+
+        ChatMessage first = saveMessage(room, reader, "batch-first");
+        saveMessage(room, reader, "batch-second");
+
+        // reader만 첫 메시지까지 읽고, lurker는 하나도 안 읽은 상태
+        cursorRepository.advance(
+                room.getId(), reader.getUser().getId(), first.getId(), MemberStatus.ACTIVE.name()
+        );
+
+        var counts = cursorRepository.findUnreadCountsForRoom(room.getId(), MemberStatus.ACTIVE).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        com.plog.domain.chat.repository.projection.ChatRoomParticipantUnreadCount::getUserId,
+                        com.plog.domain.chat.repository.projection.ChatRoomParticipantUnreadCount::getUnreadCount));
+
+        assertThat(counts.get(reader.getUser().getId())).isEqualTo(1L);
+        assertThat(counts.get(lurker.getUser().getId())).isEqualTo(2L);
+    }
+
+    @Test
     void rejectsCursorCreationAcrossProjects() {
         Project roomProject = saveProject("cursor-room-project");
         Project memberProject = saveProject("cursor-member-project");

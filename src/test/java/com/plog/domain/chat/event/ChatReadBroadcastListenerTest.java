@@ -7,7 +7,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.plog.domain.chat.dto.response.ChatReadResponse;
+import com.plog.domain.chat.dto.response.ChatReadUpdateMessage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -31,11 +31,12 @@ class ChatReadBroadcastListenerTest {
 
         listener.onChatReadUpdated(new ChatReadUpdatedEvent(ROOM_ID, USER_ID, 5L, 3L));
 
-        ArgumentCaptor<ChatReadResponse> captor = ArgumentCaptor.forClass(ChatReadResponse.class);
+        ArgumentCaptor<ChatReadUpdateMessage> captor = ArgumentCaptor.forClass(ChatReadUpdateMessage.class);
         verify(messagingTemplate).convertAndSendToUser(
                 eq(String.valueOf(USER_ID)), eq(CHAT_UPDATE_QUEUE), captor.capture());
 
-        ChatReadResponse payload = captor.getValue();
+        ChatReadUpdateMessage payload = captor.getValue();
+        assertThat(payload.type()).isEqualTo("READ_UPDATE");
         assertThat(payload.roomId()).isEqualTo(ROOM_ID);
         assertThat(payload.lastReadMessageSequence()).isEqualTo(5L);
         assertThat(payload.unreadMessageCount()).isEqualTo(3L);

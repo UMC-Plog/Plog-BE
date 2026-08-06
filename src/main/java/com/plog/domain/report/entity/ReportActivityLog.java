@@ -33,8 +33,7 @@ import org.hibernate.type.SqlTypes;
  * {@link #linkTask}가 순서대로 호출된다. 외부 도메인(GITHUB/FIGMA/NOTION/GOOGLE)은
  * rawActivityType 자체가 이미 세분류라 이 세 단계를 거치지 않고 바로 4단계 점수 계산에 쓰인다.
  * 이 계약은 아래 메서드들이 직접 검증한다 — 위반하면 IllegalStateException.
- * 기존 {@code domain.integration.entity.ActivityLog}는 resource_id가 필수라 재사용하지 않고
- * report 도메인에 별도로 둔다.
+ * 레거시 {@code activity_log} 테이블은 resource_id가 필수라 재사용하지 않고 report 도메인에 별도로 둔다.
  */
 @Entity
 @Getter
@@ -57,8 +56,7 @@ public class ReportActivityLog extends BaseEntity {
     @Column(name = "report_activity_log_id")
     private Long id;
 
-    // 활동 주체. 외부 계정 매핑이 안 된 시점에 수집될 수도 있어 nullable로 둔다
-    // (ActivityLog.projectMember와 동일한 이유).
+    // 활동 주체. 외부 계정 매핑이 안 된 시점에 수집될 수도 있어 nullable로 둔다.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_member_id")
     private ProjectMember projectMember;
