@@ -62,6 +62,21 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
             @Param("providerPayload") String providerPayload
     );
 
+    /** 표시 가능한 actor가 사라진 mutable event는 새 행을 만들지 않고 기존 payload만 갱신한다. */
+    @Transactional
+    @Modifying(flushAutomatically = true)
+    @Query(value = "update integration_activities "
+            + "set provider_payload = :providerPayload, updated_at = current_timestamp "
+            + "where integration_resource_id = :resourceId "
+            + "and provider_event_key = :providerEventKey "
+            + "and provider_payload is distinct from :providerPayload",
+            nativeQuery = true)
+    int updateProviderPayloadIfChanged(
+            @Param("resourceId") Long resourceId,
+            @Param("providerEventKey") String providerEventKey,
+            @Param("providerPayload") String providerPayload
+    );
+
     @Query("select activity.actorProviderId as actorProviderId, "
             + "lower(activity.actorLogin) as actorLogin, lower(activity.actorEmail) as actorEmail, "
             + "count(activity.id) as activityCount, "

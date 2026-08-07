@@ -41,7 +41,8 @@ public class IntegrationActivityStoreService {
             String sourceUrl,
             String providerPayload
     ) {
-        if (providerEventKey == null || providerEventKey.isBlank()) {
+        if (providerEventKey == null || providerEventKey.isBlank()
+                || lacksRequiredActorDisplay(activityType, actorLogin, actorEmail)) {
             return;
         }
         com.plog.domain.project.entity.ProjectMember projectMember =
@@ -76,6 +77,13 @@ public class IntegrationActivityStoreService {
         if (providerEventKey == null || providerEventKey.isBlank()) {
             return;
         }
+        String payload = providerPayload == null ? "{}" : providerPayload;
+        if (lacksRequiredActorDisplay(activityType, actorLogin, actorEmail)) {
+            integrationActivityRepository.updateProviderPayloadIfChanged(
+                    resource.getId(), providerEventKey, payload
+            );
+            return;
+        }
         com.plog.domain.project.entity.ProjectMember projectMember =
                 resolveActor(resource, actorProviderId, actorLogin, actorEmail);
         integrationActivityRepository.upsertProviderPayloadIfChanged(
@@ -88,7 +96,7 @@ public class IntegrationActivityStoreService {
                 actorEmail,
                 occurredAt,
                 sourceUrl,
-                providerPayload == null ? "{}" : providerPayload
+                payload
         );
     }
 
@@ -110,6 +118,15 @@ public class IntegrationActivityStoreService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    /** actor가 존재하는 활동은 이름 또는 이메일 중 하나라도 확인된 경우에만 저장한다. */
+    private boolean lacksRequiredActorDisplay(
+            IntegrationActivityType activityType,
+            String actorLogin,
+            String actorEmail
+    ) {
+        return activityType.requiresActorDisplay() && isBlank(actorLogin) && isBlank(actorEmail);
     }
 
     private com.plog.domain.project.entity.ProjectMember resolveActor(
