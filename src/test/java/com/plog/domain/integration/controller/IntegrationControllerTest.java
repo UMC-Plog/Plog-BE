@@ -1,5 +1,6 @@
 package com.plog.domain.integration.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,6 +18,7 @@ import com.plog.domain.integration.config.IntegrationRedirectProperties;
 import com.plog.domain.integration.dto.NotionResourceType;
 import com.plog.domain.integration.dto.request.FigmaResourceRegisterRequest;
 import com.plog.domain.integration.dto.request.GoogleResourceRegisterRequest;
+import com.plog.domain.integration.dto.request.IntegrationActorMappingRequest;
 import com.plog.domain.integration.dto.request.NotionResourceRegisterRequest;
 import com.plog.domain.integration.dto.response.IntegrationActorMappingListResponse;
 import com.plog.domain.integration.dto.response.IntegrationActorMappingResponse;
@@ -54,6 +56,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -364,6 +367,8 @@ class IntegrationControllerTest {
     void saveGoogleActorMappingRoutesByProvider(String provider, LinkType linkType) throws Exception {
         Long projectId = 1L;
         Long userId = 10L;
+        ArgumentCaptor<IntegrationActorMappingRequest> requestCaptor =
+                ArgumentCaptor.forClass(IntegrationActorMappingRequest.class);
         authenticate(userId);
         given(integrationActorMappingManagementService.saveMyMapping(
                 eq(projectId), eq(userId), eq(linkType), any()
@@ -388,7 +393,8 @@ class IntegrationControllerTest {
                 .andExpect(jsonPath("$.result.actorKey").value("actor:google-123"));
 
         verify(integrationActorMappingManagementService)
-                .saveMyMapping(eq(projectId), eq(userId), eq(linkType), any());
+                .saveMyMapping(eq(projectId), eq(userId), eq(linkType), requestCaptor.capture());
+        assertThat(requestCaptor.getValue().actorKey()).isEqualTo("actor:google-123");
     }
 
     @ParameterizedTest(name = "{0} actor mapping delete routes to {1}")

@@ -252,12 +252,14 @@ class IntegrationActorMappingManagementServiceTest {
                 .containsExactly(ProviderActorKey.providerId("docs-actor").selectionKey());
         assertThat(docsResponse.availableProviderActors())
                 .extracting(providerActor -> providerActor.actorKey())
+                .contains(ProviderActorKey.providerId("docs-actor").selectionKey())
                 .doesNotContain(ProviderActorKey.providerId("slides-actor").selectionKey());
         assertThat(slidesResponse.linkType()).isEqualTo(LinkType.GOOGLE_SLIDES);
         assertThat(slidesResponse.mappings()).extracting(IntegrationActorMappingResponse::actorKey)
                 .containsExactly(ProviderActorKey.providerId("slides-actor").selectionKey());
         assertThat(slidesResponse.availableProviderActors())
                 .extracting(providerActor -> providerActor.actorKey())
+                .contains(ProviderActorKey.providerId("slides-actor").selectionKey())
                 .doesNotContain(ProviderActorKey.providerId("docs-actor").selectionKey());
     }
 
