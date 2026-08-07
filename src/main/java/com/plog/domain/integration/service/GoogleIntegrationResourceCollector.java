@@ -156,7 +156,8 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
         Set<String> requestedPageTokens = new HashSet<>();
         do {
             String url = DRIVE_API + "/files/" + fileId
-                    + "/comments?pageSize=100&fields=nextPageToken,comments(id,createdTime,modifiedTime,author,content,resolved,replies)"
+                    + "/comments?pageSize=100&includeDeleted=true"
+                    + "&fields=nextPageToken,comments(id,createdTime,modifiedTime,author,content,resolved,deleted)"
                     + (pageToken == null ? "" : "&pageToken=" + pageToken);
             JsonNode body = get(url, token, context);
             for (JsonNode comment : body.path("comments")) {
@@ -166,18 +167,33 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
                         author.path("displayName").asText(null), author.path("emailAddress").asText(null),
                         parseInstant(comment.path("createdTime").asText(null)), resource.getResourceUrl(),
                         comment.toString());
-                for (JsonNode reply : comment.path("replies")) {
-                    JsonNode replyAuthor = reply.path("author");
-                    activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
-                            "comment-reply:" + reply.path("id").asText(),
-                            replyAuthor.path("permissionId").asText(null),
-                            replyAuthor.path("displayName").asText(null),
-                            replyAuthor.path("emailAddress").asText(null),
-                            parseInstant(reply.path("createdTime").asText(null)), resource.getResourceUrl(),
-                            reply.toString());
-                }
+                collectCommentReplies(resource, fileId, comment.path("id").asText(), token, context);
             }
             pageToken = nextPageToken(body, requestedPageTokens, "drive-comments", fileId);
+        } while (pageToken != null && !pageToken.isBlank());
+    }
+
+    private void collectCommentReplies(IntegrationResource resource, String fileId, String commentId, String token,
+            CollectionContext context) {
+        String pageToken = null;
+        Set<String> requestedPageTokens = new HashSet<>();
+        do {
+            String url = DRIVE_API + "/files/" + fileId + "/comments/" + commentId
+                    + "/replies?pageSize=100&includeDeleted=true"
+                    + "&fields=nextPageToken,replies(id,createdTime,modifiedTime,author,content,deleted)"
+                    + (pageToken == null ? "" : "&pageToken=" + pageToken);
+            JsonNode body = get(url, token, context);
+            for (JsonNode reply : body.path("replies")) {
+                JsonNode replyAuthor = reply.path("author");
+                activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
+                        "comment-reply:" + reply.path("id").asText(),
+                        replyAuthor.path("permissionId").asText(null),
+                        replyAuthor.path("displayName").asText(null),
+                        replyAuthor.path("emailAddress").asText(null),
+                        parseInstant(reply.path("createdTime").asText(null)), resource.getResourceUrl(),
+                        reply.toString());
+            }
+            pageToken = nextPageToken(body, requestedPageTokens, "drive-comment-replies", fileId);
         } while (pageToken != null && !pageToken.isBlank());
     }
 
