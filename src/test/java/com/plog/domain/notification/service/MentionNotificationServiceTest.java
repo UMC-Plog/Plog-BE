@@ -40,6 +40,8 @@ class MentionNotificationServiceTest {
     private NotificationRepository notificationRepository;
     @Mock
     private FcmGateway fcmGateway;
+    @Mock
+    private NotificationPushPolicy notificationPushPolicy;
 
     private MentionNotificationService service;
     private ProjectMember sender;
@@ -48,8 +50,12 @@ class MentionNotificationServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(notificationPushPolicy.isEnabled(
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.any(NotificationType.class))).thenReturn(true);
         service = new MentionNotificationService(
-                projectMemberRepository, fcmTokenRepository, notificationRepository, fcmGateway);
+                projectMemberRepository, fcmTokenRepository, notificationRepository, fcmGateway,
+                notificationPushPolicy);
         Project project = project(10L, "Plog");
         sender = member(1L, 101L, project, MemberStatus.ACTIVE, "곰곰");
         target = member(2L, 102L, project, MemberStatus.ACTIVE, "포도");
@@ -105,6 +111,17 @@ class MentionNotificationServiceTest {
         verify(fcmGateway).send(any(FcmMessage.class));
         // FCM 발송이 실패해도 인앱 알림 저장은 그대로 이루어져야 한다.
         verify(notificationRepository).saveAll(any(List.class));
+    }
+
+    @Test
+    void mention_push_설정이_OFF여도_인앱_알림은_저장한다() {
+        when(projectMemberRepository.findAllByIdIn(anyCollection())).thenReturn(List.of(sender, target));
+        when(notificationPushPolicy.isEnabled(102L, 10L, NotificationType.CHAT_MENTION)).thenReturn(false);
+
+        service.send(new ChatMentionEvent(10L, 30L, 20L, 1L, List.of(2L), "hello"));
+
+        verify(notificationRepository).saveAll(any(List.class));
+        verify(fcmGateway, org.mockito.Mockito.never()).send(any(FcmMessage.class));
     }
 
     private Project project(Long id, String name) {
