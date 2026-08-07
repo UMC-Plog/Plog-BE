@@ -5,7 +5,9 @@ import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.Notification;
+import com.plog.infrastructure.fcm.e2e.FcmDeliveryProbe;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(prefix = "plog.fcm", name = "enabled", havingValue = "true")
 public class FirebaseFcmGateway implements FcmGateway {
     private final FirebaseMessaging firebaseMessaging;
+    private final ObjectProvider<FcmDeliveryProbe> fcmDeliveryProbe;
 
     @Override
     @SuppressWarnings("deprecation")
@@ -27,7 +30,8 @@ public class FirebaseFcmGateway implements FcmGateway {
                 .putAllData(message.data())
                 .build();
         try {
-            firebaseMessaging.send(firebaseMessage);
+            String providerMessageId = firebaseMessaging.send(firebaseMessage);
+            fcmDeliveryProbe.ifAvailable(probe -> probe.record(message, providerMessageId));
         } catch (FirebaseMessagingException exception) {
             MessagingErrorCode code = exception.getMessagingErrorCode();
             boolean invalidToken = code == MessagingErrorCode.UNREGISTERED
