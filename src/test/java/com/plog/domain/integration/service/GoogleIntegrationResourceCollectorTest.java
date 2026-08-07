@@ -78,9 +78,12 @@ class GoogleIntegrationResourceCollectorTest {
         expectComments(fixture.server, """
                 {"comments":[{"id":"comment-1","createdTime":"2026-08-01T12:00:00Z",
                   "author":{"permissionId":"commenter-1","displayName":"Commenter","emailAddress":"c@example.com"},
-                  "content":"hello","replies":[{"id":"reply-1","createdTime":"2026-08-01T12:30:00Z",
+                  "content":"hello"}]}
+                """);
+        expectReplies(fixture.server, "comment-1", null, """
+                {"replies":[{"id":"reply-1","createdTime":"2026-08-01T12:30:00Z",
                   "author":{"permissionId":"replyer-1","displayName":"Replyer","emailAddress":"r@example.com"},
-                  "content":"reply"}]}]}
+                  "content":"reply"}]}
                 """);
         expectRevisions(fixture.server, """
                 {"revisions":[{"id":"rev-1","modifiedTime":"2026-08-01T13:00:00Z",
@@ -262,6 +265,50 @@ class GoogleIntegrationResourceCollectorTest {
         assertThat(secondKey).isEqualTo(firstKey);
     }
 
+    @Test
+    @DisplayName("삭제된 Google 댓글과 답글을 includeDeleted로 페이지네이션하며 저장한다")
+    void collectsDeletedCommentsAndPaginatedDeletedReplies() {
+        Fixture fixture = fixture();
+        IntegrationResource resource = resource(IntegrationResourceType.GOOGLE_DOCUMENT);
+
+        expectFileMetadata(fixture.server);
+        expectDriveActivity(fixture.server, """
+                {"itemName":"items/google-file-1","pageSize":100}
+                """, """
+                {"activities":[]}
+                """);
+        expectComments(fixture.server, """
+                {"comments":[{"id":"comment-deleted","createdTime":"2026-08-01T12:00:00Z",
+                  "author":{"permissionId":"commenter-1","displayName":"Commenter","emailAddress":"c@example.com"},
+                  "content":"deleted comment","deleted":true}]}
+                """);
+        expectReplies(fixture.server, "comment-deleted", null, """
+                {"replies":[{"id":"reply-1","createdTime":"2026-08-01T12:30:00Z",
+                  "author":{"permissionId":"replyer-1","displayName":"Replyer","emailAddress":"r@example.com"},
+                  "content":"first page"}],"nextPageToken":"reply-page-2"}
+                """);
+        expectReplies(fixture.server, "comment-deleted", "reply-page-2", """
+                {"replies":[{"id":"reply-deleted","createdTime":"2026-08-01T12:45:00Z",
+                  "author":{"permissionId":"replyer-2","displayName":"Replyer2","emailAddress":"r2@example.com"},
+                  "content":"deleted reply","deleted":true}]}
+                """);
+        expectRevisions(fixture.server, "{}");
+        expectDocumentSnapshot(fixture.server);
+
+        fixture.collector.collect(
+                resource, resource.getProjectIntegration(), CollectionContext.noop());
+
+        fixture.server.verify();
+        assertThat(storedKeys()).contains(
+                "comment:comment-deleted",
+                "comment-reply:reply-1",
+                "comment-reply:reply-deleted"
+        );
+        assertThat(storedPayloadsFor(IntegrationActivityType.GOOGLE_DRIVE_COMMENT))
+                .anySatisfy(payload -> assertThat(payload).contains("\"id\":\"comment-deleted\"", "\"deleted\":true"))
+                .anySatisfy(payload -> assertThat(payload).contains("\"id\":\"reply-deleted\"", "\"deleted\":true"));
+    }
+
     private String collectSingleActivityKey(String activityJson) {
         clearInvocations(activityStoreService);
         Fixture fixture = fixture();
@@ -325,7 +372,28 @@ class GoogleIntegrationResourceCollectorTest {
     }
 
     private void expectComments(MockRestServiceServer server, String responseBody) {
-        server.expect(requestTo(Matchers.containsString("/files/" + FILE_ID + "/comments")))
+        server.expect(requestTo(Matchers.allOf(
+                        Matchers.containsString("/files/" + FILE_ID + "/comments?"),
+                        Matchers.containsString("pageSize=100"),
+                        Matchers.containsString("includeDeleted=true"),
+                        Matchers.containsString("fields=nextPageToken,comments("),
+                        Matchers.containsString("deleted")
+                )))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
+    }
+
+    private void expectReplies(MockRestServiceServer server, String commentId, String pageToken, String responseBody) {
+        server.expect(requestTo(Matchers.allOf(
+                        Matchers.containsString("/files/" + FILE_ID + "/comments/" + commentId + "/replies?"),
+                        Matchers.containsString("pageSize=100"),
+                        Matchers.containsString("includeDeleted=true"),
+                        Matchers.containsString("fields=nextPageToken,replies("),
+                        Matchers.containsString("deleted"),
+                        pageToken == null
+                                ? Matchers.not(Matchers.containsString("pageToken="))
+                                : Matchers.containsString("pageToken=" + pageToken)
+                )))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
     }
@@ -389,6 +457,13 @@ class GoogleIntegrationResourceCollectorTest {
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(activityStoreService, atLeastOnce()).store(
                 any(), eq(activityType), captor.capture(), any(), any(), any(), any(), any(), any());
+        return new ArrayList<>(captor.getAllValues());
+    }
+
+    private List<String> storedPayloadsFor(IntegrationActivityType activityType) {
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(activityStoreService, atLeastOnce()).store(
+                any(), eq(activityType), any(), any(), any(), any(), any(), any(), captor.capture());
         return new ArrayList<>(captor.getAllValues());
     }
 
