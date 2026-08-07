@@ -35,6 +35,33 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
             @Param("providerPayload") String providerPayload
     );
 
+    /** Stable provider identity를 유지하면서 mutable payload만 최신 상태로 교체한다. */
+    @Transactional
+    @Modifying(flushAutomatically = true)
+    @Query(value = "insert into integration_activities "
+            + "(integration_resource_id, project_member_id, activity_type, provider_event_key, "
+            + "actor_provider_id, actor_login, actor_email, occurred_at, source_url, provider_payload, "
+            + "created_at, updated_at) "
+            + "values (:resourceId, :projectMemberId, :activityType, :providerEventKey, "
+            + ":actorProviderId, :actorLogin, :actorEmail, :occurredAt, :sourceUrl, :providerPayload, "
+            + "current_timestamp, current_timestamp) "
+            + "on conflict (integration_resource_id, provider_event_key) do update "
+            + "set provider_payload = excluded.provider_payload, updated_at = current_timestamp "
+            + "where integration_activities.provider_payload is distinct from excluded.provider_payload",
+            nativeQuery = true)
+    int upsertProviderPayloadIfChanged(
+            @Param("resourceId") Long resourceId,
+            @Param("projectMemberId") Long projectMemberId,
+            @Param("activityType") String activityType,
+            @Param("providerEventKey") String providerEventKey,
+            @Param("actorProviderId") String actorProviderId,
+            @Param("actorLogin") String actorLogin,
+            @Param("actorEmail") String actorEmail,
+            @Param("occurredAt") Instant occurredAt,
+            @Param("sourceUrl") String sourceUrl,
+            @Param("providerPayload") String providerPayload
+    );
+
     @Query("select activity.actorProviderId as actorProviderId, "
             + "lower(activity.actorLogin) as actorLogin, lower(activity.actorEmail) as actorEmail, "
             + "count(activity.id) as activityCount, "

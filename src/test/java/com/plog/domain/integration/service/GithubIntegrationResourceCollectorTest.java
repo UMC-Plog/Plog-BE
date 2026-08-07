@@ -1,11 +1,16 @@
 package com.plog.domain.integration.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import com.plog.domain.integration.config.IntegrationCollectionProperties;
 import com.plog.domain.integration.entity.CollectionPhase;
+import com.plog.domain.integration.entity.IntegrationActivityType;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.project.entity.Project;
@@ -14,10 +19,13 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpRequest;
 import org.springframework.http.client.ClientHttpResponse;
@@ -37,8 +45,15 @@ class GithubIntegrationResourceCollectorTest {
             mock(IntegrationActivityStoreService.class);
 
     /** URI별 응답 본문. 테스트마다 갈아끼운다. */
+    private String branchRefsBody = """
+            [{"ref":"refs/heads/main","object":{"sha":"main-tip"}}]
+            """;
+    private String tagRefsBody = "[]";
+    private final Map<String, String> commitsByRefSha = new HashMap<>();
+    private final Map<String, String> tagObjectsBySha = new HashMap<>();
     private String issuesBody = "[]";
     private String pullsBody = "[]";
+    private String pagedCommitRefSha;
 
     private GithubIntegrationResourceCollector collector;
 
@@ -51,26 +66,131 @@ class GithubIntegrationResourceCollectorTest {
                 .build();
         server.expect(ExpectedCount.manyTimes(), this::record).andRespond(this::respond);
         collector = new GithubIntegrationResourceCollector(
-                githubAppClient, activityStoreService, properties(),
+                githubAppClient, activityStoreService,
                 new GithubApiRateLimiter(properties()), builder.build());
     }
 
     @Test
-    @DisplayName("lastCollectedAt이 없으면 프로젝트 시작일을 since로 쓴다")
-    void usesProjectStartDayOnFirstCollection() {
-        collect(resource(null), CollectionContext.noop());
-
-        assertThat(commitsUri()).contains("since=2026-01-01T00:00:00Z");
-    }
-
-    @Test
-    @DisplayName("lastCollectedAt이 있으면 overlap을 뺀 시각을 since로 쓴다")
-    void usesWatermarkMinusOverlapOnRecollection() {
+    @DisplayName("프로젝트 시작일과 lastCollectedAt이 오래되어도 since를 보내지 않는다")
+    void doesNotSendSinceForOldProjectDateOrWatermark() {
         Instant watermark = Instant.parse("2026-08-05T13:00:00Z");
 
         collect(resource(watermark), CollectionContext.noop());
 
-        assertThat(commitsUri()).contains("since=2026-08-05T12:00:00Z");
+        assertThat(requestedUris).noneMatch(uri -> uri.contains("since="));
+    }
+
+    @Test
+    @DisplayName("브랜치와 태그 ref를 모두 조회하고 중복 commit SHA는 한 번만 저장한다")
+    void collectsCommitsFromAllRefsAndStoresDuplicateShaOnce() {
+        branchRefsBody = """
+                [{"ref":"refs/heads/main","object":{"sha":"branch-tip"}},
+                 {"ref":"refs/heads/release","object":{"sha":"release-tip"}}]
+                """;
+        tagRefsBody = """
+                [{"ref":"refs/tags/v1.0.0","object":{"sha":"tag-tip"}}]
+                """;
+        commitsByRefSha.put("branch-tip", """
+                [{"sha":"duplicate","author":{"id":"1","login":"chan"},
+                  "commit":{"author":{"email":"chan@example.com","date":"2026-01-02T00:00:00Z"}},
+                  "html_url":"https://github.com/UMC-Plog/Plog-FE/commit/duplicate"}]
+                """);
+        commitsByRefSha.put("release-tip", """
+                [{"sha":"duplicate","author":{"id":"1","login":"chan"},
+                  "commit":{"author":{"email":"chan@example.com","date":"2026-01-02T00:00:00Z"}},
+                  "html_url":"https://github.com/UMC-Plog/Plog-FE/commit/duplicate"}]
+                """);
+        commitsByRefSha.put("tag-tip", """
+                [{"sha":"tag-commit","author":{"id":"2","login":"min"},
+                  "commit":{"author":{"email":"min@example.com","date":"2026-01-03T00:00:00Z"}},
+                  "html_url":"https://github.com/UMC-Plog/Plog-FE/commit/tag-commit"}]
+                """);
+        IntegrationResource resource = resource(null);
+
+        collect(resource, CollectionContext.noop());
+
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/git/matching-refs/heads"));
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/git/matching-refs/tags"));
+        assertThat(requestedUris)
+                .filteredOn(uri -> uri.contains("/git/matching-refs/"))
+                .allMatch(uri -> !uri.contains("page=") && !uri.contains("per_page="));
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/commits?") && uri.contains("sha=branch-tip"));
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/commits?") && uri.contains("sha=release-tip"));
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/commits?") && uri.contains("sha=tag-tip"));
+        verify(activityStoreService, times(1)).store(eq(resource), eq(IntegrationActivityType.GITHUB_COMMIT),
+                eq("commit:duplicate"), any(), any(), any(), any(), any(), any());
+        verify(activityStoreService, times(1)).store(eq(resource), eq(IntegrationActivityType.GITHUB_COMMIT),
+                eq("commit:tag-commit"), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("annotated tag는 commit 대상까지 해석해 전체 이력을 수집한다")
+    void resolvesAnnotatedTagToCommitBeforeCollection() {
+        branchRefsBody = "[]";
+        tagRefsBody = """
+                [{"ref":"refs/tags/v1.0.0","object":{"type":"tag","sha":"annotated-tag"}}]
+                """;
+        tagObjectsBySha.put("annotated-tag", """
+                {"object":{"type":"commit","sha":"tagged-commit"}}
+                """);
+        commitsByRefSha.put("tagged-commit", """
+                [{"sha":"tagged-commit","author":{"id":"2","login":"min"},
+                  "commit":{"author":{"email":"min@example.com","date":"2026-01-03T00:00:00Z"}},
+                  "html_url":"https://github.com/UMC-Plog/Plog-FE/commit/tagged-commit"}]
+                """);
+
+        collect(resource(null), CollectionContext.noop());
+
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/git/tags/annotated-tag"));
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/commits?") && uri.contains("sha=tagged-commit"));
+        verify(activityStoreService).store(any(), eq(IntegrationActivityType.GITHUB_COMMIT),
+                eq("commit:tagged-commit"), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("annotated tag가 5단계를 넘어도 loop 없이 commit 대상까지 해석한다")
+    void resolvesDeepAnnotatedTagChainWithoutFixedDepthLimit() {
+        branchRefsBody = "[]";
+        tagRefsBody = """
+                [{"ref":"refs/tags/deep","object":{"type":"tag","sha":"tag-1"}}]
+                """;
+        for (int depth = 1; depth <= 6; depth++) {
+            tagObjectsBySha.put("tag-" + depth, """
+                    {"object":{"type":"tag","sha":"tag-%d"}}
+                    """.formatted(depth + 1));
+        }
+        tagObjectsBySha.put("tag-7", """
+                {"object":{"type":"commit","sha":"deep-tagged-commit"}}
+                """);
+        commitsByRefSha.put("deep-tagged-commit", """
+                [{"sha":"deep-tagged-commit","author":{"id":"2","login":"min"},
+                  "commit":{"author":{"email":"min@example.com","date":"2026-01-03T00:00:00Z"}},
+                  "html_url":"https://github.com/UMC-Plog/Plog-FE/commit/deep-tagged-commit"}]
+                """);
+
+        collect(resource(null), CollectionContext.noop());
+
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/git/tags/tag-7"));
+        assertThat(requestedUris)
+                .anyMatch(uri -> uri.contains("/commits?") && uri.contains("sha=deep-tagged-commit"));
+        verify(activityStoreService).store(any(), eq(IntegrationActivityType.GITHUB_COMMIT),
+                eq("commit:deep-tagged-commit"), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("commit 페이지가 101페이지를 넘어도 Link next를 따라 끝까지 저장한다")
+    void collectsCommitHistoryPastOneHundredOnePages() {
+        branchRefsBody = """
+                [{"ref":"refs/heads/main","object":{"sha":"long-history"}}]
+                """;
+        pagedCommitRefSha = "long-history";
+
+        collect(resource(null), CollectionContext.noop());
+
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/commits?") && uri.contains("page=101"));
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/commits?") && uri.contains("page=102"));
+        verify(activityStoreService, times(102)).store(any(), eq(IntegrationActivityType.GITHUB_COMMIT),
+                any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -103,8 +223,26 @@ class GithubIntegrationResourceCollectorTest {
     }
 
     @Test
-    @DisplayName("워터마크보다 오래된 PR은 reviews API를 호출하지 않는다")
-    void skipsReviewsCallForUnchangedPullRequest() {
+    @DisplayName("이슈와 이슈 댓글 요청에 since를 보내지 않는다")
+    void requestsIssuesAndCommentsWithoutSince() {
+        issuesBody = """
+                [{"number":7,"comments":3,"updated_at":"2026-01-02T00:00:00Z",
+                  "user":{"id":"1","login":"chan"},"created_at":"2026-01-02T00:00:00Z",
+                  "html_url":"https://github.com/UMC-Plog/Plog-FE/issues/7"}]
+                """;
+
+        collect(resource(Instant.parse("2026-08-05T13:00:00Z")), CollectionContext.noop());
+
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/issues?"));
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/issues/7/comments"));
+        assertThat(requestedUris.stream()
+                .filter(uri -> uri.contains("/issues?") || uri.contains("/issues/7/comments")))
+                .noneMatch(uri -> uri.contains("since="));
+    }
+
+    @Test
+    @DisplayName("워터마크보다 오래된 PR도 reviews API를 호출한다")
+    void collectsReviewsForOldPullRequest() {
         pullsBody = """
                 [{"number":3,"updated_at":"2026-01-02T00:00:00Z",
                   "user":{"id":"1","login":"chan"},"created_at":"2026-01-02T00:00:00Z",
@@ -116,7 +254,7 @@ class GithubIntegrationResourceCollectorTest {
 
         collect(resource(Instant.parse("2026-08-05T13:00:00Z")), CollectionContext.noop());
 
-        assertThat(requestedUris).noneMatch(uri -> uri.contains("/pulls/3/reviews"));
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/pulls/3/reviews"));
         assertThat(requestedUris).anyMatch(uri -> uri.contains("/pulls/9/reviews"));
     }
 
@@ -219,13 +357,6 @@ class GithubIntegrationResourceCollectorTest {
         assertThat(context.heartbeats).isEqualTo(requestedUris.size());
     }
 
-    private String commitsUri() {
-        return requestedUris.stream()
-                .filter(uri -> uri.contains("/commits"))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("commits API가 호출되지 않았다: " + requestedUris));
-    }
-
     private void collect(IntegrationResource resource, CollectionContext context) {
         collector.collect(resource, resource.getProjectIntegration(), context);
     }
@@ -237,13 +368,66 @@ class GithubIntegrationResourceCollectorTest {
     private ClientHttpResponse respond(ClientHttpRequest request) throws IOException {
         String uri = request.getURI().toString();
         String body = "[]";
-        if (uri.contains("/issues?")) {
+        if (uri.contains("/git/matching-refs/heads")) {
+            body = branchRefsBody;
+        } else if (uri.contains("/git/matching-refs/tags")) {
+            body = tagRefsBody;
+        } else if (uri.contains("/git/tags/")) {
+            body = tagObjectsBySha.getOrDefault(pathTail(uri), "{}");
+        } else if (uri.contains("/commits?")) {
+            String refSha = shaQueryValue(uri);
+            if (refSha.equals(pagedCommitRefSha)) {
+                int page = pageQueryValue(uri);
+                body = """
+                        [{"sha":"sha-%d","author":{"id":"1","login":"chan"},
+                          "commit":{"author":{"email":"chan@example.com","date":"2026-01-02T00:00:00Z"}},
+                          "html_url":"https://github.com/UMC-Plog/Plog-FE/commit/sha-%d"}]
+                        """.formatted(page, page);
+                var response = MockRestResponseCreators.withSuccess(body, MediaType.APPLICATION_JSON);
+                if (page < 102) {
+                    response.header(HttpHeaders.LINK,
+                            "<https://api.github.com/repos/UMC-Plog/Plog-FE/commits?per_page=100&sha="
+                                    + refSha + "&page=" + (page + 1) + ">; rel=\"next\"");
+                }
+                return response.createResponse(request);
+            }
+            body = commitsByRefSha.getOrDefault(refSha, "[]");
+        } else if (uri.contains("/issues?")) {
             body = issuesBody;
         } else if (uri.contains("/pulls?")) {
             body = pullsBody;
         }
         return MockRestResponseCreators.withSuccess(body, MediaType.APPLICATION_JSON)
                 .createResponse(request);
+    }
+
+    private String shaQueryValue(String uri) {
+        String marker = "sha=";
+        int start = uri.indexOf(marker);
+        if (start < 0) {
+            return "";
+        }
+        int end = uri.indexOf('&', start);
+        return end < 0 ? uri.substring(start + marker.length()) : uri.substring(start + marker.length(), end);
+    }
+
+    private int pageQueryValue(String uri) {
+        String query = java.net.URI.create(uri).getRawQuery();
+        if (query == null || query.isBlank()) {
+            return 1;
+        }
+        for (String parameter : query.split("&")) {
+            String[] pair = parameter.split("=", 2);
+            if (pair.length == 2 && "page".equals(pair[0])) {
+                return Integer.parseInt(pair[1]);
+            }
+        }
+        return 1;
+    }
+
+    private String pathTail(String uri) {
+        int start = uri.lastIndexOf('/');
+        return start < 0 ? uri : uri.substring(start + 1);
     }
 
     private IntegrationResource resource(Instant lastCollectedAt) {
