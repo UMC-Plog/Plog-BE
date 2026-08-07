@@ -60,6 +60,38 @@ public class IntegrationActivityStoreService {
         );
     }
 
+    /** 댓글 삭제처럼 같은 provider event key의 payload 상태가 바뀌는 항목에만 사용한다. */
+    @Transactional
+    public void storeLatestProviderPayload(
+            IntegrationResource resource,
+            IntegrationActivityType activityType,
+            String providerEventKey,
+            String actorProviderId,
+            String actorLogin,
+            String actorEmail,
+            Instant occurredAt,
+            String sourceUrl,
+            String providerPayload
+    ) {
+        if (providerEventKey == null || providerEventKey.isBlank()) {
+            return;
+        }
+        com.plog.domain.project.entity.ProjectMember projectMember =
+                resolveActor(resource, actorProviderId, actorLogin, actorEmail);
+        integrationActivityRepository.upsertProviderPayloadIfChanged(
+                resource.getId(),
+                projectMember == null ? null : projectMember.getId(),
+                activityType.name(),
+                providerEventKey,
+                actorProviderId,
+                actorLogin,
+                actorEmail,
+                occurredAt,
+                sourceUrl,
+                providerPayload == null ? "{}" : providerPayload
+        );
+    }
+
     @Transactional
     public int backfillActorDisplayInfo(
             Long projectIntegrationId,

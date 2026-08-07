@@ -69,12 +69,48 @@ class IntegrationActivityStoreServiceTest {
     }
 
     @Test
+    void storesLatestProviderPayloadWithAtomicUpsert() {
+        IntegrationResource resource = resource();
+        ProjectMember member = ProjectMember.builder().id(20L).build();
+        given(integrationActorMappingService.resolve(any(), eq("commenter-1"), eq("Commenter"), eq("c@plog.test")))
+                .willReturn(member);
+
+        integrationActivityStoreService.storeLatestProviderPayload(
+                resource,
+                IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
+                "comment:comment-1",
+                "commenter-1",
+                "Commenter",
+                "c@plog.test",
+                Instant.parse("2026-08-01T12:00:00Z"),
+                "https://docs.google.com/document/d/google-file-1/edit",
+                "{\"id\":\"comment-1\",\"deleted\":true}"
+        );
+
+        verify(integrationActivityRepository).upsertProviderPayloadIfChanged(
+                10L,
+                20L,
+                IntegrationActivityType.GOOGLE_DRIVE_COMMENT.name(),
+                "comment:comment-1",
+                "commenter-1",
+                "Commenter",
+                "c@plog.test",
+                Instant.parse("2026-08-01T12:00:00Z"),
+                "https://docs.google.com/document/d/google-file-1/edit",
+                "{\"id\":\"comment-1\",\"deleted\":true}"
+        );
+    }
+
+    @Test
     void ignoresAnEmptyProviderEventKey() {
         integrationActivityStoreService.store(
                 resource(), IntegrationActivityType.GITHUB_COMMIT, " ", null, null, null, null, null, null
         );
 
         verify(integrationActivityRepository, never()).insertIfAbsent(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+        );
+        verify(integrationActivityRepository, never()).upsertProviderPayloadIfChanged(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
         );
     }

@@ -195,6 +195,73 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
         assertActorSnapshot(otherIntegrationActivity.getId(), null, null);
     }
 
+    @Test
+    void upsertProviderPayloadIfChangedUpdatesGoogleDeletedStateWithoutDuplicatingActivity() {
+        Project project = entityManager.persist(project());
+        ProjectMember member = entityManager.persist(member(
+                project,
+                User.createLocal("google-comment@example.com", "encoded", "댓글", "google-comment"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration integration = entityManager.persist(integration(project, member));
+        IntegrationResource resource = entityManager.persist(resource(integration, member));
+        entityManager.flush();
+
+        int inserted = activityRepository.upsertProviderPayloadIfChanged(
+                resource.getId(), member.getId(), IntegrationActivityType.GOOGLE_DRIVE_COMMENT.name(),
+                "comment:comment-1", "commenter-1", "Commenter", "commenter@example.com",
+                Instant.parse("2026-08-01T12:00:00Z"), "https://docs.google.com/document/d/google-file-1/edit",
+                "{\"id\":\"comment-1\",\"deleted\":false}"
+        );
+        entityManager.flush();
+        entityManager.clear();
+
+        Long activityId = activityId(resource.getId(), "comment:comment-1");
+        IntegrationActivity active = activityRepository.findById(activityId).orElseThrow();
+        assertThat(inserted).isOne();
+        assertThat(active.getProviderPayload()).contains("\"deleted\":false");
+
+        int unchanged = activityRepository.upsertProviderPayloadIfChanged(
+                resource.getId(), member.getId(), IntegrationActivityType.GOOGLE_DRIVE_COMMENT.name(),
+                "comment:comment-1", "commenter-1", "Commenter", "commenter@example.com",
+                Instant.parse("2026-08-01T12:00:00Z"), "https://docs.google.com/document/d/google-file-1/edit",
+                "{\"id\":\"comment-1\",\"deleted\":false}"
+        );
+        entityManager.flush();
+        entityManager.clear();
+
+        int updated = activityRepository.upsertProviderPayloadIfChanged(
+                resource.getId(), null, IntegrationActivityType.GOOGLE_DRIVE_COMMENT.name(),
+                "comment:comment-1", null, null, null,
+                null, null,
+                "{\"id\":\"comment-1\",\"deleted\":true}"
+        );
+        entityManager.flush();
+        entityManager.clear();
+
+        int deletedUnchanged = activityRepository.upsertProviderPayloadIfChanged(
+                resource.getId(), null, IntegrationActivityType.GOOGLE_DRIVE_COMMENT.name(),
+                "comment:comment-1", "changed-actor", "Changed", "changed@example.com",
+                Instant.parse("2026-08-03T12:00:00Z"), "https://changed.example.com",
+                "{\"id\":\"comment-1\",\"deleted\":true}"
+        );
+        entityManager.flush();
+        entityManager.clear();
+
+        IntegrationActivity deleted = activityRepository.findById(activityId).orElseThrow();
+        assertThat(unchanged).isZero();
+        assertThat(updated).isOne();
+        assertThat(deletedUnchanged).isZero();
+        assertThat(activityCount(resource.getId(), "comment:comment-1")).isOne();
+        assertThat(deleted.getProviderPayload()).contains("\"deleted\":true");
+        assertThat(deleted.getProjectMember().getId()).isEqualTo(member.getId());
+        assertThat(deleted.getActorProviderId()).isEqualTo("commenter-1");
+        assertThat(deleted.getActorLogin()).isEqualTo("Commenter");
+        assertThat(deleted.getActorEmail()).isEqualTo("commenter@example.com");
+        assertThat(deleted.getOccurredAt()).isEqualTo(Instant.parse("2026-08-01T12:00:00Z"));
+        assertThat(deleted.getSourceUrl()).isEqualTo("https://docs.google.com/document/d/google-file-1/edit");
+    }
+
     @ParameterizedTest
     @CsvSource(nullValues = "NULL", textBlock = """
             provider-actor,NULL,NULL
@@ -497,6 +564,32 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
     private long tableCount(String tableName) {
         return ((Number) entityManager.getEntityManager()
                 .createNativeQuery("select count(*) from " + tableName)
+                .getSingleResult()).longValue();
+    }
+
+    private Long activityId(Long resourceId, String eventKey) {
+        return ((Number) entityManager.getEntityManager()
+                .createNativeQuery("""
+                        select integration_activity_id
+                        from integration_activities
+                        where integration_resource_id = :resourceId
+                          and provider_event_key = :eventKey
+                        """)
+                .setParameter("resourceId", resourceId)
+                .setParameter("eventKey", eventKey)
+                .getSingleResult()).longValue();
+    }
+
+    private long activityCount(Long resourceId, String eventKey) {
+        return ((Number) entityManager.getEntityManager()
+                .createNativeQuery("""
+                        select count(*)
+                        from integration_activities
+                        where integration_resource_id = :resourceId
+                          and provider_event_key = :eventKey
+                        """)
+                .setParameter("resourceId", resourceId)
+                .setParameter("eventKey", eventKey)
                 .getSingleResult()).longValue();
     }
 
