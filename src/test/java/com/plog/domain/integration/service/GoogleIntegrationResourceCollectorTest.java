@@ -13,9 +13,11 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withResourceNotFound;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.plog.domain.integration.entity.IntegrationActivityType;
@@ -27,13 +29,17 @@ import java.util.List;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
 
 class GoogleIntegrationResourceCollectorTest {
 
@@ -263,6 +269,190 @@ class GoogleIntegrationResourceCollectorTest {
     }
 
     @Test
+    @DisplayName("Drive Activity actor를 People API 한 번의 배치 조회로 보강한다")
+    void enrichesDriveActivityActorsWithBatchedPeopleLookup() {
+        Fixture fixture = fixture();
+        IntegrationResource resource = resource(IntegrationResourceType.GOOGLE_DOCUMENT);
+
+        expectFileMetadata(fixture.server);
+        expectDriveActivity(fixture.server, """
+                {"itemName":"items/google-file-1","pageSize":100}
+                """, """
+                {"activities":[%s,%s,%s]}
+                """.formatted(
+                personOnlyActivityJson("people/editor", "2026-08-01T10:00:00Z"),
+                personOnlyActivityJson("people/editor", "2026-08-01T10:30:00Z"),
+                personOnlyActivityJson("people/reviewer", "2026-08-01T11:00:00Z")));
+        expectPeopleBatch(fixture.server, List.of("people/editor", "people/reviewer"), """
+                {"responses":[
+                  {"requestedResourceName":"people/reviewer","person":{
+                    "resourceName":"people/reviewer",
+                    "names":[
+                      {"displayName":"Old Reviewer"},
+                      {"metadata":{"primary":true},"displayName":"Reviewer"}
+                    ]
+                  }},
+                  {"requestedResourceName":"people/editor","person":{
+                    "resourceName":"people/editor",
+                    "names":[{"metadata":{"primary":true},"displayName":"Editor"}],
+                    "emailAddresses":[{"metadata":{"primary":true},"value":"editor@example.com"}]
+                  }}
+                ]}
+                """);
+        expectComments(fixture.server, "{}");
+        expectRevisions(fixture.server, "{}");
+        expectDocumentSnapshot(fixture.server);
+
+        fixture.collector.collect(resource, resource.getProjectIntegration(), CollectionContext.noop());
+
+        fixture.server.verify();
+        assertThat(storedActorsFor(IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY)).containsExactly(
+                new StoredActor("people/editor", "Editor", "editor@example.com"),
+                new StoredActor("people/editor", "Editor", "editor@example.com"),
+                new StoredActor("people/reviewer", "Reviewer", null)
+        );
+        assertThat(fixture.requestedUris.stream()
+                .filter(uri -> uri.startsWith("https://people.googleapis.com/v1/people:batchGet")))
+                .singleElement()
+                .satisfies(uri -> assertThat(uri).containsOnlyOnce("resourceNames=people/editor"));
+        verify(activityStoreService, never()).backfillActorDisplayInfo(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Drive Activity 페이지가 바뀌어도 이미 조회한 actor는 다시 조회하지 않는다")
+    void cachesResolvedDriveActivityActorsAcrossPages() {
+        Fixture fixture = fixture();
+        IntegrationResource resource = resource(IntegrationResourceType.GOOGLE_DOCUMENT);
+
+        expectFileMetadata(fixture.server);
+        expectDriveActivity(fixture.server, """
+                {"itemName":"items/google-file-1","pageSize":100}
+                """, """
+                {"activities":[%s],"nextPageToken":"page-2"}
+                """.formatted(personOnlyActivityJson("people/editor", "2026-08-01T10:00:00Z")));
+        expectPeopleBatch(fixture.server, List.of("people/editor"), peopleResponse(
+                "people/editor", "Editor", "editor@example.com"));
+        expectDriveActivity(fixture.server, """
+                {"itemName":"items/google-file-1","pageSize":100,"pageToken":"page-2"}
+                """, """
+                {"activities":[%s,%s]}
+                """.formatted(
+                personOnlyActivityJson("people/editor", "2026-08-01T10:30:00Z"),
+                personOnlyActivityJson("people/reviewer", "2026-08-01T11:00:00Z")));
+        expectPeopleBatch(fixture.server, List.of("people/reviewer"), peopleResponse(
+                "people/reviewer", "Reviewer", "reviewer@example.com"));
+        expectComments(fixture.server, "{}");
+        expectRevisions(fixture.server, "{}");
+        expectDocumentSnapshot(fixture.server);
+
+        fixture.collector.collect(resource, resource.getProjectIntegration(), CollectionContext.noop());
+
+        fixture.server.verify();
+        assertThat(storedActorsFor(IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY)).containsExactly(
+                new StoredActor("people/editor", "Editor", "editor@example.com"),
+                new StoredActor("people/editor", "Editor", "editor@example.com"),
+                new StoredActor("people/reviewer", "Reviewer", "reviewer@example.com")
+        );
+        assertThat(fixture.requestedUris).filteredOn(
+                uri -> uri.startsWith("https://people.googleapis.com/v1/people:batchGet"))
+                .hasSize(2);
+        verify(activityStoreService, never()).backfillActorDisplayInfo(any(), any(), any(), any());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"403, 424", "429, 429", "503, 503"})
+    @DisplayName("People API 배치 실패는 downstream 수집 후 리소스 실패로 전달한다")
+    void propagatesPeopleLookupProviderErrorAfterCollectingDownstream(
+            int responseStatus,
+            int collectionStatus
+    ) {
+        Fixture fixture = fixture();
+        IntegrationResource resource = resource(IntegrationResourceType.GOOGLE_DOCUMENT);
+
+        expectFileMetadata(fixture.server);
+        expectDriveActivity(fixture.server, """
+                {"itemName":"items/google-file-1","pageSize":100}
+                """, """
+                {"activities":[%s]}
+                """.formatted(personOnlyActivityJson("people/editor", "2026-08-01T10:00:00Z")));
+        fixture.server.expect(requestTo(Matchers.startsWith(
+                        "https://people.googleapis.com/v1/people:batchGet")))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withStatus(HttpStatusCode.valueOf(responseStatus))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":{\"message\":\"people unavailable\"}}"));
+        expectComments(fixture.server, "{}");
+        expectRevisions(fixture.server, "{}");
+        expectDocumentSnapshot(fixture.server);
+
+        assertThatThrownBy(() -> fixture.collector.collect(
+                resource, resource.getProjectIntegration(), CollectionContext.noop()))
+                .isInstanceOfSatisfying(ProviderResourceAccessException.class,
+                        exception -> assertThat(exception.statusCode()).isEqualTo(collectionStatus));
+
+        fixture.server.verify();
+        verifyNoActivityStored(IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY);
+        verify(activityStoreService, never()).backfillActorDisplayInfo(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("People API 네트워크 실패는 downstream 수집 후 일시 장애로 전달한다")
+    void propagatesPeopleLookupNetworkFailureAfterCollectingDownstream() {
+        Fixture fixture = fixture();
+        IntegrationResource resource = resource(IntegrationResourceType.GOOGLE_DOCUMENT);
+
+        expectFileMetadata(fixture.server);
+        expectDriveActivity(fixture.server, """
+                {"itemName":"items/google-file-1","pageSize":100}
+                """, """
+                {"activities":[%s]}
+                """.formatted(personOnlyActivityJson("people/editor", "2026-08-01T10:00:00Z")));
+        fixture.server.expect(requestTo(Matchers.startsWith(
+                        "https://people.googleapis.com/v1/people:batchGet")))
+                .andRespond(request -> {
+                    throw new ResourceAccessException("connection reset");
+                });
+        expectComments(fixture.server, "{}");
+        expectRevisions(fixture.server, "{}");
+        expectDocumentSnapshot(fixture.server);
+
+        assertThatThrownBy(() -> fixture.collector.collect(
+                resource, resource.getProjectIntegration(), CollectionContext.noop()))
+                .isInstanceOfSatisfying(ProviderResourceAccessException.class,
+                        exception -> assertThat(exception.statusCode()).isEqualTo(503));
+
+        fixture.server.verify();
+        verifyNoActivityStored(IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY);
+        verify(activityStoreService, never()).backfillActorDisplayInfo(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("People 프로필에 이름·이메일이 없으면 해당 actor 활동만 제외하고 수집은 완료한다")
+    void skipsActorActivityWhenPeopleProfileHasNoDisplayInformation() {
+        Fixture fixture = fixture();
+        IntegrationResource resource = resource(IntegrationResourceType.GOOGLE_DOCUMENT);
+
+        expectFileMetadata(fixture.server);
+        expectDriveActivity(fixture.server, """
+                {"itemName":"items/google-file-1","pageSize":100}
+                """, """
+                {"activities":[%s]}
+                """.formatted(personOnlyActivityJson("people/editor", "2026-08-01T10:00:00Z")));
+        expectPeopleBatch(fixture.server, List.of("people/editor"), """
+                {"responses":[{"requestedResourceName":"people/editor","person":{
+                  "resourceName":"people/editor"}}]}
+                """);
+        expectComments(fixture.server, "{}");
+        expectRevisions(fixture.server, "{}");
+        expectDocumentSnapshot(fixture.server);
+
+        fixture.collector.collect(resource, resource.getProjectIntegration(), CollectionContext.noop());
+
+        fixture.server.verify();
+        verifyNoActivityStored(IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY);
+    }
+
+    @Test
     @DisplayName("삭제된 Google 댓글과 답글을 includeDeleted로 페이지네이션하며 저장한다")
     void collectsDeletedCommentsAndPaginatedDeletedReplies() {
         Fixture fixture = fixture();
@@ -368,6 +558,20 @@ class GoogleIntegrationResourceCollectorTest {
                 .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
     }
 
+    private void expectPeopleBatch(
+            MockRestServiceServer server,
+            List<String> resourceNames,
+            String responseBody
+    ) {
+        server.expect(requestTo(Matchers.startsWith("https://people.googleapis.com/v1/people:batchGet")))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN))
+                .andExpect(queryParam("personFields", "names,emailAddresses"))
+                .andExpect(queryParam("sources", "READ_SOURCE_TYPE_PROFILE"))
+                .andExpect(queryParam("resourceNames", resourceNames.toArray(String[]::new)))
+                .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
+    }
+
     private void expectComments(MockRestServiceServer server, String responseBody) {
         server.expect(requestTo(Matchers.allOf(
                         Matchers.containsString("/files/" + FILE_ID + "/comments?"),
@@ -436,6 +640,23 @@ class GoogleIntegrationResourceCollectorTest {
                 """.formatted(timestamp);
     }
 
+    private String personOnlyActivityJson(String personName, String timestamp) {
+        return """
+                {"primaryActionDetail":{"edit":{}},"actors":[{"user":{"knownUser":{
+                  "personName":"%s"}}}],"timestamp":"%s"}
+                """.formatted(personName, timestamp);
+    }
+
+    private String peopleResponse(String resourceName, String displayName, String email) {
+        return """
+                {"responses":[{"requestedResourceName":"%s","person":{
+                  "resourceName":"%s",
+                  "names":[{"metadata":{"primary":true},"displayName":"%s"}],
+                  "emailAddresses":[{"metadata":{"primary":true},"value":"%s"}]
+                }}]}
+                """.formatted(resourceName, resourceName, displayName, email);
+    }
+
     private List<IntegrationActivityType> storedTypes() {
         ArgumentCaptor<IntegrationActivityType> captor = ArgumentCaptor.forClass(IntegrationActivityType.class);
         verify(activityStoreService, atLeastOnce()).store(
@@ -471,11 +692,38 @@ class GoogleIntegrationResourceCollectorTest {
         return new ArrayList<>(captor.getAllValues());
     }
 
+    private List<StoredActor> storedActorsFor(IntegrationActivityType activityType) {
+        ArgumentCaptor<String> providerIdCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> loginCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> emailCaptor = ArgumentCaptor.forClass(String.class);
+        verify(activityStoreService, atLeastOnce()).store(
+                any(), eq(activityType), any(), providerIdCaptor.capture(), loginCaptor.capture(),
+                emailCaptor.capture(), any(), any(), any());
+
+        List<StoredActor> actors = new ArrayList<>();
+        for (int index = 0; index < providerIdCaptor.getAllValues().size(); index++) {
+            actors.add(new StoredActor(
+                    providerIdCaptor.getAllValues().get(index),
+                    loginCaptor.getAllValues().get(index),
+                    emailCaptor.getAllValues().get(index)
+            ));
+        }
+        return actors;
+    }
+
+    private void verifyNoActivityStored(IntegrationActivityType activityType) {
+        verify(activityStoreService, never()).store(
+                any(), eq(activityType), any(), any(), any(), any(), any(), any(), any());
+    }
+
     private record Fixture(
             MockRestServiceServer server,
             GoogleIntegrationResourceCollector collector,
             List<String> requestedUris
     ) {
+    }
+
+    private record StoredActor(String providerId, String login, String email) {
     }
 
     private static final class RecordingContext implements CollectionContext {
