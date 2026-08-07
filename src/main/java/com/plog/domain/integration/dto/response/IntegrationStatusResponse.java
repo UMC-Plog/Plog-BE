@@ -13,12 +13,15 @@ public record IntegrationStatusResponse(
         Long projectMemberId,
         @Schema(description = "provider별 연동 상태 목록. GITHUB, FIGMA, NOTION, GOOGLE 순서로 반환됩니다.")
         List<IntegrationItemResponse> integrations,
-        @Schema(description = "프로젝트 완료 시 실행되는 최종 외부 데이터 수집 상태. 실행 전이면 null",
+        @Schema(description = "레거시 최종 수집 run 상태. 현재 수동 수집의 폴링 기준이 아니며, run이 없으면 null. "
+                + "수동 수집 진행 상태는 collectionJobStatus를 사용합니다.",
                 allowableValues = {"PENDING", "RUNNING", "RETRYABLE", "SUCCEEDED", "PARTIAL_FAILED"})
         IntegrationCollectionRunStatus finalCollectionStatus,
         @Schema(description = "최종 수집의 최근 실패 요약. 실패가 없으면 null")
         String finalCollectionFailure,
-        @Schema(description = "가장 최근 수동 수집 잡의 상태. 요청한 적이 없으면 null",
+        @Schema(description = "가장 최근 수동 수집 잡의 상태. 요청한 적이 없으면 null. "
+                + "PENDING·RUNNING·RETRYABLE은 진행 상태이므로 폴링을 계속하고, "
+                + "SUCCEEDED·PARTIAL_FAILED·FAILED는 종료 상태이므로 폴링을 종료합니다.",
                 allowableValues = {
                         "PENDING", "RUNNING", "RETRYABLE", "SUCCEEDED", "PARTIAL_FAILED", "FAILED"})
         IntegrationCollectionJobStatus collectionJobStatus,

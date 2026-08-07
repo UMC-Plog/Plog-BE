@@ -35,6 +35,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     private final ProjectIntegrationService projectIntegrationService;
     private final IntegrationActivityStoreService activityStoreService;
     private final RestClient restClient;
+    private final GooglePeopleActorResolver peopleActorResolver;
 
     /** 생성자가 둘이라 Spring이 주입 대상을 고를 수 없다. 이쪽이 운영용이다. */
     @Autowired
@@ -54,6 +55,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
         this.projectIntegrationService = projectIntegrationService;
         this.activityStoreService = activityStoreService;
         this.restClient = restClient;
+        this.peopleActorResolver = new GooglePeopleActorResolver(restClient);
     }
 
     @Override
@@ -69,8 +71,9 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     ) {
         String token = projectIntegrationService.decryptAccessToken(verifiedIntegration);
         String fileId = resource.getProviderResourceId();
+        GooglePeopleActorResolver.Session actorSession = peopleActorResolver.begin(token, context);
         collectFileMetadata(resource, fileId, token, context);
-        collectOptional(() -> collectDriveActivity(resource, fileId, token, context));
+        collectOptional(() -> collectDriveActivity(resource, fileId, token, context, actorSession));
         collectOptional(() -> collectComments(resource, fileId, token, context));
         collectOptional(() -> collectRevisions(resource, fileId, token, context));
         if (resource.getResourceType() == IntegrationResourceType.GOOGLE_DOCUMENT) {
@@ -79,6 +82,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
         if (resource.getResourceType() == IntegrationResourceType.GOOGLE_PRESENTATION) {
             collectOptional(() -> collectPresentationSnapshot(resource, fileId, token, context));
         }
+        peopleActorResolver.throwIfFailed(actorSession);
     }
 
     private void collectDocumentSnapshot(IntegrationResource resource, String fileId, String token,
@@ -124,7 +128,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     }
 
     private void collectDriveActivity(IntegrationResource resource, String fileId, String token,
-            CollectionContext context) {
+            CollectionContext context, GooglePeopleActorResolver.Session actorSession) {
         String pageToken = null;
         Set<String> requestedPageTokens = new HashSet<>();
         do {
@@ -133,21 +137,38 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
                             ? Map.of("itemName", "items/" + fileId, "pageSize", 100)
                             : Map.of("itemName", "items/" + fileId, "pageSize", 100, "pageToken", pageToken),
                     context);
+            List<JsonNode> knownUsers = new ArrayList<>();
             for (JsonNode activity : body.path("activities")) {
-                JsonNode actor = activity.path("actors").isArray() && !activity.path("actors").isEmpty()
-                        ? activity.path("actors").get(0)
-                        : null;
-                JsonNode knownUser = actor == null ? null : actor.path("user").path("knownUser");
+                JsonNode knownUser = firstKnownUser(activity);
+                if (knownUser != null) {
+                    knownUsers.add(knownUser);
+                }
+            }
+            peopleActorResolver.prefetch(actorSession, knownUsers);
+            for (JsonNode activity : body.path("activities")) {
+                JsonNode knownUser = firstKnownUser(activity);
+                GooglePeopleActorResolver.Actor actor = peopleActorResolver.resolve(actorSession, knownUser);
+                if (!actor.hasDisplayInformation()) {
+                    continue;
+                }
                 activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY,
                         "drive-activity:" + sha256(canonicalJson(activity)),
-                        text(knownUser, "personName"), firstText(knownUser, "displayName", "name"),
-                        firstText(knownUser, "emailAddress", "email"),
+                        actor.providerId(), actor.login(), actor.email(),
                         parseInstant(activity.path("timestamp")
                                 .asText(activity.path("timeRange").path("endTime").asText(null))),
                         resource.getResourceUrl(), activity.toString());
             }
             pageToken = nextPageToken(body, requestedPageTokens, "drive-activity", fileId);
         } while (pageToken != null && !pageToken.isBlank());
+    }
+
+    private JsonNode firstKnownUser(JsonNode activity) {
+        JsonNode actors = activity.path("actors");
+        if (!actors.isArray() || actors.isEmpty()) {
+            return null;
+        }
+        JsonNode knownUser = actors.get(0).path("user").path("knownUser");
+        return knownUser.isMissingNode() || knownUser.isNull() ? null : knownUser;
     }
 
     private void collectComments(IntegrationResource resource, String fileId, String token,
@@ -228,26 +249,6 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             throw new ProviderResourceAccessException(503, null);
         }
         return nextPageToken;
-    }
-
-    private String firstText(JsonNode node, String... fields) {
-        if (node == null) {
-            return null;
-        }
-        for (String field : fields) {
-            String value = text(node, field);
-            if (value != null && !value.isBlank()) {
-                return value;
-            }
-        }
-        return null;
-    }
-
-    private String text(JsonNode node, String field) {
-        if (node == null || node.isMissingNode() || node.path(field).isMissingNode()) {
-            return null;
-        }
-        return node.path(field).asText(null);
     }
 
     private String sha256(String value) {
