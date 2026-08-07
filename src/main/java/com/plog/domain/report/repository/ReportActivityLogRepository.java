@@ -44,8 +44,19 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
     List<EvaluationLogRecoveryTarget> findSelfFeedbacksMissingActivityLog(
             @Param("threshold") LocalDateTime threshold, Limit limit);
 
-    // 1단계 정제 대상 조회용 — 아직 정제를 거치지 않은 내부 도메인 행
-    List<ReportActivityLog> findBySourceDomainInAndNoiseFilteredIsNull(List<SourceDomain> sourceDomains);
+    // 1단계 정제 대상 조회용 — 아직 정제를 거치지 않은 내부 도메인 행.
+    // limit은 ActivityRefinementService가 한 배치에서 처리할 상한(EvaluationActivityLogRecoveryScheduler와 동일한 관례).
+    // occurredAt만으로는 동시각 행 사이의 순서가 불안정해 id를 안정적인 tie-breaker로 더한다 —
+    // 배치 내 "가장 먼저 온 것"만 살리는 중복 판정이 호출마다 같은 순서를 보게 하기 위함이다.
+    List<ReportActivityLog> findBySourceDomainInAndNoiseFilteredIsNullOrderByOccurredAtAscIdAsc(
+            List<SourceDomain> sourceDomains, Limit limit);
+
+    // 배치 경계를 넘는 중복 판정용. 이전 배치에서 이미 noiseFiltered=false로 확정된 동일 원문이
+    // 있는지 확인한다(같은 회원·같은 도메인·id가 더 작은 = 더 먼저 처리된 행 한정).
+    // cleanContent를 별도 컬럼으로 저장하지 않으므로 원문(content) 그대로 비교한다 — 공백 등
+    // 사소한 표기 차이로 인한 미탐은 감수하되, 과탐(정상 문장을 잘못 노이즈 처리)은 피한다.
+    boolean existsByProjectMember_IdAndSourceDomainAndContentAndNoiseFilteredFalseAndIdLessThan(
+            Long projectMemberId, SourceDomain sourceDomain, String content, Long id);
 
     // 4단계 정량계산에서 멤버별로 묶어서 집계할 때 사용
     List<ReportActivityLog> findByProjectMember_IdAndSourceDomainIn(
