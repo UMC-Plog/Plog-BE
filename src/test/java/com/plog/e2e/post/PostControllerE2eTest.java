@@ -306,8 +306,10 @@ class PostControllerE2eTest extends E2eTestBase {
         @DisplayName("OWNER가 새 공지를 지정하면 기존 공지를 해제한다")
         void replacesSingleNotice() {
             Long ownerId = saveUser("notice-owner");
+            Long targetUserId = saveUser("notice-target");
             Long projectId = saveProject("notice");
             Long ownerMemberId = saveMember(ownerId, projectId, "OWNER", "ACTIVE", "오너");
+            saveMember(targetUserId, projectId, "MEMBER", "ACTIVE", "수신자");
             Long oldNoticeId = savePost(ownerMemberId, "기존 공지", true);
             Long nextNoticeId = savePost(ownerMemberId, "새 공지", false);
 
@@ -323,6 +325,40 @@ class PostControllerE2eTest extends E2eTestBase {
             assertThat(jdbc.queryForObject(
                     "select count(*) from posts where is_notice = true and project_member_id = ?",
                     Long.class, ownerMemberId)).isEqualTo(1L);
+            awaitNotificationCount(projectId, "NOTICE", 2L);
+            assertThat(jdbc.queryForObject("""
+                    select count(*) from notifications
+                    where project_id = ? and type = 'NOTICE' and resource_id = ?
+                    """, Long.class, projectId, nextNoticeId)).isEqualTo(2L);
+
+            request(HttpMethod.PATCH, post(projectId, nextNoticeId) + "/notice",
+                    ownerId, Map.of("isNotice", true));
+            request(HttpMethod.PATCH, post(projectId, nextNoticeId) + "/notice",
+                    ownerId, Map.of("isNotice", false));
+            assertThat(jdbc.queryForObject("""
+                    select count(*) from notifications
+                    where project_id = ? and type = 'NOTICE' and resource_id = ?
+                    """, Long.class, projectId, nextNoticeId)).isEqualTo(2L);
+        }
+
+        private void awaitNotificationCount(Long projectId, String type, long expected) {
+            long deadline = System.nanoTime() + 3_000_000_000L;
+            Long count;
+            do {
+                count = jdbc.queryForObject(
+                        "select count(*) from notifications where project_id = ? and type = ?",
+                        Long.class, projectId, type);
+                if (count != null && count >= expected) {
+                    return;
+                }
+                try {
+                    Thread.sleep(20L);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(exception);
+                }
+            } while (System.nanoTime() < deadline);
+            throw new AssertionError("알림 생성 대기 시간 초과: type=" + type + ", count=" + count);
         }
 
         @Test

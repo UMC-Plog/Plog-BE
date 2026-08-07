@@ -14,6 +14,7 @@ import com.plog.domain.notification.entity.Notification;
 import com.plog.domain.notification.entity.NotificationType;
 import com.plog.domain.notification.entity.FcmToken;
 import com.plog.domain.notification.event.ChatMessageNotificationEvent;
+import com.plog.domain.notification.event.NoticePublishedEvent;
 import com.plog.domain.notification.event.PeerEvaluationStartedEvent;
 import com.plog.domain.notification.event.ReportPublishedEvent;
 import com.plog.domain.notification.repository.FcmTokenRepository;
@@ -114,6 +115,31 @@ class ProjectNotificationServiceTest {
         service.sendReportPublished(new ReportPublishedEvent(10L, 20L));
 
         assertSavedNotifications(NotificationType.REPORT_PUBLISHED, 20L, 2);
+    }
+
+    @Test
+    void 공지_지정_이벤트는_활성_멤버에게_postId와_함께_저장하고_설정이_켜진_대상만_push한다() {
+        Project project = mock(Project.class);
+        when(project.getId()).thenReturn(10L);
+        when(project.getProjectName()).thenReturn("Plog");
+        ProjectMember enabled = member(1L, 101L, project, "첫째");
+        ProjectMember disabled = member(2L, 102L, project, "둘째");
+        when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(10L, MemberStatus.ACTIVE))
+                .thenReturn(List.of(enabled, disabled));
+        when(notificationPushPolicy.isEnabled(102L, 10L, NotificationType.NOTICE)).thenReturn(false);
+        FcmToken token = mock(FcmToken.class);
+        when(token.getToken()).thenReturn("notice-token");
+        when(fcmTokenRepository.findAllByUserIdIn(java.util.Set.of(101L))).thenReturn(List.of(token));
+
+        service.sendNoticePublished(new NoticePublishedEvent(10L, 20L));
+
+        assertSavedNotifications(NotificationType.NOTICE, 20L, 2);
+        ArgumentCaptor<FcmMessage> messageCaptor = ArgumentCaptor.forClass(FcmMessage.class);
+        verify(fcmGateway).send(messageCaptor.capture());
+        assertThat(messageCaptor.getValue().data())
+                .containsEntry("type", "NOTICE")
+                .containsEntry("projectId", "10")
+                .containsEntry("resourceId", "20");
     }
 
     @Test

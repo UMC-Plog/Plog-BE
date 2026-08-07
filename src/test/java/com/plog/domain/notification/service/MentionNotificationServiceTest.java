@@ -71,13 +71,12 @@ class MentionNotificationServiceTest {
 
         service.send(new ChatMentionEvent(10L, 30L, 20L, 1L, List.of(2L, 2L, 1L, 3L), " 확인 부탁해요 "));
 
-        // C안: title = 프로젝트명, body = "{프로젝트명}: {닉네임}님이 회원님을 멘션했습니다." (preview 미사용)
         ArgumentCaptor<FcmMessage> messageCaptor = ArgumentCaptor.forClass(FcmMessage.class);
         verify(fcmGateway).send(messageCaptor.capture());
         FcmMessage message = messageCaptor.getValue();
         assertThat(message.token()).isEqualTo("token-102");
         assertThat(message.title()).isEqualTo("Plog");
-        assertThat(message.body()).isEqualTo("Plog: 곰곰님이 회원님을 멘션했습니다.");
+        assertThat(message.body()).isEqualTo("곰곰님이 회원님을 멘션했습니다.");
         assertThat(message.data()).containsEntry("projectId", "10")
                 .containsEntry("roomId", "30")
                 .containsEntry("resourceId", "20")
@@ -92,7 +91,7 @@ class MentionNotificationServiceTest {
         assertThat(savedNotifications).hasSize(1);
         Notification saved = savedNotifications.get(0);
         assertThat(saved.getType()).isEqualTo(NotificationType.CHAT_MENTION);
-        assertThat(saved.getContent()).isEqualTo("Plog: 곰곰님이 회원님을 멘션했습니다.");
+        assertThat(saved.getContent()).isEqualTo("곰곰님이 회원님을 멘션했습니다.");
         assertThat(saved.getResourceId()).isEqualTo(20L);
         assertThat(saved.isRead()).isFalse();
     }

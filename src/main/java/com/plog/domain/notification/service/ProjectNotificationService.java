@@ -4,6 +4,7 @@ import com.plog.domain.notification.entity.FcmToken;
 import com.plog.domain.notification.entity.Notification;
 import com.plog.domain.notification.entity.NotificationType;
 import com.plog.domain.notification.event.ChatMessageNotificationEvent;
+import com.plog.domain.notification.event.NoticePublishedEvent;
 import com.plog.domain.notification.event.PeerEvaluationStartedEvent;
 import com.plog.domain.notification.event.ReportPublishedEvent;
 import com.plog.domain.notification.repository.FcmTokenRepository;
@@ -100,6 +101,29 @@ public class ProjectNotificationService {
     }
 
     @Transactional
+    public void sendNoticePublished(NoticePublishedEvent event) {
+        if (event == null || event.projectId() == null || event.postId() == null) {
+            return;
+        }
+        notificationRepository.acquireDedupeLock(event.projectId() + ":"
+                + NotificationType.NOTICE.name() + ":" + event.postId());
+        if (notificationRepository.existsByProjectIdAndTypeAndResourceId(
+                event.projectId(), NotificationType.NOTICE, event.postId())) {
+            return;
+        }
+        List<ProjectMember> targets = activeMembers(event.projectId());
+        if (targets.isEmpty()) {
+            return;
+        }
+        Project project = targets.get(0).getProject();
+        deliver(targets, project, NotificationType.NOTICE,
+                "새 공지가 등록되었습니다.", event.postId(), Map.of(
+                        "projectId", event.projectId().toString(),
+                        "resourceId", event.postId().toString(),
+                        "type", NotificationType.NOTICE.name()));
+    }
+
+    @Transactional
     public void sendReportPublished(ReportPublishedEvent event) {
         if (event == null || event.projectId() == null || event.reportId() == null) {
             return;
@@ -151,7 +175,7 @@ public class ProjectNotificationService {
         log.info("project_notification_delivery type={} projectId={} targetCount={} tokenCount={}",
                 type, project.getId(), targets.size(), tokens.size());
         for (FcmToken token : tokens) {
-            sendWithRetry(token.getToken(), project.getProjectName(), body, data, type);
+            sendWithRetry(token.getToken(), project.getProjectName(), body, data, type, project.getId());
         }
     }
 
@@ -160,11 +184,13 @@ public class ProjectNotificationService {
             String title,
             String body,
             Map<String, String> data,
-            NotificationType type
+            NotificationType type,
+            Long projectId
     ) {
         for (int attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
             try {
                 fcmGateway.send(new FcmMessage(token, title, body, data));
+                log.info("project_notification_delivery_succeeded type={} projectId={}", type, projectId);
                 return;
             } catch (FcmDeliveryException exception) {
                 if (exception.isInvalidToken()) {

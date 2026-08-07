@@ -17,15 +17,11 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: update
+      ddl-auto: create
     properties:
       hibernate:
         jdbc:
           time_zone: UTC
-  # 전체 레거시 스키마는 아직 Hibernate가 관리한다. 운영의 증분 마이그레이션만
-  # application-prod.yaml에서 활성화한다.
-  flyway:
-    enabled: false
   # Gmail SMTP. 계정/앱비밀번호는 literal 금지 → 환경변수로만 주입
   mail:
     host: smtp.gmail.com
@@ -191,6 +187,10 @@ plog:
       enabled: ${REPORT_SCHEDULER_ENABLED:false}
       # 초 분 시 일 월 요일 (Spring 6필드). 컨테이너 TZ=UTC 기준.
       cron: ${REPORT_SCHEDULER_CRON:0 40 3 * * *}
+  notification:
+    peer-evaluation:
+      # 프로젝트 종료일 당일 00:00 UTC부터 평가가 열리므로 매일 경계 시점에 확인한다.
+      cron: ${PEER_EVALUATION_NOTIFICATION_CRON:0 0 0 * * *}
   # 운영 환경에서만 활성화하며 인증은 Application Default Credentials를 사용한다.
   fcm:
     enabled: ${FCM_ENABLED:false}
