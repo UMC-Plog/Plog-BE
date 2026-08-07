@@ -35,6 +35,7 @@ public class MentionNotificationService {
     private final FcmTokenRepository fcmTokenRepository;
     private final NotificationRepository notificationRepository;
     private final FcmGateway fcmGateway;
+    private final NotificationPushPolicy notificationPushPolicy;
 
     @Transactional
     public void send(ChatMentionEvent event) {
@@ -92,7 +93,13 @@ public class MentionNotificationService {
         Set<Long> targetUserIds = targets.stream()
                 .map(member -> member.getUser().getId())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-        List<FcmToken> tokens = new ArrayList<>(fcmTokenRepository.findAllByUserIdIn(targetUserIds));
+        Set<Long> pushUserIds = targetUserIds.stream()
+                .filter(userId -> notificationPushPolicy.isEnabled(
+                        userId, event.projectId(), NotificationType.CHAT_MENTION))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        List<FcmToken> tokens = pushUserIds.isEmpty()
+                ? List.of()
+                : new ArrayList<>(fcmTokenRepository.findAllByUserIdIn(pushUserIds));
         for (FcmToken token : tokens) {
             sendWithRetry(token.getToken(), title, body, data);
         }

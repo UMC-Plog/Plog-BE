@@ -36,6 +36,7 @@ public class ProjectNotificationService {
     private final FcmTokenRepository fcmTokenRepository;
     private final NotificationRepository notificationRepository;
     private final FcmGateway fcmGateway;
+    private final NotificationPushPolicy notificationPushPolicy;
 
     @Transactional
     public void sendChatMessage(ChatMessageNotificationEvent event) {
@@ -141,7 +142,12 @@ public class ProjectNotificationService {
                 .toList());
         Set<Long> userIds = targets.stream().map(member -> member.getUser().getId())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-        List<FcmToken> tokens = fcmTokenRepository.findAllByUserIdIn(userIds);
+        Set<Long> pushUserIds = userIds.stream()
+                .filter(userId -> notificationPushPolicy.isEnabled(userId, project.getId(), type))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        List<FcmToken> tokens = pushUserIds.isEmpty()
+                ? List.of()
+                : fcmTokenRepository.findAllByUserIdIn(pushUserIds);
         log.info("project_notification_delivery type={} projectId={} targetCount={} tokenCount={}",
                 type, project.getId(), targets.size(), tokens.size());
         for (FcmToken token : tokens) {

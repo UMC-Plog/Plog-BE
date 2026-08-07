@@ -40,12 +40,17 @@ class ProjectNotificationServiceTest {
     @Mock private FcmTokenRepository fcmTokenRepository;
     @Mock private NotificationRepository notificationRepository;
     @Mock private FcmGateway fcmGateway;
+    @Mock private NotificationPushPolicy notificationPushPolicy;
     private ProjectNotificationService service;
 
     @BeforeEach
     void setUp() {
+        lenient().when(notificationPushPolicy.isEnabled(
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.any(NotificationType.class))).thenReturn(true);
         service = new ProjectNotificationService(
-                projectMemberRepository, fcmTokenRepository, notificationRepository, fcmGateway);
+                projectMemberRepository, fcmTokenRepository, notificationRepository, fcmGateway,
+                notificationPushPolicy);
     }
 
     @Test
@@ -173,6 +178,22 @@ class ProjectNotificationServiceTest {
 
         verify(notificationRepository).saveAll(anyCollection());
         verify(fcmGateway).send(any(FcmMessage.class));
+    }
+
+    @Test
+    void push_설정이_OFF여도_인앱_알림은_저장하고_FCM은_보내지_않는다() {
+        Project project = mock(Project.class);
+        when(project.getId()).thenReturn(10L);
+        ProjectMember sender = member(1L, 101L, project, "보낸이");
+        ProjectMember target = member(2L, 102L, project, "수신자");
+        when(projectMemberRepository.findAllByIdIn(anyCollection())).thenReturn(List.of(sender, target));
+        when(notificationPushPolicy.isEnabled(102L, 10L, NotificationType.CHAT_MESSAGE)).thenReturn(false);
+
+        service.sendChatMessage(new ChatMessageNotificationEvent(
+                10L, 20L, 30L, 1L, List.of(2L), "메시지"));
+
+        verify(notificationRepository).saveAll(anyCollection());
+        verify(fcmGateway, org.mockito.Mockito.never()).send(any(FcmMessage.class));
     }
 
     private void assertSavedNotifications(NotificationType type, Long resourceId, int size) {
