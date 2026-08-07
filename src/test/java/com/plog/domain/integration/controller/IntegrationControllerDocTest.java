@@ -26,6 +26,13 @@ class IntegrationControllerDocTest {
         ).getAnnotation(Operation.class).summary())
                 .isEqualTo("1. 프로젝트 외부 연동 상태 조회");
         assertThat(IntegrationControllerDoc.class.getMethod(
+                "getProjectIntegrations",
+                Long.class,
+                Long.class
+        ).getAnnotation(Operation.class).description())
+                .contains("finalCollectionStatus가 아니라 collectionJobStatus")
+                .contains("SUCCEEDED 또는 PARTIAL_FAILED");
+        assertThat(IntegrationControllerDoc.class.getMethod(
                 "issueAuthorizationUrl",
                 Long.class,
                 String.class,

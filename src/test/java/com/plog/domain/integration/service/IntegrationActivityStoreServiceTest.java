@@ -116,6 +116,75 @@ class IntegrationActivityStoreServiceTest {
     }
 
     @Test
+    void ignoresAnIdentifiedActorWithoutDisplayInformationOnInsert() {
+        IntegrationResource resource = resource();
+
+        integrationActivityStoreService.store(
+                resource, IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY,
+                "drive-activity:event-1", "people/editor", null, null,
+                null, null, "{}"
+        );
+
+        verifyNoInteractions(integrationActorMappingService, integrationActivityRepository);
+    }
+
+    @Test
+    void ignoresAnActorBearingActivityWithoutAnyActorInformationOnInsert() {
+        IntegrationResource resource = resource();
+
+        integrationActivityStoreService.store(
+                resource, IntegrationActivityType.NOTION_WEBHOOK_EVENT,
+                "webhook:event-1", null, null, null,
+                null, null, "{}"
+        );
+
+        verifyNoInteractions(integrationActorMappingService, integrationActivityRepository);
+    }
+
+    @Test
+    void updatesOnlyAnExistingMutableActivityWhenActorDisplayInformationIsUnavailable() {
+        IntegrationResource resource = resource();
+
+        integrationActivityStoreService.storeLatestProviderPayload(
+                resource, IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
+                "comment:comment-1", "permission-1", " ", null,
+                null, null, "{}"
+        );
+
+        verify(integrationActivityRepository).updateProviderPayloadIfChanged(
+                10L, "comment:comment-1", "{}"
+        );
+        verify(integrationActivityRepository, never()).upsertProviderPayloadIfChanged(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+        );
+        verifyNoInteractions(integrationActorMappingService);
+    }
+
+    @Test
+    void storesAnActorlessStructuralSnapshot() {
+        IntegrationResource resource = resource();
+
+        integrationActivityStoreService.store(
+                resource, IntegrationActivityType.GOOGLE_PRESENTATION_SNAPSHOT,
+                "presentation-snapshot:file-1:version-1", null, null, null,
+                null, "https://docs.google.com/presentation/d/file-1/edit", "{}"
+        );
+
+        verify(integrationActivityRepository).insertIfAbsent(
+                10L,
+                null,
+                IntegrationActivityType.GOOGLE_PRESENTATION_SNAPSHOT.name(),
+                "presentation-snapshot:file-1:version-1",
+                null,
+                null,
+                null,
+                null,
+                "https://docs.google.com/presentation/d/file-1/edit",
+                "{}"
+        );
+    }
+
+    @Test
     void backfillsActorSnapshotThroughRepository() {
         given(integrationActivityRepository.backfillActorSnapshotByProviderId(
                 1L, "actor-1", "vana", "vana@plog.test"

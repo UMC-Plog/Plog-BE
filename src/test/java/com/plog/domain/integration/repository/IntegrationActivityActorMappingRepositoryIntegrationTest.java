@@ -262,6 +262,47 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
         assertThat(deleted.getSourceUrl()).isEqualTo("https://docs.google.com/document/d/google-file-1/edit");
     }
 
+    @Test
+    void updateProviderPayloadIfChangedUpdatesOnlyAnExistingActivity() {
+        Project project = entityManager.persist(project());
+        ProjectMember member = entityManager.persist(member(
+                project,
+                User.createLocal("google-existing@example.com", "encoded", "기존 댓글", "google-existing"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration integration = entityManager.persist(integration(project, member));
+        IntegrationResource resource = entityManager.persist(resource(integration, member));
+        entityManager.flush();
+
+        assertThat(activityRepository.updateProviderPayloadIfChanged(
+                resource.getId(), "comment:missing", "{\"deleted\":true}"
+        )).isZero();
+        assertThat(activityCount(resource.getId(), "comment:missing")).isZero();
+
+        activityRepository.upsertProviderPayloadIfChanged(
+                resource.getId(), member.getId(), IntegrationActivityType.GOOGLE_DRIVE_COMMENT.name(),
+                "comment:existing", "commenter-1", "Commenter", "commenter@example.com",
+                Instant.parse("2026-08-01T12:00:00Z"),
+                "https://docs.google.com/document/d/google-file-1/edit",
+                "{\"deleted\":false}"
+        );
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(activityRepository.updateProviderPayloadIfChanged(
+                resource.getId(), "comment:existing", "{\"deleted\":true}"
+        )).isOne();
+        entityManager.clear();
+
+        IntegrationActivity updated = activityRepository.findById(
+                activityId(resource.getId(), "comment:existing")
+        ).orElseThrow();
+        assertThat(updated.getProviderPayload()).contains("\"deleted\":true");
+        assertThat(updated.getActorProviderId()).isEqualTo("commenter-1");
+        assertThat(updated.getActorLogin()).isEqualTo("Commenter");
+        assertThat(updated.getActorEmail()).isEqualTo("commenter@example.com");
+    }
+
     @ParameterizedTest
     @CsvSource(nullValues = "NULL", textBlock = """
             provider-actor,NULL,NULL
