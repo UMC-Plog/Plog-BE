@@ -148,6 +148,36 @@ class GithubIntegrationResourceCollectorTest {
     }
 
     @Test
+    @DisplayName("annotated tag가 5단계를 넘어도 loop 없이 commit 대상까지 해석한다")
+    void resolvesDeepAnnotatedTagChainWithoutFixedDepthLimit() {
+        branchRefsBody = "[]";
+        tagRefsBody = """
+                [{"ref":"refs/tags/deep","object":{"type":"tag","sha":"tag-1"}}]
+                """;
+        for (int depth = 1; depth <= 6; depth++) {
+            tagObjectsBySha.put("tag-" + depth, """
+                    {"object":{"type":"tag","sha":"tag-%d"}}
+                    """.formatted(depth + 1));
+        }
+        tagObjectsBySha.put("tag-7", """
+                {"object":{"type":"commit","sha":"deep-tagged-commit"}}
+                """);
+        commitsByRefSha.put("deep-tagged-commit", """
+                [{"sha":"deep-tagged-commit","author":{"id":"2","login":"min"},
+                  "commit":{"author":{"email":"min@example.com","date":"2026-01-03T00:00:00Z"}},
+                  "html_url":"https://github.com/UMC-Plog/Plog-FE/commit/deep-tagged-commit"}]
+                """);
+
+        collect(resource(null), CollectionContext.noop());
+
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/git/tags/tag-7"));
+        assertThat(requestedUris)
+                .anyMatch(uri -> uri.contains("/commits?") && uri.contains("sha=deep-tagged-commit"));
+        verify(activityStoreService).store(any(), eq(IntegrationActivityType.GITHUB_COMMIT),
+                eq("commit:deep-tagged-commit"), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     @DisplayName("commit 페이지가 101페이지를 넘어도 Link next를 따라 끝까지 저장한다")
     void collectsCommitHistoryPastOneHundredOnePages() {
         branchRefsBody = """
