@@ -35,6 +35,9 @@ public interface IntegrationControllerDoc {
                     현재 사용자가 ACTIVE 멤버인 프로젝트의 외부 provider 연동 상태를 조회합니다.
                     GITHUB, FIGMA, NOTION, GOOGLE_DOCS, GOOGLE_SLIDES 순서로 모두 내려주며, 아직 연결되지 않은 provider는 linked=false입니다.
                     토큰/secret은 응답에 포함하지 않고, 화면 표시용 connectedAccountName만 제공합니다.
+                    수동 수집 후에는 finalCollectionStatus가 아니라 collectionJobStatus를 폴링 기준으로 사용합니다.
+                    PENDING, RUNNING, RETRYABLE이면 폴링을 계속하고 SUCCEEDED, PARTIAL_FAILED, FAILED이면 종료합니다.
+                    provider별 actor 매핑은 integrations[].collectionStatus가 SUCCEEDED 또는 PARTIAL_FAILED일 때 활성화합니다.
                     """
     )
     @ApiResponses({
@@ -555,6 +558,9 @@ public interface IntegrationControllerDoc {
                     수집은 백그라운드 잡으로 실행되며 이 API는 즉시 202와 jobId를 반환합니다.
                     진행 상황과 결과는 GET /api/projects/{projectId}/integrations 의 collectionJobStatus 와
                     provider별 리소스의 collectionStatus 로 확인합니다.
+                    collectionJobStatus가 PENDING, RUNNING, RETRYABLE이면 폴링을 계속하고
+                    SUCCEEDED, PARTIAL_FAILED, FAILED이면 종료합니다.
+                    actor 매핑은 provider별 collectionStatus가 SUCCEEDED 또는 PARTIAL_FAILED일 때 활성화합니다.
                     이미 진행 중인 수집이 있으면 새 잡을 만들지 않고 그 잡의 ID를 반환합니다.
                     프로젝트가 진행 중이어도 ACTIVE 멤버가 실행할 수 있으며 프로젝트 상태는 변경하지 않습니다.
                     """

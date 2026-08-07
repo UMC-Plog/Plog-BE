@@ -20,7 +20,9 @@ public record IntegrationItemResponse(
         IntegrationConnectionStatus connectionStatus,
         @Schema(description = "사용자가 provider를 다시 연동해야 하면 true", example = "false")
         boolean reauthorizationRequired,
-        @Schema(description = "해당 provider에 등록된 리소스들의 최근 수집 상태",
+        @Schema(description = "해당 provider에 등록된 리소스들의 최근 수집 상태. "
+                + "actor 매핑은 SUCCEEDED 또는 PARTIAL_FAILED일 때 활성화하고, "
+                + "NOT_STARTED·PENDING·RUNNING·RETRYING·FAILED·REAUTH_REQUIRED일 때는 비활성화합니다.",
                 allowableValues = {"NOT_STARTED", "PENDING", "RUNNING", "RETRYING", "SUCCEEDED",
                         "PARTIAL_FAILED", "FAILED", "REAUTH_REQUIRED"}, example = "SUCCEEDED")
         IntegrationCollectionStatus collectionStatus,
