@@ -99,18 +99,15 @@ class GoogleIntegrationResourceCollectorTest {
                 IntegrationActivityType.GOOGLE_DRIVE_FILE_SNAPSHOT,
                 IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY,
                 IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY,
-                IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
-                IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
                 IntegrationActivityType.GOOGLE_DRIVE_REVISION,
                 IntegrationActivityType.GOOGLE_DOCUMENT_SUGGESTION
         );
         assertThat(storedKeys()).contains(
                 "drive-file:google-file-1:2026-08-01T09:00:00Z",
-                "comment:comment-1",
-                "comment-reply:reply-1",
                 "revision:rev-1",
                 "document-snapshot:google-file-1:doc-revision-1"
         );
+        assertThat(storedLatestKeys()).contains("comment:comment-1", "comment-reply:reply-1");
     }
 
     @Test
@@ -299,12 +296,12 @@ class GoogleIntegrationResourceCollectorTest {
                 resource, resource.getProjectIntegration(), CollectionContext.noop());
 
         fixture.server.verify();
-        assertThat(storedKeys()).contains(
+        assertThat(storedLatestKeys()).contains(
                 "comment:comment-deleted",
                 "comment-reply:reply-1",
                 "comment-reply:reply-deleted"
         );
-        assertThat(storedPayloadsFor(IntegrationActivityType.GOOGLE_DRIVE_COMMENT))
+        assertThat(storedLatestPayloadsFor(IntegrationActivityType.GOOGLE_DRIVE_COMMENT))
                 .anySatisfy(payload -> assertThat(payload).contains("\"id\":\"comment-deleted\"", "\"deleted\":true"))
                 .anySatisfy(payload -> assertThat(payload).contains("\"id\":\"reply-deleted\"", "\"deleted\":true"));
     }
@@ -460,9 +457,16 @@ class GoogleIntegrationResourceCollectorTest {
         return new ArrayList<>(captor.getAllValues());
     }
 
-    private List<String> storedPayloadsFor(IntegrationActivityType activityType) {
+    private List<String> storedLatestKeys() {
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(activityStoreService, atLeastOnce()).store(
+        verify(activityStoreService, atLeastOnce()).storeLatestProviderPayload(
+                any(), any(), captor.capture(), any(), any(), any(), any(), any(), any());
+        return captor.getAllValues();
+    }
+
+    private List<String> storedLatestPayloadsFor(IntegrationActivityType activityType) {
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(activityStoreService, atLeastOnce()).storeLatestProviderPayload(
                 any(), eq(activityType), any(), any(), any(), any(), any(), any(), captor.capture());
         return new ArrayList<>(captor.getAllValues());
     }
