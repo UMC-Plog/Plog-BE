@@ -1,5 +1,6 @@
 package com.plog.domain.post.service;
 
+import com.plog.domain.notification.event.NoticePublishedEvent;
 import com.plog.domain.post.dto.CommentDto;
 import com.plog.domain.post.dto.PostDto;
 import com.plog.domain.post.entity.AttachmentType;
@@ -13,15 +14,15 @@ import com.plog.domain.post.repository.CommentRepository;
 import com.plog.domain.post.repository.PostAttachmentRepository;
 import com.plog.domain.post.repository.PostLikeRepository;
 import com.plog.domain.post.repository.PostRepository;
-import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.MemberStatus;
+import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.exception.ProjectApiErrorCode;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.global.api.exception.ApiException;
-import com.plog.global.util.TimeUtil;
 import com.plog.global.common.AttachmentDownloadUrlFactory;
+import com.plog.global.util.TimeUtil;
 import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.AttachmentUsage;
 import com.plog.infrastructure.s3.UploadedFile;
@@ -38,9 +39,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -204,11 +205,15 @@ public class PostService {
         projectRepository.findByIdForUpdate(projectId)
                 .orElseThrow(() -> new ApiException(ProjectApiErrorCode.PROJECT_NOT_FOUND));
         Post post = requirePost(projectId, postId);
+        boolean newlyPublished = Boolean.TRUE.equals(request.isNotice()) && !post.isNotice();
         if (Boolean.TRUE.equals(request.isNotice())) {
             clearNotices(projectId, postId);
         }
         post.changeNotice(Boolean.TRUE.equals(request.isNotice()));
         postRepository.saveAndFlush(post);
+        if (newlyPublished) {
+            eventPublisher.publishEvent(new NoticePublishedEvent(projectId, postId));
+        }
         return new PostDto.NoticeResponse(post.getId(), projectId, post.isNotice(), toInstant(post.getUpdatedAt()));
     }
 

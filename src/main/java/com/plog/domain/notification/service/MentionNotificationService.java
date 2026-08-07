@@ -75,7 +75,7 @@ public class MentionNotificationService {
         Project project = sender.getProject();
         String senderNickname = resolveNickname(sender);
         String title = project.getProjectName();
-        String body = project.getProjectName() + ": " + senderNickname + "님이 회원님을 멘션했습니다.";
+        String body = senderNickname + "님이 회원님을 멘션했습니다.";
         Map<String, String> data = Map.of(
                 "projectId", event.projectId().toString(),
                 "roomId", event.roomId().toString(),
@@ -101,7 +101,7 @@ public class MentionNotificationService {
                 ? List.of()
                 : new ArrayList<>(fcmTokenRepository.findAllByUserIdIn(pushUserIds));
         for (FcmToken token : tokens) {
-            sendWithRetry(token.getToken(), title, body, data);
+            sendWithRetry(token.getToken(), title, body, data, event.projectId());
         }
     }
 
@@ -116,10 +116,12 @@ public class MentionNotificationService {
         return userNickname == null || userNickname.isBlank() ? "프로젝트 멤버" : userNickname;
     }
 
-    private void sendWithRetry(String token, String title, String body, Map<String, String> data) {
+    private void sendWithRetry(String token, String title, String body, Map<String, String> data, Long projectId) {
         for (int attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
             try {
                 fcmGateway.send(new FcmMessage(token, title, body, data));
+                log.info("project_notification_delivery_succeeded type={} projectId={}",
+                        NotificationType.CHAT_MENTION, projectId);
                 return;
             } catch (FcmDeliveryException exception) {
                 if (exception.isInvalidToken()) {

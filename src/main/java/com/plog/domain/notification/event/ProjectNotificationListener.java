@@ -34,6 +34,12 @@ public class ProjectNotificationListener {
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onNoticePublished(NoticePublishedEvent event) {
+        notificationService.sendNoticePublished(event);
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReportPublished(ReportPublishedEvent event) {
         notificationService.sendReportPublished(event);
     }
