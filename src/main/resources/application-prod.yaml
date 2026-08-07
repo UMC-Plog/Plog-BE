@@ -12,7 +12,7 @@ spring:
       # 컬럼·테이블 삭제, 데이터 백필 — 은 psql로 직접 DDL을 쳐야 한다.
       #
       # create/create-drop 금지: 부팅할 때마다 drop+create 라서 재배포·재기동마다 전부 날아간다.
-      ddl-auto: create
+      ddl-auto: update
     properties:
       hibernate:
         format_sql: false
