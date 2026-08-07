@@ -132,6 +132,38 @@ class IntegrationCollectionJobRepositoryIntegrationTest {
     }
 
     @Test
+    @DisplayName("새로 RUNNING이 된 잡은 processing timeout 전에 회수하지 않는다")
+    void reclaimStaleKeepsFreshlyClaimedJob() {
+        Long projectId = savedProjectId();
+        jobService.enqueue(projectId, null);
+        Instant startedAt = Instant.now();
+        jobService.claimNext(startedAt);
+
+        Instant beforeTimeout = startedAt.plus(Duration.ofMinutes(29));
+        int reclaimed = jobService.reclaimStale(beforeTimeout);
+
+        assertThat(reclaimed).isZero();
+        assertThat(jobService.claimNext(beforeTimeout)).isNull();
+    }
+
+    @Test
+    @DisplayName("heartbeat가 갱신된 RUNNING 잡은 processing timeout 전에 회수하지 않는다")
+    void reclaimStaleKeepsRecentlyHeartbeatingJob() {
+        Long projectId = savedProjectId();
+        jobService.enqueue(projectId, null);
+        Instant startedAt = Instant.now().plusSeconds(1);
+        IntegrationCollectionJobService.ClaimedJob claimed = jobService.claimNext(startedAt);
+        Instant heartbeatAt = startedAt.plus(Duration.ofMinutes(25));
+        jobService.heartbeat(claimed, heartbeatAt);
+
+        Instant beforeTimeout = heartbeatAt.plus(Duration.ofMinutes(29));
+        int reclaimed = jobService.reclaimStale(beforeTimeout);
+
+        assertThat(reclaimed).isZero();
+        assertThat(jobService.claimNext(beforeTimeout)).isNull();
+    }
+
+    @Test
     @DisplayName("findLatest는 가장 최근 잡을 돌려준다")
     void findLatestReturnsMostRecentJob() {
         Long projectId = savedProjectId();

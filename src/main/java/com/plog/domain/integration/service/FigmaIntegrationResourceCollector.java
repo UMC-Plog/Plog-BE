@@ -9,8 +9,8 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -20,14 +20,33 @@ import org.springframework.web.client.RestClientResponseException;
 /** Figma 파일의 현재 스냅샷, version history, 댓글과 reaction 원문을 저장한다. */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 class FigmaIntegrationResourceCollector implements IntegrationResourceCollector {
 
     private static final String API_BASE_URL = "https://api.figma.com";
 
     private final ProjectIntegrationService projectIntegrationService;
     private final IntegrationActivityStoreService activityStoreService;
-    private final RestClient restClient = ProviderRestClientFactory.create();
+    private final RestClient restClient;
+
+    /** 생성자가 둘이라 Spring이 주입 대상을 고를 수 없다. 이쪽이 운영용이다. */
+    @Autowired
+    FigmaIntegrationResourceCollector(
+            ProjectIntegrationService projectIntegrationService,
+            IntegrationActivityStoreService activityStoreService
+    ) {
+        this(projectIntegrationService, activityStoreService, ProviderRestClientFactory.create());
+    }
+
+    /** 테스트에서 MockRestServiceServer를 물리기 위한 생성자다. */
+    FigmaIntegrationResourceCollector(
+            ProjectIntegrationService projectIntegrationService,
+            IntegrationActivityStoreService activityStoreService,
+            RestClient restClient
+    ) {
+        this.projectIntegrationService = projectIntegrationService;
+        this.activityStoreService = activityStoreService;
+        this.restClient = restClient;
+    }
 
     @Override
     public List<LinkType> providers() {
@@ -38,14 +57,14 @@ class FigmaIntegrationResourceCollector implements IntegrationResourceCollector 
     public void collect(IntegrationResource resource, CollectionContext context) {
         String token = projectIntegrationService.decryptAccessToken(resource.getProjectIntegration());
         String fileKey = resource.getProviderResourceId();
-        JsonNode file = get("/v1/files/" + fileKey + "?depth=1", token);
+        JsonNode file = get("/v1/files/" + fileKey + "?depth=1", token, context);
         activityStoreService.store(resource, IntegrationActivityType.FIGMA_FILE_METADATA,
                 "file:" + fileKey + ":" + file.path("version").asText("current"), null, null, null,
                 parseInstant(file.path("lastModified").asText(null)), resource.getResourceUrl(), file.toString());
 
-        collectVersions(resource, fileKey, token);
+        collectVersions(resource, fileKey, token, context);
 
-        JsonNode comments = get("/v1/files/" + fileKey + "/comments", token);
+        JsonNode comments = get("/v1/files/" + fileKey + "/comments", token, context);
         for (JsonNode comment : comments.path("comments")) {
             JsonNode user = comment.path("user");
             activityStoreService.store(resource, IntegrationActivityType.FIGMA_COMMENT,
@@ -68,7 +87,8 @@ class FigmaIntegrationResourceCollector implements IntegrationResourceCollector 
         }
     }
 
-    private void collectVersions(IntegrationResource resource, String fileKey, String token) {
+    private void collectVersions(IntegrationResource resource, String fileKey, String token,
+            CollectionContext context) {
         String nextPage = "/v1/files/" + fileKey + "/versions";
         Set<String> requestedPages = new HashSet<>();
         while (nextPage != null && !nextPage.isBlank()) {
@@ -76,7 +96,7 @@ class FigmaIntegrationResourceCollector implements IntegrationResourceCollector 
                 log.warn("Figma version pagination loop detected. fileKey={}, page={}", fileKey, nextPage);
                 throw new ProviderResourceAccessException(503, null);
             }
-            JsonNode response = get(nextPage, token);
+            JsonNode response = get(nextPage, token, context);
             for (JsonNode version : response.path("versions")) {
                 JsonNode user = version.path("user");
                 activityStoreService.store(resource, IntegrationActivityType.FIGMA_FILE_VERSION,
@@ -89,8 +109,9 @@ class FigmaIntegrationResourceCollector implements IntegrationResourceCollector 
         }
     }
 
-    private JsonNode get(String path, String token) {
+    private JsonNode get(String path, String token, CollectionContext context) {
         try {
+            context.heartbeat();
             return restClient.get()
                     .uri(URI.create(path.startsWith("http") ? path : API_BASE_URL + path))
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)

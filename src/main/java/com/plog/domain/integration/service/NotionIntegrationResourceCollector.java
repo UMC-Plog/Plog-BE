@@ -11,8 +11,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -21,7 +22,6 @@ import org.springframework.web.client.RestClientResponseException;
 /** Notion page/data source의 page·block·comment 원문을 수집한다. 수정 diff가 없으므로 스냅샷을 보관한다. */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 class NotionIntegrationResourceCollector implements IntegrationResourceCollector {
 
     private static final String API_BASE_URL = "https://api.notion.com";
@@ -30,7 +30,55 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
     private final ProjectIntegrationService projectIntegrationService;
     private final IntegrationActivityStoreService activityStoreService;
     private final NotionApiRateLimiter rateLimiter;
-    private final RestClient restClient = ProviderRestClientFactory.create();
+    private final NotionUserResolver userResolver;
+    private final RestClient restClient;
+
+    /** 테스트용 생성자가 함께 있으므로 Spring 운영 주입 대상을 명시한다. */
+    @Autowired
+    NotionIntegrationResourceCollector(
+            ProjectIntegrationService projectIntegrationService,
+            IntegrationActivityStoreService activityStoreService,
+            NotionApiRateLimiter rateLimiter,
+            NotionUserResolver userResolver
+    ) {
+        this(
+                projectIntegrationService,
+                activityStoreService,
+                rateLimiter,
+                userResolver,
+                ProviderRestClientFactory.create()
+        );
+    }
+
+    /** 테스트에서 MockRestServiceServer를 물리기 위한 생성자다. */
+    NotionIntegrationResourceCollector(
+            ProjectIntegrationService projectIntegrationService,
+            IntegrationActivityStoreService activityStoreService,
+            NotionApiRateLimiter rateLimiter,
+            RestClient restClient
+    ) {
+        this(
+                projectIntegrationService,
+                activityStoreService,
+                rateLimiter,
+                new NotionUserResolver(activityStoreService, rateLimiter, restClient),
+                restClient
+        );
+    }
+
+    NotionIntegrationResourceCollector(
+            ProjectIntegrationService projectIntegrationService,
+            IntegrationActivityStoreService activityStoreService,
+            NotionApiRateLimiter rateLimiter,
+            NotionUserResolver userResolver,
+            RestClient restClient
+    ) {
+        this.projectIntegrationService = projectIntegrationService;
+        this.activityStoreService = activityStoreService;
+        this.rateLimiter = rateLimiter;
+        this.userResolver = userResolver;
+        this.restClient = restClient;
+    }
 
     @Override
     public List<LinkType> providers() {
@@ -40,33 +88,40 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
     @Override
     public void collect(IntegrationResource resource, CollectionContext context) {
         String token = projectIntegrationService.decryptAccessToken(resource.getProjectIntegration());
-        collect(resource, token);
+        NotionUserResolver.Session userSession = userResolver.begin(
+                resource.getProjectIntegration().getId(), token, context);
+        collect(resource, token, context, userSession);
     }
 
-    private void collect(IntegrationResource resource, String token) {
+    private void collect(
+            IntegrationResource resource,
+            String token,
+            CollectionContext context,
+            NotionUserResolver.Session userSession
+    ) {
         if (resource.getResourceType() == IntegrationResourceType.NOTION_PAGE) {
-            collectPage(resource, resource.getProviderResourceId(), token, new HashSet<>());
+            collectPage(resource, resource.getProviderResourceId(), token, context, userSession, new HashSet<>());
             return;
         }
         if (resource.getResourceType() == IntegrationResourceType.NOTION_DATA_SOURCE) {
-            JsonNode dataSource = get("/v1/data_sources/" + resource.getProviderResourceId(), token);
-            JsonNode editor = dataSource.path("last_edited_by");
+            JsonNode dataSource = get("/v1/data_sources/" + resource.getProviderResourceId(), token, context);
+            NotionUserResolver.Actor editor = userResolver.resolve(userSession, dataSource.path("last_edited_by"));
             activityStoreService.store(resource, IntegrationActivityType.NOTION_DATA_SOURCE_SNAPSHOT,
                     "data-source:" + resource.getProviderResourceId() + ":" + dataSource.path("last_edited_time").asText("current"),
-                    actorId(editor), actorName(editor), actorEmail(editor),
+                    editor.providerId(), editor.login(), editor.email(),
                     parseInstant(dataSource.path("last_edited_time").asText(null)), dataSource.path("url").asText(resource.getResourceUrl()),
                     dataSource.toString());
             String cursor = null;
             Set<String> requestedCursors = new HashSet<>();
             do {
-                JsonNode page = post("/v1/data_sources/" + resource.getProviderResourceId() + "/query", token,
+                JsonNode page = post("/v1/data_sources/" + resource.getProviderResourceId() + "/query", token, context,
                         cursor == null
                                 ? Map.of("page_size", 100, "result_type", "page")
                                 : Map.of("page_size", 100, "result_type", "page", "start_cursor", cursor));
                 for (JsonNode result : page.path("results")) {
                     String pageId = result.path("id").asText();
                     if (!pageId.isBlank()) {
-                        collectPage(resource, pageId, token, new HashSet<>());
+                        collectPage(resource, pageId, token, context, userSession, new HashSet<>());
                     }
                 }
                 cursor = nextCursor(page, requestedCursors, "data-source-query", resource.getProviderResourceId());
@@ -76,7 +131,8 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
 
     IntegrationResource findContainingResource(
             List<IntegrationResource> resources,
-            NotionWebhookTarget target
+            NotionWebhookTarget target,
+            CollectionContext context
     ) {
         if (resources.isEmpty()) {
             return null;
@@ -103,44 +159,71 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
             if (!visited.add(current.type() + ":" + current.id())) {
                 return null;
             }
-            current = parentOf(current, token);
+            current = parentOf(current, token, context);
         }
         return null;
     }
 
-    void collectChangedEntity(IntegrationResource resource, NotionWebhookTarget target) {
+    void collectChangedEntity(IntegrationResource resource, NotionWebhookTarget target, CollectionContext context) {
         String token = projectIntegrationService.decryptAccessToken(resource.getProjectIntegration());
+        NotionUserResolver.Session userSession = userResolver.begin(
+                resource.getProjectIntegration().getId(), token, context);
+        collectChangedEntity(resource, target, context, userSession);
+    }
+
+    void collectChangedEntity(
+            IntegrationResource resource,
+            NotionWebhookTarget target,
+            CollectionContext context,
+            NotionUserResolver.Session userSession
+    ) {
+        String token = userSession.accessToken();
         String type = normalizeType(target.entityType());
         if ("page".equals(type)) {
-            collectPage(resource, target.entityId(), token, new HashSet<>());
+            collectPage(resource, target.entityId(), token, context, userSession, new HashSet<>());
             return;
         }
         if ("block".equals(type)) {
-            collectBlock(resource, target.entityId(), token, new HashSet<>());
+            collectBlock(resource, target.entityId(), token, context, userSession, new HashSet<>());
             return;
         }
         if ("comment".equals(type) && target.parentId() != null) {
-            collectComments(resource, target.parentId(), token);
+            collectComments(resource, target.parentId(), token, context, userSession);
             return;
         }
-        collect(resource, token);
+        collect(resource, token, context, userSession);
     }
 
-    private void collectPage(IntegrationResource resource, String pageId, String token, Set<String> visitedBlocks) {
-        JsonNode page = get("/v1/pages/" + pageId, token);
+    private void collectPage(
+            IntegrationResource resource,
+            String pageId,
+            String token,
+            CollectionContext context,
+            NotionUserResolver.Session userSession,
+            Set<String> visitedBlocks
+    ) {
+        JsonNode page = get("/v1/pages/" + pageId, token, context);
         JsonNode createdBy = page.path("created_by");
         JsonNode editedBy = page.path("last_edited_by");
-        JsonNode actor = preferredActor(editedBy, createdBy);
+        NotionUserResolver.Actor actor = userResolver.resolve(
+                userSession, preferredActor(editedBy, createdBy));
         activityStoreService.store(resource, IntegrationActivityType.NOTION_PAGE_SNAPSHOT,
                 "page:" + pageId + ":" + page.path("last_edited_time").asText("current"),
-                actorId(actor), actorName(actor), actorEmail(actor),
+                actor.providerId(), actor.login(), actor.email(),
                 parseInstant(page.path("last_edited_time").asText(page.path("created_time").asText(null))),
                 page.path("url").asText(resource.getResourceUrl()), page.toString());
-        collectBlocks(resource, pageId, token, visitedBlocks);
-        collectComments(resource, pageId, token);
+        collectBlocks(resource, pageId, token, context, userSession, visitedBlocks);
+        collectComments(resource, pageId, token, context, userSession);
     }
 
-    private void collectBlocks(IntegrationResource resource, String blockId, String token, Set<String> visitedBlocks) {
+    private void collectBlocks(
+            IntegrationResource resource,
+            String blockId,
+            String token,
+            CollectionContext context,
+            NotionUserResolver.Session userSession,
+            Set<String> visitedBlocks
+    ) {
         if (!visitedBlocks.add(blockId)) {
             return;
         }
@@ -149,15 +232,15 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
         do {
             String path = "/v1/blocks/" + blockId + "/children?page_size=100"
                     + (cursor == null ? "" : "&start_cursor=" + cursor);
-            JsonNode body = get(path, token);
+            JsonNode body = get(path, token, context);
             for (JsonNode block : body.path("results")) {
                 String id = block.path("id").asText();
-                storeBlock(resource, block);
+                storeBlock(resource, block, userSession);
                 if (!id.isBlank()) {
-                    collectComments(resource, id, token);
+                    collectComments(resource, id, token, context, userSession);
                 }
                 if (block.path("has_children").asBoolean(false) && !id.isBlank()) {
-                    collectBlocks(resource, id, token, visitedBlocks);
+                    collectBlocks(resource, id, token, context, userSession, visitedBlocks);
                 }
             }
             cursor = nextCursor(body, requestedCursors, "block-children", blockId);
@@ -168,30 +251,39 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
             IntegrationResource resource,
             String blockId,
             String token,
+            CollectionContext context,
+            NotionUserResolver.Session userSession,
             Set<String> visitedBlocks
     ) {
         if (!visitedBlocks.add(blockId)) {
             return;
         }
-        JsonNode block = get("/v1/blocks/" + blockId, token);
-        storeBlock(resource, block);
-        collectComments(resource, blockId, token);
+        JsonNode block = get("/v1/blocks/" + blockId, token, context);
+        storeBlock(resource, block, userSession);
+        collectComments(resource, blockId, token, context, userSession);
         if (block.path("has_children").asBoolean(false)) {
-            collectBlocks(resource, blockId, token, visitedBlocks);
+            collectBlocks(resource, blockId, token, context, userSession, visitedBlocks);
         }
     }
 
-    private void collectComments(IntegrationResource resource, String pageId, String token) {
+    private void collectComments(
+            IntegrationResource resource,
+            String pageId,
+            String token,
+            CollectionContext context,
+            NotionUserResolver.Session userSession
+    ) {
         String cursor = null;
         Set<String> requestedCursors = new HashSet<>();
         do {
             String path = "/v1/comments?block_id=" + pageId + "&page_size=100"
                     + (cursor == null ? "" : "&start_cursor=" + cursor);
-            JsonNode body = get(path, token);
+            JsonNode body = get(path, token, context);
             for (JsonNode comment : body.path("results")) {
-                JsonNode author = comment.path("created_by");
+                NotionUserResolver.Actor author = userResolver.resolve(userSession, comment.path("created_by"));
                 activityStoreService.store(resource, IntegrationActivityType.NOTION_COMMENT,
-                        "comment:" + comment.path("id").asText(), actorId(author), actorName(author), actorEmail(author),
+                        "comment:" + comment.path("id").asText(),
+                        author.providerId(), author.login(), author.email(),
                         parseInstant(comment.path("created_time").asText(null)), resource.getResourceUrl(), comment.toString());
             }
             cursor = nextCursor(body, requestedCursors, "page-comments", pageId);
@@ -211,8 +303,9 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
         return cursor;
     }
 
-    private JsonNode get(String path, String token) {
+    private JsonNode get(String path, String token, CollectionContext context) {
         try {
+            context.heartbeat();
             rateLimiter.acquire();
             return restClient.get().uri(API_BASE_URL + path)
                     .header("Notion-Version", NOTION_VERSION)
@@ -234,23 +327,13 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
                 ? fallback : preferred;
     }
 
-    private String actorId(JsonNode actor) {
-        return actor.path("id").asText(null);
-    }
-
-    private String actorName(JsonNode actor) {
-        return actor.path("name").asText(null);
-    }
-
-    private String actorEmail(JsonNode actor) {
-        return actor.path("person").path("email").asText(null);
-    }
-
-    private JsonNode post(String path, String token, Object request) {
+    private JsonNode post(String path, String token, CollectionContext context, Object request) {
         try {
+            context.heartbeat();
             rateLimiter.acquire();
             return restClient.post().uri(API_BASE_URL + path)
                     .header("Notion-Version", NOTION_VERSION)
+                    .contentType(MediaType.APPLICATION_JSON)
                     .headers(headers -> headers.setBearerAuth(token))
                     .body(request)
                     .retrieve().body(JsonNode.class);
@@ -273,17 +356,24 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
         }
     }
 
-    private void storeBlock(IntegrationResource resource, JsonNode block) {
+    private void storeBlock(
+            IntegrationResource resource,
+            JsonNode block,
+            NotionUserResolver.Session userSession
+    ) {
         String id = block.path("id").asText();
-        JsonNode actor = preferredActor(block.path("last_edited_by"), block.path("created_by"));
+        NotionUserResolver.Actor actor = userResolver.resolve(
+                userSession,
+                preferredActor(block.path("last_edited_by"), block.path("created_by"))
+        );
         activityStoreService.store(resource, IntegrationActivityType.NOTION_BLOCK_SNAPSHOT,
                 "block:" + id + ":" + block.path("last_edited_time").asText("current"),
-                actorId(actor), actorName(actor), actorEmail(actor),
+                actor.providerId(), actor.login(), actor.email(),
                 parseInstant(block.path("last_edited_time").asText(block.path("created_time").asText(null))),
                 resource.getResourceUrl(), block.toString());
     }
 
-    private ParentRef parentOf(ParentRef current, String token) {
+    private ParentRef parentOf(ParentRef current, String token, CollectionContext context) {
         String path = switch (current.type()) {
             case "page" -> "/v1/pages/" + current.id();
             case "block" -> "/v1/blocks/" + current.id();
@@ -294,7 +384,7 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
         if (path == null) {
             return null;
         }
-        JsonNode parent = get(path, token).path("parent");
+        JsonNode parent = get(path, token, context).path("parent");
         String type = normalizeType(parent.path("type").asText(null));
         if (type == null || "workspace".equals(type)) {
             return null;

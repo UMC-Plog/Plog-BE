@@ -5,8 +5,8 @@ import com.plog.domain.integration.entity.CollectionPhase;
 /**
  * collector와 잡 워커 사이의 재개·진행 보고 통로.
  *
- * <p>GitHub collector만 실제로 사용한다. 나머지 provider는 리소스 하나가 단발 호출이라
- * 리소스 단위 커서로 충분하므로 이 컨텍스트를 무시한다.</p>
+ * <p>GitHub collector는 재개 커서와 진행 보고를 사용하고, pagination이나 재귀 호출이 긴
+ * 다른 provider collector는 heartbeat만 사용한다.</p>
  */
 interface CollectionContext {
 

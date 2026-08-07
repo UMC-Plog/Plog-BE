@@ -148,6 +148,53 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
         });
     }
 
+    @Test
+    void backfillActorSnapshotByProviderIdFillsOnlyBlankActorFieldsInRequestedIntegration() {
+        Project project = entityManager.persist(project());
+        ProjectMember member = entityManager.persist(member(
+                project,
+                User.createLocal("backfill@example.com", "encoded", "보강", "backfill"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration integration = entityManager.persist(integration(project, member));
+        IntegrationResource resource = entityManager.persist(resource(integration, member));
+        IntegrationActivity missingBoth = entityManager.persist(activity(
+                resource, null, "event-missing-both", "provider-actor", null, null));
+        IntegrationActivity blankLogin = entityManager.persist(activity(
+                resource, null, "event-blank-login", "provider-actor", " ", "existing@example.com"));
+        IntegrationActivity blankEmail = entityManager.persist(activity(
+                resource, null, "event-blank-email", "provider-actor", "existing-login", " "));
+        IntegrationActivity existingSnapshot = entityManager.persist(activity(
+                resource, null, "event-existing", "provider-actor", "kept-login", "kept@example.com"));
+        IntegrationActivity otherActor = entityManager.persist(activity(
+                resource, null, "event-other-actor", "other-actor", null, null));
+
+        Project otherProject = entityManager.persist(project("other-backfill"));
+        ProjectMember otherMember = entityManager.persist(member(
+                otherProject,
+                User.createLocal("other-backfill@example.com", "encoded", "다른", "other-backfill"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration otherIntegration = entityManager.persist(integration(otherProject, otherMember));
+        IntegrationResource otherResource = entityManager.persist(resource(otherIntegration, otherMember));
+        IntegrationActivity otherIntegrationActivity = entityManager.persist(activity(
+                otherResource, null, "event-other-integration", "provider-actor", null, null));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(activityRepository.backfillActorSnapshotByProviderId(
+                integration.getId(), "provider-actor", "new-login", "new@example.com"
+        )).isEqualTo(3);
+        entityManager.clear();
+
+        assertActorSnapshot(missingBoth.getId(), "new-login", "new@example.com");
+        assertActorSnapshot(blankLogin.getId(), "new-login", "existing@example.com");
+        assertActorSnapshot(blankEmail.getId(), "existing-login", "new@example.com");
+        assertActorSnapshot(existingSnapshot.getId(), "kept-login", "kept@example.com");
+        assertActorSnapshot(otherActor.getId(), null, null);
+        assertActorSnapshot(otherIntegrationActivity.getId(), null, null);
+    }
+
     @ParameterizedTest
     @CsvSource(nullValues = "NULL", textBlock = """
             provider-actor,NULL,NULL
@@ -451,6 +498,12 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
         return ((Number) entityManager.getEntityManager()
                 .createNativeQuery("select count(*) from " + tableName)
                 .getSingleResult()).longValue();
+    }
+
+    private void assertActorSnapshot(Long activityId, String actorLogin, String actorEmail) {
+        IntegrationActivity activity = activityRepository.findById(activityId).orElseThrow();
+        assertThat(activity.getActorLogin()).isEqualTo(actorLogin);
+        assertThat(activity.getActorEmail()).isEqualTo(actorEmail);
     }
 
     private void createLegacyIntegrationTables() {

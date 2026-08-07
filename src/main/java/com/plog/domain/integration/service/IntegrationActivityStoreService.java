@@ -60,6 +60,26 @@ public class IntegrationActivityStoreService {
         );
     }
 
+    @Transactional
+    public int backfillActorDisplayInfo(
+            Long projectIntegrationId,
+            String actorProviderId,
+            String actorLogin,
+            String actorEmail
+    ) {
+        if (projectIntegrationId == null || isBlank(actorProviderId)
+                || (isBlank(actorLogin) && isBlank(actorEmail))) {
+            return 0;
+        }
+        return integrationActivityRepository.backfillActorSnapshotByProviderId(
+                projectIntegrationId, actorProviderId, actorLogin, actorEmail
+        );
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
     private com.plog.domain.project.entity.ProjectMember resolveActor(
             IntegrationResource resource,
             String actorProviderId,

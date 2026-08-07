@@ -41,6 +41,7 @@ class NotionWebhookCollectionWorker {
     private final ProjectIntegrationRepository projectIntegrationRepository;
     private final IntegrationResourceRepository integrationResourceRepository;
     private final NotionIntegrationResourceCollector notionCollector;
+    private final NotionUserResolver notionUserResolver;
     private final IntegrationActivityStoreService activityStoreService;
     private final IntegrationResourceCollectionStateService resourceStateService;
     private final ProjectIntegrationService projectIntegrationService;
@@ -107,7 +108,7 @@ class NotionWebhookCollectionWorker {
             }
             IntegrationResource resource;
             try {
-                resource = notionCollector.findContainingResource(resources, latest.target());
+                resource = notionCollector.findContainingResource(resources, latest.target(), CollectionContext.noop());
             } catch (ProviderResourceAccessException exception) {
                 FailureResult result = handleProviderFailure(
                         integration, null, latest, exception, failures);
@@ -122,8 +123,13 @@ class NotionWebhookCollectionWorker {
             resourceStateService.markRunning(resource.getId(), Instant.now());
             activityStoreService.beginResourceCollection();
             try {
-                storeWebhookActivities(resource, batch.events());
-                notionCollector.collectChangedEntity(resource, latest.target());
+                CollectionContext collectionContext = CollectionContext.noop();
+                String token = projectIntegrationService.decryptAccessToken(integration);
+                NotionUserResolver.Session userSession = notionUserResolver.begin(
+                        integration.getId(), token, collectionContext);
+                storeWebhookActivities(resource, batch.events(), userSession);
+                notionCollector.collectChangedEntity(
+                        resource, latest.target(), collectionContext, userSession);
                 resourceStateService.markCollected(resource.getId(), Instant.now());
                 collectedResources++;
             } catch (ProviderResourceAccessException exception) {
@@ -222,17 +228,24 @@ class NotionWebhookCollectionWorker {
 
     private void storeWebhookActivities(
             IntegrationResource resource,
-            List<NotionWebhookBatch.Event> events
+            List<NotionWebhookBatch.Event> events,
+            NotionUserResolver.Session userSession
     ) {
         for (NotionWebhookBatch.Event event : events) {
             JsonNode authors = readAuthors(event.authorsJson());
             if (authors.size() == 0) {
-                storeWebhookActivity(resource, event, null, "unknown");
+                storeWebhookActivity(resource, event, null, "unknown", userSession);
                 continue;
             }
             for (JsonNode author : authors) {
                 String actorId = author.path("id").asText(null);
-                storeWebhookActivity(resource, event, author, actorId == null ? "unknown" : actorId);
+                storeWebhookActivity(
+                        resource,
+                        event,
+                        author,
+                        actorId == null ? "unknown" : actorId,
+                        userSession
+                );
             }
         }
     }
@@ -241,15 +254,17 @@ class NotionWebhookCollectionWorker {
             IntegrationResource resource,
             NotionWebhookBatch.Event event,
             JsonNode author,
-            String actorKey
+            String actorKey,
+            NotionUserResolver.Session userSession
     ) {
+        NotionUserResolver.Actor actor = notionUserResolver.resolve(userSession, author);
         activityStoreService.store(
                 resource,
                 IntegrationActivityType.NOTION_WEBHOOK_EVENT,
                 "webhook:" + event.eventId() + ":" + actorKey,
-                author == null ? null : author.path("id").asText(null),
-                author == null ? null : author.path("name").asText(null),
-                author == null ? null : author.path("person").path("email").asText(null),
+                actor.providerId(),
+                actor.login(),
+                actor.email(),
                 event.occurredAt(),
                 resource.getResourceUrl(),
                 event.rawPayload()
