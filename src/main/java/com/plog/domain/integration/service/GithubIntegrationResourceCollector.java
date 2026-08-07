@@ -138,8 +138,11 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
     private String annotatedTagTargetSha(String repositoryPath, String tagSha, String token, CollectionContext context) {
         Set<String> visited = new HashSet<>();
         String currentSha = tagSha;
-        for (int depth = 0; depth < 5 && currentSha != null && !currentSha.isBlank()
-                && visited.add(currentSha); depth++) {
+        while (currentSha != null && !currentSha.isBlank()) {
+            if (!visited.add(currentSha)) {
+                log.warn("GitHub annotated tag loop detected. repository={}, tagSha={}", repositoryPath, tagSha);
+                return null;
+            }
             JsonNode tag = get("/repos/" + repositoryPath + "/git/tags/" + currentSha, token, context);
             if (tag == null) {
                 return null;
@@ -155,7 +158,6 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
             }
             currentSha = targetSha;
         }
-        log.warn("GitHub annotated tag chain could not be resolved. repository={}, tagSha={}", repositoryPath, tagSha);
         return null;
     }
 
