@@ -25,6 +25,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpRequest;
 import org.springframework.http.client.ClientHttpResponse;
@@ -52,6 +53,7 @@ class GithubIntegrationResourceCollectorTest {
     private final Map<String, String> tagObjectsBySha = new HashMap<>();
     private String issuesBody = "[]";
     private String pullsBody = "[]";
+    private String pagedCommitRefSha;
 
     private GithubIntegrationResourceCollector collector;
 
@@ -143,6 +145,22 @@ class GithubIntegrationResourceCollectorTest {
         assertThat(requestedUris).anyMatch(uri -> uri.contains("/commits?") && uri.contains("sha=tagged-commit"));
         verify(activityStoreService).store(any(), eq(IntegrationActivityType.GITHUB_COMMIT),
                 eq("commit:tagged-commit"), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("commit 페이지가 101페이지를 넘어도 Link next를 따라 끝까지 저장한다")
+    void collectsCommitHistoryPastOneHundredOnePages() {
+        branchRefsBody = """
+                [{"ref":"refs/heads/main","object":{"sha":"long-history"}}]
+                """;
+        pagedCommitRefSha = "long-history";
+
+        collect(resource(null), CollectionContext.noop());
+
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/commits?") && uri.contains("page=101"));
+        assertThat(requestedUris).anyMatch(uri -> uri.contains("/commits?") && uri.contains("page=102"));
+        verify(activityStoreService, times(102)).store(any(), eq(IntegrationActivityType.GITHUB_COMMIT),
+                any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -327,7 +345,23 @@ class GithubIntegrationResourceCollectorTest {
         } else if (uri.contains("/git/tags/")) {
             body = tagObjectsBySha.getOrDefault(pathTail(uri), "{}");
         } else if (uri.contains("/commits?")) {
-            body = commitsByRefSha.getOrDefault(shaQueryValue(uri), "[]");
+            String refSha = shaQueryValue(uri);
+            if (refSha.equals(pagedCommitRefSha)) {
+                int page = pageQueryValue(uri);
+                body = """
+                        [{"sha":"sha-%d","author":{"id":"1","login":"chan"},
+                          "commit":{"author":{"email":"chan@example.com","date":"2026-01-02T00:00:00Z"}},
+                          "html_url":"https://github.com/UMC-Plog/Plog-FE/commit/sha-%d"}]
+                        """.formatted(page, page);
+                var response = MockRestResponseCreators.withSuccess(body, MediaType.APPLICATION_JSON);
+                if (page < 102) {
+                    response.header(HttpHeaders.LINK,
+                            "<https://api.github.com/repos/UMC-Plog/Plog-FE/commits?per_page=100&sha="
+                                    + refSha + "&page=" + (page + 1) + ">; rel=\"next\"");
+                }
+                return response.createResponse(request);
+            }
+            body = commitsByRefSha.getOrDefault(refSha, "[]");
         } else if (uri.contains("/issues?")) {
             body = issuesBody;
         } else if (uri.contains("/pulls?")) {
@@ -345,6 +379,20 @@ class GithubIntegrationResourceCollectorTest {
         }
         int end = uri.indexOf('&', start);
         return end < 0 ? uri.substring(start + marker.length()) : uri.substring(start + marker.length(), end);
+    }
+
+    private int pageQueryValue(String uri) {
+        String query = java.net.URI.create(uri).getRawQuery();
+        if (query == null || query.isBlank()) {
+            return 1;
+        }
+        for (String parameter : query.split("&")) {
+            String[] pair = parameter.split("=", 2);
+            if (pair.length == 2 && "page".equals(pair[0])) {
+                return Integer.parseInt(pair[1]);
+            }
+        }
+        return 1;
     }
 
     private String pathTail(String uri) {
