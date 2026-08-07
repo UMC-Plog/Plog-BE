@@ -130,6 +130,7 @@ jobs:
             SOCIAL_GOOGLE_CLIENT_SECRET=${{ secrets.SOCIAL_GOOGLE_CLIENT_SECRET }}
             SOCIAL_GOOGLE_REDIRECT_URI=${{ secrets.SOCIAL_GOOGLE_REDIRECT_URI || 'https://umc-plog.site/oauth/google' }}
             FCM_ENABLED=true
+            REPORT_SCHEDULER_ENABLED=true
             FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
             GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/firebase-service-account.json
             LLM_PROVIDER=gemini

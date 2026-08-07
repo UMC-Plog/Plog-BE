@@ -21,14 +21,17 @@ class ProjectNotificationListenerTest {
         ChatMessageNotificationEvent chat =
                 new ChatMessageNotificationEvent(1L, 2L, 3L, 4L, List.of(5L), "메시지");
         PeerEvaluationStartedEvent peer = new PeerEvaluationStartedEvent(1L, 4L);
+        NoticePublishedEvent notice = new NoticePublishedEvent(1L, 7L);
         ReportPublishedEvent report = new ReportPublishedEvent(1L, 6L);
 
         listener.onChatMessage(chat);
         listener.onPeerEvaluationStarted(peer);
+        listener.onNoticePublished(notice);
         listener.onReportPublished(report);
 
         verify(notificationService).sendChatMessage(chat);
         verify(notificationService).sendPeerEvaluationStarted(peer);
+        verify(notificationService).sendNoticePublished(notice);
         verify(notificationService).sendReportPublished(report);
     }
 
@@ -36,6 +39,7 @@ class ProjectNotificationListenerTest {
     void 원본_트랜잭션_커밋_후에만_알림을_발송한다() throws NoSuchMethodException {
         assertAfterCommit("onChatMessage", ChatMessageNotificationEvent.class);
         assertAfterCommit("onPeerEvaluationStarted", PeerEvaluationStartedEvent.class);
+        assertAfterCommit("onNoticePublished", NoticePublishedEvent.class);
         assertAfterCommit("onReportPublished", ReportPublishedEvent.class);
     }
 

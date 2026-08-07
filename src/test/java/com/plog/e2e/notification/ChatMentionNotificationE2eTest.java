@@ -59,9 +59,8 @@ class ChatMentionNotificationE2eTest extends E2eTestBase {
             verify(fcmGateway, timeout(3_000).times(1)).send(captor.capture());
             FcmMessage message = captor.getValue();
             assertThat(message.token()).isEqualTo("target-token");
-            // C안: title = 프로젝트명, body = "{프로젝트명}: {닉네임}님이 회원님을 멘션했습니다." (preview 미사용)
             assertThat(message.title()).isEqualTo("Plog mention");
-            assertThat(message.body()).isEqualTo("Plog mention: 곰곰님이 회원님을 멘션했습니다.");
+            assertThat(message.body()).isEqualTo("곰곰님이 회원님을 멘션했습니다.");
             assertThat(message.data())
                     .containsEntry("projectId", projectId.toString())
                     .containsEntry("roomId", "55")
