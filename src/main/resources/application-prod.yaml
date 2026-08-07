@@ -1,9 +1,4 @@
 spring:
-  flyway:
-    enabled: true
-    baseline-on-migrate: true
-    baseline-version: 0
-    locations: classpath:db/migration
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -12,8 +7,12 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      # 스키마가 안정되면 Flyway 도입 후 validate 로 전환 권장 (지금은 개발 편의상 update)
-      ddl-auto: update
+      # 스키마 변경은 전적으로 이 설정에 의존한다(마이그레이션 도구 없음).
+      # update가 못 하는 작업 — 컬럼 rename, 타입 축소, 기존 데이터에 NOT NULL 승격,
+      # 컬럼·테이블 삭제, 데이터 백필 — 은 psql로 직접 DDL을 쳐야 한다.
+      #
+      # create/create-drop 금지: 부팅할 때마다 drop+create 라서 재배포·재기동마다 전부 날아간다.
+      ddl-auto: create
     properties:
       hibernate:
         format_sql: false
