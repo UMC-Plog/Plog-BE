@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.plog.domain.integration.entity.IntegrationActivityType;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.LinkType;
+import com.plog.domain.integration.entity.ProjectIntegration;
 import java.net.URI;
 import java.time.Instant;
 import java.util.HashSet;
@@ -54,8 +55,12 @@ class FigmaIntegrationResourceCollector implements IntegrationResourceCollector 
     }
 
     @Override
-    public void collect(IntegrationResource resource, CollectionContext context) {
-        String token = projectIntegrationService.decryptAccessToken(resource.getProjectIntegration());
+    public void collect(
+            IntegrationResource resource,
+            ProjectIntegration verifiedIntegration,
+            CollectionContext context
+    ) {
+        String token = projectIntegrationService.decryptAccessToken(verifiedIntegration);
         String fileKey = resource.getProviderResourceId();
         JsonNode file = get("/v1/files/" + fileKey + "?depth=1", token, context);
         activityStoreService.store(resource, IntegrationActivityType.FIGMA_FILE_METADATA,

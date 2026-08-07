@@ -4,6 +4,7 @@ import com.plog.domain.integration.entity.IntegrationCollectionJob;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.IntegrationResourceStatus;
 import com.plog.domain.integration.entity.LinkType;
+import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.IntegrationResourceRepository;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectRepository;
@@ -18,10 +19,9 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
@@ -105,7 +105,7 @@ public class IntegrationDataCollectionService {
 
     private CollectionOutcome collectResources(Long projectId, CollectionContext context) {
         List<CollectionFailure> failures = new ArrayList<>();
-        Set<Long> verifiedIntegrationIds = new HashSet<>();
+        Map<Long, ProjectIntegration> verifiedIntegrations = new HashMap<>();
         List<IntegrationResource> resources = integrationResourceRepository
                 .findAllByProjectIntegrationProjectIdAndResourceStatusOrderByIdAsc(
                         projectId, IntegrationResourceStatus.ACTIVE);
@@ -127,7 +127,7 @@ public class IntegrationDataCollectionService {
                 continue;
             }
             resourceCollectionStateService.markPending(resource.getId(), Instant.now());
-            if (collectResource(resource, collector, failures, verifiedIntegrationIds, context)) {
+            if (collectResource(resource, collector, failures, verifiedIntegrations, context)) {
                 collectedResourceCount++;
             }
         }
@@ -163,15 +163,16 @@ public class IntegrationDataCollectionService {
             IntegrationResource resource,
             IntegrationResourceCollector collector,
             List<CollectionFailure> failures,
-            Set<Long> verifiedIntegrationIds,
+            Map<Long, ProjectIntegration> verifiedIntegrations,
             CollectionContext context
     ) {
         for (int attempt = 1; attempt <= MAX_TEMPORARY_ATTEMPTS; attempt++) {
             try {
                 resourceCollectionStateService.markRunning(resource.getId(), Instant.now());
                 integrationActivityStoreService.beginResourceCollection();
-                verifyIntegrationIfNeeded(resource, verifiedIntegrationIds);
-                collector.collect(resource, context);
+                ProjectIntegration verifiedIntegration = verifyIntegrationIfNeeded(
+                        resource, verifiedIntegrations);
+                collector.collect(resource, verifiedIntegration, context);
                 resourceCollectionStateService.markCollected(resource.getId(), Instant.now());
                 return true;
             } catch (ProviderResourceAccessException exception) {
@@ -201,16 +202,20 @@ public class IntegrationDataCollectionService {
         return false;
     }
 
-    private void verifyIntegrationIfNeeded(IntegrationResource resource, Set<Long> verifiedIntegrationIds) {
+    private ProjectIntegration verifyIntegrationIfNeeded(
+            IntegrationResource resource,
+            Map<Long, ProjectIntegration> verifiedIntegrations
+    ) {
         Long integrationId = resource.getProjectIntegration().getId();
-        if (verifiedIntegrationIds.contains(integrationId)) {
-            return;
+        if (verifiedIntegrations.containsKey(integrationId)) {
+            return verifiedIntegrations.get(integrationId);
         }
-        integrationVerificationService.requireVerifiedConnection(
+        ProjectIntegration verifiedIntegration = integrationVerificationService.requireVerifiedConnection(
                 resource.getProjectIntegration().getProject().getId(),
                 resource.getProjectIntegration().getLinkType()
         );
-        verifiedIntegrationIds.add(integrationId);
+        verifiedIntegrations.put(integrationId, verifiedIntegration);
+        return verifiedIntegration;
     }
 
     private boolean handleProviderFailure(

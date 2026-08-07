@@ -6,6 +6,7 @@ import com.plog.domain.integration.entity.IntegrationActivityType;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.IntegrationResourceType;
 import com.plog.domain.integration.entity.LinkType;
+import com.plog.domain.integration.entity.ProjectIntegration;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -61,8 +62,12 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     }
 
     @Override
-    public void collect(IntegrationResource resource, CollectionContext context) {
-        String token = projectIntegrationService.decryptAccessToken(resource.getProjectIntegration());
+    public void collect(
+            IntegrationResource resource,
+            ProjectIntegration verifiedIntegration,
+            CollectionContext context
+    ) {
+        String token = projectIntegrationService.decryptAccessToken(verifiedIntegration);
         String fileId = resource.getProviderResourceId();
         collectFileMetadata(resource, fileId, token, context);
         collectOptional(() -> collectDriveActivity(resource, fileId, token, context));

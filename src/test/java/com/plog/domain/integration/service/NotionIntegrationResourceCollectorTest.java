@@ -71,7 +71,7 @@ class NotionIntegrationResourceCollectorTest {
                 {"results":[],"has_more":false}
                 """);
 
-        fixture.collector.collect(resource, context);
+        fixture.collector.collect(resource, resource.getProjectIntegration(), context);
 
         fixture.server.verify();
         assertThat(context.heartbeats).isEqualTo(3);
@@ -112,7 +112,7 @@ class NotionIntegrationResourceCollectorTest {
                 {"results":[],"has_more":false}
                 """);
 
-        fixture.collector.collect(resource, context);
+        fixture.collector.collect(resource, resource.getProjectIntegration(), context);
 
         fixture.server.verify();
         assertThat(context.heartbeats).isEqualTo(7);
@@ -162,7 +162,7 @@ class NotionIntegrationResourceCollectorTest {
                 {"results":[],"has_more":false}
                 """);
 
-        fixture.collector.collect(resource, context);
+        fixture.collector.collect(resource, resource.getProjectIntegration(), context);
 
         fixture.server.verify();
         assertThat(context.heartbeats).isEqualTo(5);

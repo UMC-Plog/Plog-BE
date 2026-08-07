@@ -58,7 +58,7 @@ class GithubIntegrationResourceCollectorTest {
     @Test
     @DisplayName("lastCollectedAt이 없으면 프로젝트 시작일을 since로 쓴다")
     void usesProjectStartDayOnFirstCollection() {
-        collector.collect(resource(null), CollectionContext.noop());
+        collect(resource(null), CollectionContext.noop());
 
         assertThat(commitsUri()).contains("since=2026-01-01T00:00:00Z");
     }
@@ -68,7 +68,7 @@ class GithubIntegrationResourceCollectorTest {
     void usesWatermarkMinusOverlapOnRecollection() {
         Instant watermark = Instant.parse("2026-08-05T13:00:00Z");
 
-        collector.collect(resource(watermark), CollectionContext.noop());
+        collect(resource(watermark), CollectionContext.noop());
 
         assertThat(commitsUri()).contains("since=2026-08-05T12:00:00Z");
     }
@@ -82,7 +82,7 @@ class GithubIntegrationResourceCollectorTest {
                   "html_url":"https://github.com/UMC-Plog/Plog-FE/issues/7"}]
                 """;
 
-        collector.collect(resource(null), CollectionContext.noop());
+        collect(resource(null), CollectionContext.noop());
 
         assertThat(requestedUris).noneMatch(uri -> uri.contains("/issues/7/comments"));
         assertThat(requestedUris).anyMatch(uri -> uri.contains("/issues/7/events"));
@@ -97,7 +97,7 @@ class GithubIntegrationResourceCollectorTest {
                   "html_url":"https://github.com/UMC-Plog/Plog-FE/issues/7"}]
                 """;
 
-        collector.collect(resource(null), CollectionContext.noop());
+        collect(resource(null), CollectionContext.noop());
 
         assertThat(requestedUris).anyMatch(uri -> uri.contains("/issues/7/comments"));
     }
@@ -114,7 +114,7 @@ class GithubIntegrationResourceCollectorTest {
                   "html_url":"https://github.com/UMC-Plog/Plog-FE/pull/9"}]
                 """;
 
-        collector.collect(resource(Instant.parse("2026-08-05T13:00:00Z")), CollectionContext.noop());
+        collect(resource(Instant.parse("2026-08-05T13:00:00Z")), CollectionContext.noop());
 
         assertThat(requestedUris).noneMatch(uri -> uri.contains("/pulls/3/reviews"));
         assertThat(requestedUris).anyMatch(uri -> uri.contains("/pulls/9/reviews"));
@@ -129,7 +129,7 @@ class GithubIntegrationResourceCollectorTest {
                   "html_url":"https://github.com/UMC-Plog/Plog-FE/pull/3"}]
                 """;
 
-        collector.collect(resource(null), CollectionContext.noop());
+        collect(resource(null), CollectionContext.noop());
 
         assertThat(requestedUris).anyMatch(uri -> uri.contains("/pulls/3/reviews"));
     }
@@ -137,7 +137,7 @@ class GithubIntegrationResourceCollectorTest {
     @Test
     @DisplayName("이슈와 PR 목록을 created 오름차순으로 요청한다")
     void requestsStableOrderingForResume() {
-        collector.collect(resource(null), CollectionContext.noop());
+        collect(resource(null), CollectionContext.noop());
 
         assertThat(requestedUris).anyMatch(
                 uri -> uri.contains("/issues?") && uri.contains("sort=created&direction=asc"));
@@ -151,7 +151,7 @@ class GithubIntegrationResourceCollectorTest {
         RecordingContext context = new RecordingContext(
                 new CollectionCursor(1L, CollectionPhase.ISSUES, null));
 
-        collector.collect(resource(null), context);
+        collect(resource(null), context);
 
         assertThat(requestedUris).noneMatch(uri -> uri.contains("/commits"));
         assertThat(requestedUris).noneMatch(uri -> uri.contains("/pulls?"));
@@ -164,7 +164,7 @@ class GithubIntegrationResourceCollectorTest {
         RecordingContext context = new RecordingContext(
                 new CollectionCursor(999L, CollectionPhase.ISSUES, null));
 
-        collector.collect(resource(null), context);
+        collect(resource(null), context);
 
         assertThat(requestedUris).anyMatch(uri -> uri.contains("/commits"));
     }
@@ -183,7 +183,7 @@ class GithubIntegrationResourceCollectorTest {
         RecordingContext context = new RecordingContext(
                 new CollectionCursor(1L, CollectionPhase.ISSUES, 42));
 
-        collector.collect(resource(null), context);
+        collect(resource(null), context);
 
         assertThat(requestedUris).noneMatch(uri -> uri.contains("/issues/42/events"));
         assertThat(requestedUris).anyMatch(uri -> uri.contains("/issues/43/events"));
@@ -204,7 +204,7 @@ class GithubIntegrationResourceCollectorTest {
                 """;
         RecordingContext context = new RecordingContext(CollectionCursor.start());
 
-        collector.collect(resource(null), context);
+        collect(resource(null), context);
 
         assertThat(context.advances).containsExactly("PULL_REQUESTS:3", "ISSUES:7");
     }
@@ -214,7 +214,7 @@ class GithubIntegrationResourceCollectorTest {
     void reportsHeartbeatPerApiCall() {
         RecordingContext context = new RecordingContext(CollectionCursor.start());
 
-        collector.collect(resource(null), context);
+        collect(resource(null), context);
 
         assertThat(context.heartbeats).isEqualTo(requestedUris.size());
     }
@@ -224,6 +224,10 @@ class GithubIntegrationResourceCollectorTest {
                 .filter(uri -> uri.contains("/commits"))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("commits API가 호출되지 않았다: " + requestedUris));
+    }
+
+    private void collect(IntegrationResource resource, CollectionContext context) {
+        collector.collect(resource, resource.getProjectIntegration(), context);
     }
 
     private void record(ClientHttpRequest request) {

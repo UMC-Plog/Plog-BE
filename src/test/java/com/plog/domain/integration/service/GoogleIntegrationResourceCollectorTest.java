@@ -88,7 +88,8 @@ class GoogleIntegrationResourceCollectorTest {
                 """);
         expectDocumentSnapshot(fixture.server);
 
-        fixture.collector.collect(resource, CollectionContext.noop());
+        fixture.collector.collect(
+                resource, resource.getProjectIntegration(), CollectionContext.noop());
 
         fixture.server.verify();
         assertThat(storedTypes()).containsExactly(
@@ -125,7 +126,8 @@ class GoogleIntegrationResourceCollectorTest {
         expectRevisions(fixture.server, "{}");
         expectPresentationSnapshot(fixture.server);
 
-        fixture.collector.collect(resource, CollectionContext.noop());
+        fixture.collector.collect(
+                resource, resource.getProjectIntegration(), CollectionContext.noop());
 
         fixture.server.verify();
         assertThat(storedTypes()).containsExactly(
@@ -157,11 +159,36 @@ class GoogleIntegrationResourceCollectorTest {
         expectRevisions(fixture.server, "{}");
         expectDocumentSnapshot(fixture.server);
 
-        fixture.collector.collect(resource, context);
+        fixture.collector.collect(resource, resource.getProjectIntegration(), context);
 
         fixture.server.verify();
         assertThat(fixture.requestedUris).hasSize(6);
         assertThat(context.heartbeats).isEqualTo(fixture.requestedUris.size());
+    }
+
+    @Test
+    @DisplayName("검증에서 반환된 최신 연동의 access token을 사용한다")
+    void usesAccessTokenFromVerifiedIntegration() {
+        Fixture fixture = fixture();
+        IntegrationResource resource = resource(IntegrationResourceType.GOOGLE_DOCUMENT);
+        ProjectIntegration staleIntegration = resource.getProjectIntegration();
+        ProjectIntegration verifiedIntegration = mock(ProjectIntegration.class);
+
+        expectFileMetadata(fixture.server);
+        expectDriveActivity(fixture.server, """
+                {"itemName":"items/google-file-1","pageSize":100}
+                """, """
+                {"activities":[]}
+                """);
+        expectComments(fixture.server, "{}");
+        expectRevisions(fixture.server, "{}");
+        expectDocumentSnapshot(fixture.server);
+
+        fixture.collector.collect(resource, verifiedIntegration, CollectionContext.noop());
+
+        fixture.server.verify();
+        verify(projectIntegrationService).decryptAccessToken(verifiedIntegration);
+        verify(projectIntegrationService, never()).decryptAccessToken(staleIntegration);
     }
 
     @Test
@@ -176,7 +203,8 @@ class GoogleIntegrationResourceCollectorTest {
                 .andRespond(withBadRequest().contentType(MediaType.APPLICATION_JSON)
                         .body("{\"error\":{\"message\":\"Invalid JSON payload\"}}"));
 
-        assertThatThrownBy(() -> fixture.collector.collect(resource, CollectionContext.noop()))
+        assertThatThrownBy(() -> fixture.collector.collect(
+                resource, resource.getProjectIntegration(), CollectionContext.noop()))
                 .isInstanceOf(ProviderResourceAccessException.class)
                 .extracting("statusCode")
                 .isEqualTo(400);
@@ -210,7 +238,8 @@ class GoogleIntegrationResourceCollectorTest {
                 .andRespond(withResourceNotFound());
         expectDocumentSnapshot(fixture.server);
 
-        fixture.collector.collect(resource, CollectionContext.noop());
+        fixture.collector.collect(
+                resource, resource.getProjectIntegration(), CollectionContext.noop());
 
         fixture.server.verify();
         assertThat(storedTypes()).containsExactly(
@@ -251,7 +280,8 @@ class GoogleIntegrationResourceCollectorTest {
         fixture.server.expect(requestTo(Matchers.containsString("/documents/" + FILE_ID)))
                 .andRespond(withResourceNotFound());
 
-        fixture.collector.collect(resource, CollectionContext.noop());
+        fixture.collector.collect(
+                resource, resource.getProjectIntegration(), CollectionContext.noop());
         fixture.server.verify();
 
         return storedKeysFor(IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY).get(0);

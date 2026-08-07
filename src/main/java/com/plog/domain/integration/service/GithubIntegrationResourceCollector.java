@@ -6,6 +6,7 @@ import com.plog.domain.integration.entity.CollectionPhase;
 import com.plog.domain.integration.entity.IntegrationActivityType;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.LinkType;
+import com.plog.domain.integration.entity.ProjectIntegration;
 import java.net.URI;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -67,9 +68,13 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
     }
 
     @Override
-    public void collect(IntegrationResource resource, CollectionContext context) {
+    public void collect(
+            IntegrationResource resource,
+            ProjectIntegration verifiedIntegration,
+            CollectionContext context
+    ) {
         String accessToken = githubAppClient.createInstallationAccessToken(
-                resource.getProjectIntegration().getProviderConnectionId());
+                verifiedIntegration.getProviderConnectionId());
         String repositoryPath = repositoryPath(resource.getResourceUrl());
         Instant watermark = resource.getLastCollectedAt();
         String since = sinceParameter(resource, watermark);
