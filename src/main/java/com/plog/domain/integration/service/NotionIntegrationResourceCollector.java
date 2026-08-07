@@ -5,6 +5,7 @@ import com.plog.domain.integration.entity.IntegrationActivityType;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.IntegrationResourceType;
 import com.plog.domain.integration.entity.LinkType;
+import com.plog.domain.integration.entity.ProjectIntegration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -86,10 +87,14 @@ class NotionIntegrationResourceCollector implements IntegrationResourceCollector
     }
 
     @Override
-    public void collect(IntegrationResource resource, CollectionContext context) {
-        String token = projectIntegrationService.decryptAccessToken(resource.getProjectIntegration());
+    public void collect(
+            IntegrationResource resource,
+            ProjectIntegration verifiedIntegration,
+            CollectionContext context
+    ) {
+        String token = projectIntegrationService.decryptAccessToken(verifiedIntegration);
         NotionUserResolver.Session userSession = userResolver.begin(
-                resource.getProjectIntegration().getId(), token, context);
+                verifiedIntegration.getId(), token, context);
         collect(resource, token, context, userSession);
     }
 
