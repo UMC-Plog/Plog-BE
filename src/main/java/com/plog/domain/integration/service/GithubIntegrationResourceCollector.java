@@ -10,11 +10,11 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -30,7 +30,6 @@ import org.springframework.web.client.RestClientResponseException;
 class GithubIntegrationResourceCollector implements IntegrationResourceCollector {
 
     private static final String API_BASE_URL = "https://api.github.com";
-    private static final int MAX_API_PAGE_COUNT = 100;
 
     private final GithubAppClient githubAppClient;
     private final IntegrationActivityStoreService activityStoreService;
@@ -96,11 +95,11 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
             String token, CollectionContext context) {
         Set<String> storedShas = new HashSet<>();
         for (String refSha : commitRefShas(repositoryPath, token, context)) {
-            for (JsonNode commit : getPages("/repos/" + repositoryPath + "/commits?per_page=100&sha="
-                    + encodeQueryParam(refSha), token, context)) {
+            collectPagedItems("/repos/" + repositoryPath + "/commits?per_page=100&sha="
+                    + encodeQueryParam(refSha), token, context, commit -> {
                 String commitSha = commit.path("sha").asText(null);
                 if (commitSha == null || commitSha.isBlank() || !storedShas.add(commitSha)) {
-                    continue;
+                    return;
                 }
                 JsonNode author = commit.path("author");
                 JsonNode authorCommit = commit.path("commit").path("author");
@@ -108,7 +107,7 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
                         "commit:" + commitSha, author.path("id").asText(null), author.path("login").asText(null),
                         authorCommit.path("email").asText(null), parseInstant(authorCommit.path("date").asText(null)),
                         commit.path("html_url").asText(resource.getResourceUrl()), commit.toString());
-            }
+            });
         }
     }
 
@@ -169,11 +168,11 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
     ) {
         // /pulls는 since를 지원하지 않는다. created 오름차순으로 고정해 재개 지점을 안정시키고,
         // 리스트 페이지는 100건 단위라 비용이 작다.
-        for (JsonNode pullRequest : getPages(
-                "/repos/" + repositoryPath + "/pulls?state=all&per_page=100&sort=created&direction=asc", token, context)) {
+        collectPagedItems("/repos/" + repositoryPath + "/pulls?state=all&per_page=100&sort=created&direction=asc",
+                token, context, pullRequest -> {
             int pullRequestNumber = pullRequest.path("number").asInt();
             if (cursor.skipsItem(CollectionPhase.PULL_REQUESTS, pullRequestNumber)) {
-                continue;
+                return;
             }
             JsonNode author = pullRequest.path("user");
             String number = pullRequest.path("number").asText();
@@ -181,15 +180,16 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
                     "pull-request:" + number, author.path("id").asText(null), author.path("login").asText(null), null,
                     parseInstant(pullRequest.path("created_at").asText(null)), pullRequest.path("html_url").asText(resource.getResourceUrl()),
                     pullRequest.toString());
-            for (JsonNode review : getPages("/repos/" + repositoryPath + "/pulls/" + number + "/reviews?per_page=100", token, context)) {
+            collectPagedItems("/repos/" + repositoryPath + "/pulls/" + number + "/reviews?per_page=100",
+                    token, context, review -> {
                 JsonNode reviewer = review.path("user");
                 activityStoreService.store(resource, IntegrationActivityType.GITHUB_PULL_REQUEST_REVIEW,
                         "pull-request-review:" + review.path("id").asText(), reviewer.path("id").asText(null),
                         reviewer.path("login").asText(null), null, parseInstant(review.path("submitted_at").asText(null)),
                         pullRequest.path("html_url").asText(resource.getResourceUrl()), review.toString());
-            }
+            });
             context.advance(CollectionPhase.PULL_REQUESTS, pullRequestNumber);
-        }
+        });
     }
 
     private void collectIssues(
@@ -200,11 +200,11 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
             CollectionContext context
     ) {
         // created 오름차순 정렬은 재개용이다.
-        for (JsonNode issue : getPages("/repos/" + repositoryPath
-                + "/issues?state=all&per_page=100&sort=created&direction=asc", token, context)) {
+        collectPagedItems("/repos/" + repositoryPath
+                + "/issues?state=all&per_page=100&sort=created&direction=asc", token, context, issue -> {
             int issueNumber = issue.path("number").asInt();
             if (cursor.skipsItem(CollectionPhase.ISSUES, issueNumber)) {
-                continue;
+                return;
             }
             String number = issue.path("number").asText();
             if (!issue.has("pull_request")) {
@@ -216,46 +216,82 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
             }
             // 이슈 payload가 코멘트 수를 알려준다. 0이면 호출 자체가 낭비다.
             if (issue.path("comments").asInt(0) > 0) {
-                for (JsonNode comment : getPages("/repos/" + repositoryPath + "/issues/" + number
-                        + "/comments?per_page=100", token, context)) {
+                collectPagedItems("/repos/" + repositoryPath + "/issues/" + number
+                        + "/comments?per_page=100", token, context, comment -> {
                     JsonNode commenter = comment.path("user");
                     activityStoreService.store(resource, IntegrationActivityType.GITHUB_ISSUE_COMMENT,
                             "issue-comment:" + comment.path("id").asText(), commenter.path("id").asText(null),
                             commenter.path("login").asText(null), null, parseInstant(comment.path("created_at").asText(null)),
                             comment.path("html_url").asText(issue.path("html_url").asText(resource.getResourceUrl())), comment.toString());
-                }
+                });
             }
-            for (JsonNode event : getPages("/repos/" + repositoryPath + "/issues/" + number + "/events?per_page=100", token, context)) {
+            collectPagedItems("/repos/" + repositoryPath + "/issues/" + number + "/events?per_page=100",
+                    token, context, event -> {
                 JsonNode actor = event.path("actor");
                 activityStoreService.store(resource, IntegrationActivityType.GITHUB_ISSUE_EVENT,
                         "issue-event:" + event.path("id").asText(), actor.path("id").asText(null), actor.path("login").asText(null), null,
                         parseInstant(event.path("created_at").asText(null)), issue.path("html_url").asText(resource.getResourceUrl()), event.toString());
-            }
+            });
             context.advance(CollectionPhase.ISSUES, issueNumber);
-        }
+        });
     }
 
     private String encodeQueryParam(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
-    private List<JsonNode> getPages(String pathWithQuery, String token, CollectionContext context) {
-        List<JsonNode> results = new ArrayList<>();
-        for (int page = 1; page <= MAX_API_PAGE_COUNT; page++) {
-            JsonNode body = get(pathWithQuery + "&page=" + page, token, context);
-            if (body == null || !body.isArray() || body.isEmpty()) {
-                return results;
+    private void collectPagedItems(String pathWithQuery, String token, CollectionContext context,
+            Consumer<JsonNode> itemConsumer) {
+        String nextPath = appendPage(pathWithQuery, 1);
+        Set<String> requestedPaths = new HashSet<>();
+        while (nextPath != null) {
+            if (!requestedPaths.add(nextPath)) {
+                log.warn("GitHub pagination loop detected. path={}", nextPath);
+                throw new ProviderResourceAccessException(503, null);
             }
-            body.forEach(results::add);
-            if (body.size() < 100) {
-                return results;
+            ResponseEntity<JsonNode> response = getResponse(nextPath, token, context);
+            JsonNode body = response.getBody();
+            if (body == null || !body.isArray()) {
+                return;
+            }
+            body.forEach(itemConsumer);
+            nextPath = nextPagePath(response.getHeaders());
+        }
+    }
+
+    private String appendPage(String pathWithQuery, int page) {
+        return pathWithQuery + (pathWithQuery.contains("?") ? "&" : "?") + "page=" + page;
+    }
+
+    private String nextPagePath(HttpHeaders headers) {
+        for (String linkHeader : headers.getOrEmpty(HttpHeaders.LINK)) {
+            for (String link : linkHeader.split(",")) {
+                if (!link.contains("rel=\"next\"") && !link.contains("rel=next")) {
+                    continue;
+                }
+                int start = link.indexOf('<');
+                int end = link.indexOf('>');
+                if (start < 0 || end <= start) {
+                    continue;
+                }
+                URI nextUri = URI.create(link.substring(start + 1, end));
+                if (!"https".equalsIgnoreCase(nextUri.getScheme())
+                        || !"api.github.com".equalsIgnoreCase(nextUri.getHost())
+                        || (nextUri.getPort() != -1 && nextUri.getPort() != 443)) {
+                    log.warn("GitHub pagination returned an unexpected next URI. uri={}", nextUri);
+                    throw new ProviderResourceAccessException(503, null);
+                }
+                return nextUri.getRawPath() + (nextUri.getRawQuery() == null ? "" : "?" + nextUri.getRawQuery());
             }
         }
-        log.warn("GitHub pagination exceeded max page count. path={}, maxPages={}", pathWithQuery, MAX_API_PAGE_COUNT);
-        throw new ProviderResourceAccessException(503, null);
+        return null;
     }
 
     private JsonNode get(String path, String token, CollectionContext context) {
+        return getResponse(path, token, context).getBody();
+    }
+
+    private ResponseEntity<JsonNode> getResponse(String path, String token, CollectionContext context) {
         // 항목 경계가 없는 페이지네이션 구간에서도 잡이 회수되지 않게 한다.
         context.heartbeat();
         rateLimiter.acquire();
@@ -265,7 +301,7 @@ class GithubIntegrationResourceCollector implements IntegrationResourceCollector
                     .header(HttpHeaders.ACCEPT, "application/vnd.github+json")
                     .retrieve().toEntity(JsonNode.class);
             rateLimiter.observe(response.getHeaders());
-            return response.getBody();
+            return response;
         } catch (RestClientResponseException exception) {
             log.warn("GitHub API returned error response. path={}, status={}, body={}",
                     path, exception.getStatusCode().value(),
