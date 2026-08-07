@@ -1,6 +1,7 @@
 package com.plog.domain.integration.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
@@ -28,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -71,7 +73,11 @@ class IntegrationDataCollectionServiceTest {
             }
 
             @Override
-            public void collect(IntegrationResource resource, CollectionContext context) {
+            public void collect(
+                    IntegrationResource resource,
+                    ProjectIntegration verifiedIntegration,
+                    CollectionContext context
+            ) {
                 if ("missing-file".equals(resource.getProviderResourceId())) {
                     throw new ProviderResourceAccessException(404, null);
                 }
@@ -147,6 +153,68 @@ class IntegrationDataCollectionServiceTest {
         );
         verify(integrationActivityStoreService, times(2)).beginResourceCollection();
         verify(integrationActivityStoreService, times(2)).endResourceCollection();
+    }
+
+    @Test
+    void collectsWithIntegrationReturnedByVerification() {
+        Long projectId = 1L;
+        Project project = project(projectId);
+        ProjectIntegration staleIntegration = ProjectIntegration.builder()
+                .id(20L)
+                .project(project)
+                .linkType(LinkType.GOOGLE_DOCS)
+                .credentialType(IntegrationCredentialType.OAUTH)
+                .externalAccountId("google-account")
+                .externalAccountName("team@plog.test")
+                .providerConnectionId("google-account")
+                .accessTokenEncrypted("stale-token")
+                .build();
+        ProjectIntegration refreshedIntegration = ProjectIntegration.builder()
+                .id(20L)
+                .project(project)
+                .linkType(LinkType.GOOGLE_DOCS)
+                .credentialType(IntegrationCredentialType.OAUTH)
+                .externalAccountId("google-account")
+                .externalAccountName("team@plog.test")
+                .providerConnectionId("google-account")
+                .accessTokenEncrypted("refreshed-token")
+                .build();
+        IntegrationResource resource = IntegrationResource.builder()
+                .id(101L)
+                .projectIntegration(staleIntegration)
+                .resourceType(IntegrationResourceType.GOOGLE_DOCUMENT)
+                .providerResourceId("available-file")
+                .resourceName("프로젝트 기획서")
+                .resourceUrl("https://docs.google.com/document/d/available-file")
+                .resourceStatus(IntegrationResourceStatus.ACTIVE)
+                .build();
+        AtomicReference<ProjectIntegration> collectedIntegration = new AtomicReference<>();
+        IntegrationResourceCollector recordingCollector = new IntegrationResourceCollector() {
+            @Override
+            public List<LinkType> providers() {
+                return List.of(LinkType.GOOGLE_DOCS);
+            }
+
+            @Override
+            public void collect(
+                    IntegrationResource target,
+                    ProjectIntegration verifiedIntegration,
+                    CollectionContext context
+            ) {
+                collectedIntegration.set(verifiedIntegration);
+            }
+        };
+        IntegrationDataCollectionService service = serviceWith(recordingCollector);
+        given(integrationResourceRepository
+                .findAllByProjectIntegrationProjectIdAndResourceStatusOrderByIdAsc(
+                        projectId, IntegrationResourceStatus.ACTIVE))
+                .willReturn(List.of(resource));
+        given(integrationVerificationService.requireVerifiedConnection(projectId, LinkType.GOOGLE_DOCS))
+                .willReturn(refreshedIntegration);
+
+        service.runCollection(projectId, CollectionContext.noop());
+
+        assertSame(refreshedIntegration, collectedIntegration.get());
     }
 
     @Test
@@ -332,7 +400,11 @@ class IntegrationDataCollectionServiceTest {
         }
 
         @Override
-        public void collect(IntegrationResource resource, CollectionContext context) {
+        public void collect(
+                IntegrationResource resource,
+                ProjectIntegration verifiedIntegration,
+                CollectionContext context
+        ) {
             attempts++;
             throw new ProviderResourceAccessException(statusCode, null);
         }
@@ -356,7 +428,11 @@ class IntegrationDataCollectionServiceTest {
         }
 
         @Override
-        public void collect(IntegrationResource resource, CollectionContext context) {
+        public void collect(
+                IntegrationResource resource,
+                ProjectIntegration verifiedIntegration,
+                CollectionContext context
+        ) {
             throw new ProviderResourceAccessException(403, new RestClientResponseException(
                     "forbidden", 403, "Forbidden", headers,
                     "{}".getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8));

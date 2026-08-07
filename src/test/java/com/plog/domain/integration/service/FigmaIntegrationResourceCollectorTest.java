@@ -71,7 +71,7 @@ class FigmaIntegrationResourceCollectorTest {
                 """);
         expectComments(fixture.server);
 
-        fixture.collector.collect(resource, context);
+        fixture.collector.collect(resource, resource.getProjectIntegration(), context);
 
         fixture.server.verify();
         assertThat(fixture.requestedUris).hasSize(4);
