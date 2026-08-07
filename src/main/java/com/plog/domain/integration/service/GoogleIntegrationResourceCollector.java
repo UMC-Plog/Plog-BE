@@ -162,7 +162,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             JsonNode body = get(url, token, context);
             for (JsonNode comment : body.path("comments")) {
                 JsonNode author = comment.path("author");
-                activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
+                activityStoreService.storeLatestProviderPayload(resource, IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
                         "comment:" + comment.path("id").asText(), author.path("permissionId").asText(null),
                         author.path("displayName").asText(null), author.path("emailAddress").asText(null),
                         parseInstant(comment.path("createdTime").asText(null)), resource.getResourceUrl(),
@@ -185,7 +185,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             JsonNode body = get(url, token, context);
             for (JsonNode reply : body.path("replies")) {
                 JsonNode replyAuthor = reply.path("author");
-                activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
+                activityStoreService.storeLatestProviderPayload(resource, IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
                         "comment-reply:" + reply.path("id").asText(),
                         replyAuthor.path("permissionId").asText(null),
                         replyAuthor.path("displayName").asText(null),
