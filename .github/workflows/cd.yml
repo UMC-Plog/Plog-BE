@@ -136,6 +136,8 @@ jobs:
             LLM_PROVIDER=gemini
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
             GEMINI_MODEL=gemini-2.5-flash
+            EMBEDDING_PROVIDER=gemini
+            EMBEDDING_MODEL=gemini-embedding-001
             EOF
             chmod 600 .env
 

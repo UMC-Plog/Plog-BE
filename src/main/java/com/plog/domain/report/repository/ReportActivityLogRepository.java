@@ -58,6 +58,11 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
     boolean existsByProjectMember_IdAndSourceDomainAndContentAndNoiseFilteredFalseAndIdLessThan(
             Long projectMemberId, SourceDomain sourceDomain, String content, Long id);
 
+    // 3단계 임베딩 대상 조회용 — 정제를 통과했고(noiseFiltered=false) 아직 임베딩 처리 전인(embeddingModel이
+    // null인) 행. embeddingModel은 실제 모델명 또는 ReportActivityLog.EMBEDDING_NOT_APPLICABLE로 채워지므로
+    // null은 "처리 전"만을 뜻한다 — 임베딩할 텍스트가 없는 행도 한 번 처리되면 다시 선택되지 않는다.
+    List<ReportActivityLog> findByNoiseFilteredFalseAndEmbeddingModelIsNullOrderByOccurredAtAscIdAsc(Limit limit);
+
     // 4단계 정량계산에서 멤버별로 묶어서 집계할 때 사용
     List<ReportActivityLog> findByProjectMember_IdAndSourceDomainIn(
             Long projectMemberId, List<SourceDomain> sourceDomains);
