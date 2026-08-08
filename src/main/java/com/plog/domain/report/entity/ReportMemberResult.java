@@ -72,6 +72,19 @@ public class ReportMemberResult extends BaseEntity {
     @Column(name = "caution_text", columnDefinition = "TEXT")
     private String cautionText;
 
+    // ── 팀 리포트 표 표시용 업무 집계. InternalReportData 조립 시점(0~1단계)에 함께 채워진다. ──
+    /** 부여된 전체 업무 수. 팀 리포트 표의 "전체". */
+    @Column(name = "total_task_count", nullable = false, columnDefinition = "integer default 0")
+    private int totalTaskCount;
+
+    /** 완료한 업무 수. 팀 리포트 표의 "완료". */
+    @Column(name = "completed_task_count", nullable = false, columnDefinition = "integer default 0")
+    private int completedTaskCount;
+
+    /** 기한 내 완료한 업무 수. 화면 "12/13건" 표기의 앞 숫자(분모는 totalTaskCount). */
+    @Column(name = "deadline_met_task_count", nullable = false, columnDefinition = "integer default 0")
+    private int deadlineMetTaskCount;
+
     // ── 5단계(LLM) 산출물. 컬럼 하나가 화면 섹션 하나에 대응한다. ──
     // 중첩 구조인 것들은 jsonb 에 직렬화해 넣는다(ReportActivityLog.metadata 와 같은 방식).
     // 근거가 부족하면 LLM 이 비워 보내므로 전부 nullable 이고, 화면은 빈 섹션을 숨긴다.
@@ -133,6 +146,17 @@ public class ReportMemberResult extends BaseEntity {
         this.externalToolConnected = externalToolConnected;
         this.reliabilityTier = reliabilityTier;
         this.cautionText = cautionText;
+    }
+
+    /**
+     * 업무 완료/마감 준수 건수 기록. InternalReportData 조립 시점에 함께 저장한다 —
+     * 팀 리포트 표의 완료율·마감 준수율(멤버별 컬럼을 합산해서 계산)과
+     * 멤버 상세의 "12/13건" 표기에 쓰인다.
+     */
+    public void applyTaskCounts(int totalTaskCount, int completedTaskCount, int deadlineMetTaskCount) {
+        this.totalTaskCount = totalTaskCount;
+        this.completedTaskCount = completedTaskCount;
+        this.deadlineMetTaskCount = deadlineMetTaskCount;
     }
 
     /**

@@ -31,7 +31,13 @@ public record ReportMemberResultResponse(
         @Schema(description = "분석 한계 안내 문구. 없으면 null",
                 example = "Notion이 연동되지 않아 일부 작업 과정은 반영되지 않았을 수 있습니다.")
         String cautionText,
-
+        @Schema(description = "부여된 전체 업무 수", example = "13")
+        int totalTaskCount,
+        @Schema(description = "완료한 업무 수", example = "12")
+        int completedTaskCount,
+        @Schema(description = "기한 내 완료한 업무 수. \"12/13건\" 표기의 앞 숫자(분모는 totalTaskCount)",
+                example = "12")
+        int deadlineMetTaskCount,
         @Schema(description = "AI 한줄 평가. 개인 리포트 상단에 노출됩니다",
                 example = "적극적인 리더십으로 팀의 방향을 잡고, 구성원들이 원활하게 협업할 수 있도록 분위기를 주도했어요")
         String headline,
