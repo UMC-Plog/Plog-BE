@@ -66,6 +66,15 @@ class OllamaEmbeddingClientTest {
     }
 
     @Test
+    void double로는_유한하지만_float_범위를_넘는_값이_있으면_예외를_던진다() {
+        server.expect(requestTo(URL))
+                .andRespond(withSuccess("{\"embedding\":[0.1,1e40,0.3]}", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.embed("텍스트"))
+                .isInstanceOf(EmbeddingGenerationException.class);
+    }
+
+    @Test
     void 사백이십구_응답은_EmbeddingRateLimitException을_던지고_재시도하지_않는다() {
         server.expect(requestTo(URL))
                 .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));

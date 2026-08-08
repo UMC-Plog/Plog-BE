@@ -128,4 +128,16 @@ class GeminiEmbeddingClientTest {
         EmbeddingProperties.OllamaConfig ollama = new EmbeddingProperties.OllamaConfig(null, null);
         return new EmbeddingProperties(gemini, ollama, Duration.ofSeconds(5), Duration.ofSeconds(30), 3072);
     }
+
+    @Test
+    void double로는_유한하지만_float_범위를_넘는_값이_있으면_예외를_던진다() {
+        // 1e40은 double로는 정상 범위(최대 약 1.8e308)지만 float 범위(최대 약 3.4e38)를
+        // 넘어서 (float) 캐스팅 시 Infinity가 된다 — double 단계 검증만으로는 못 잡는 케이스.
+        server.expect(requestTo(URL))
+                .andRespond(withSuccess(
+                        "{\"embedding\":{\"values\":[0.1,1e40,0.3]}}", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.embed("텍스트"))
+                .isInstanceOf(EmbeddingGenerationException.class);
+    }
 }

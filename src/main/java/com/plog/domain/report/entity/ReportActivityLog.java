@@ -125,6 +125,14 @@ public class ReportActivityLog extends BaseEntity {
     @Column(name = "embedding_lease_until")
     private LocalDateTime embeddingLeaseUntil;
 
+    /**
+     * {@link #embeddingLeaseUntil}과 함께 찍히는 소유권 토큰(배치 1회 호출당 UUID 하나).
+     * 리스를 해제·갱신할 때 이 토큰이 일치하는 행만 건드린다 — 이미 만료돼서 다른 실행자가
+     * 새로 선점한 행을 실수로 건드리지 않기 위한 낙관적 동시성 체크다.
+     */
+    @Column(name = "embedding_lease_token", length = 36)
+    private String embeddingLeaseToken;
+
     public static ReportActivityLog create(
             ProjectMember projectMember,
             SourceDomain sourceDomain,
@@ -216,6 +224,7 @@ public class ReportActivityLog extends BaseEntity {
         this.embeddingModel = model;
         this.embedding = embeddingJson;
         this.embeddingLeaseUntil = null; // 완료됐으니 리스 해제
+        this.embeddingLeaseToken = null;
     }
 
     /**
@@ -228,6 +237,7 @@ public class ReportActivityLog extends BaseEntity {
         this.embeddingModel = EMBEDDING_NOT_APPLICABLE;
         this.embedding = null;
         this.embeddingLeaseUntil = null; // 완료됐으니 리스 해제
+        this.embeddingLeaseToken = null;
     }
 
     /** 실제 임베딩 벡터가 채워져 있는지. markEmbeddingNotApplicable만 호출된 행은 false. */

@@ -2,9 +2,11 @@ package com.plog.domain.report.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,18 +15,21 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plog.domain.report.entity.RawActivityType;
 import com.plog.domain.report.entity.ReportActivityLog;
 import com.plog.domain.report.entity.SourceDomain;
-import com.plog.domain.report.repository.projection.EmbeddingClaimProjection;
 import com.plog.domain.report.repository.ReportActivityLogRepository;
+import com.plog.domain.report.repository.projection.EmbeddingClaimProjection;
 import com.plog.infrastructure.ai.embedding.EmbeddingClient;
 import com.plog.infrastructure.ai.embedding.EmbeddingGenerationException;
 import com.plog.infrastructure.ai.embedding.EmbeddingRateLimitException;
 import com.plog.infrastructure.ai.embedding.EmbeddingResponse;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -79,7 +84,7 @@ class ActivityEmbeddingServiceTest {
     }
 
     private void stubClaim(List<EmbeddingClaimProjection> claimed) {
-        when(activityLogRepository.selectClaimableEmbeddingActivities(any(), org.mockito.ArgumentMatchers.anyInt()))
+        when(activityLogRepository.selectClaimableEmbeddingActivities(any(), ArgumentMatchers.anyInt()))
                 .thenReturn(claimed);
     }
 
@@ -90,11 +95,11 @@ class ActivityEmbeddingServiceTest {
         int embedded = service.embedBatch();
 
         assertThat(embedded).isZero();
-        verify(activityLogRepository, never()).leaseForEmbedding(anyList(), any());
+        verify(activityLogRepository, never()).leaseForEmbedding(anyList(), any(), anyString());
     }
 
     @Test
-    void 선점한_행에는_미래_시각으로_리스를_찍는다() {
+    void 선점한_행에는_미래_시각과_토큰으로_리스를_찍는다() {
         stubClaim(List.of(claim(1L, "업무 관련 문장입니다")));
         when(embeddingClient.embed("업무 관련 문장입니다"))
                 .thenReturn(new EmbeddingResponse(List.of(0.1f), "gemini-embedding-001"));
@@ -104,11 +109,12 @@ class ActivityEmbeddingServiceTest {
 
         service.embedBatch();
 
-        org.mockito.ArgumentCaptor<LocalDateTime> leaseUntilCaptor =
-                org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
-        verify(activityLogRepository).leaseForEmbedding(org.mockito.ArgumentMatchers.eq(List.of(1L)),
-                leaseUntilCaptor.capture());
+        ArgumentCaptor<LocalDateTime> leaseUntilCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        ArgumentCaptor<String> tokenCaptor = ArgumentCaptor.forClass(String.class);
+        verify(activityLogRepository).leaseForEmbedding(
+                ArgumentMatchers.eq(List.of(1L)), leaseUntilCaptor.capture(), tokenCaptor.capture());
         assertThat(leaseUntilCaptor.getValue()).isAfter(beforeCall);
+        assertThat(tokenCaptor.getValue()).isNotBlank();
     }
 
     @Test
@@ -181,5 +187,53 @@ class ActivityEmbeddingServiceTest {
         assertThat(beforeLimit.getEmbeddingModel()).isEqualTo("gemini-embedding-001");
         verify(embeddingClient, never()).embed("한도 걸린 후 메시지 — 시도조차 안 돼야 함");
         verify(activityLogRepository, never()).findById(3L);
+    }
+
+    @Test
+    void 호출_한도에_걸리면_현재_행과_이후_미처리_행의_리스를_즉시_해제한다() {
+        stubClaim(List.of(
+                claim(1L, "한도 걸리기 전 메시지"),
+                claim(2L, "한도에 걸리는 메시지"),
+                claim(3L, "아직 처리 안 된 메시지")));
+        when(embeddingClient.embed("한도 걸리기 전 메시지"))
+                .thenReturn(new EmbeddingResponse(List.of(0.1f), "gemini-embedding-001"));
+        when(embeddingClient.embed("한도에 걸리는 메시지"))
+                .thenThrow(new EmbeddingRateLimitException("한도 초과", null));
+        ReportActivityLog beforeLimit = refinedChatLog("한도 걸리기 전 메시지");
+        when(activityLogRepository.findById(1L)).thenReturn(Optional.of(beforeLimit));
+
+        service.embedBatch();
+
+        ArgumentCaptor<String> leaseTokenCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> releaseTokenCaptor = ArgumentCaptor.forClass(String.class);
+        verify(activityLogRepository).leaseForEmbedding(
+                ArgumentMatchers.eq(List.of(1L, 2L, 3L)), any(), leaseTokenCaptor.capture());
+        // 2번(한도 걸린 행)과 3번(아직 처리 안 된 행)의 리스가 풀린다. 1번(이미 완료)은 포함 안 됨.
+        verify(activityLogRepository).releaseEmbeddingLease(
+                ArgumentMatchers.eq(List.of(2L, 3L)), releaseTokenCaptor.capture());
+        assertThat(releaseTokenCaptor.getValue()).isEqualTo(leaseTokenCaptor.getValue());
+    }
+
+    @Test
+    void 배치_도중_일정_건수마다_남은_행의_리스를_갱신한다() {
+        // LEASE_RENEWAL_INTERVAL(25)을 넘기도록 26건을 만든다 — i=25에서 갱신 1회 트리거.
+        List<EmbeddingClaimProjection> claimed = new ArrayList<>();
+        for (long id = 1; id <= 26; id++) {
+            String content = "메시지 " + id;
+            claimed.add(claim(id, content));
+            when(embeddingClient.embed(content))
+                    .thenReturn(new EmbeddingResponse(List.of(0.1f), "gemini-embedding-001"));
+            when(activityLogRepository.findById(id))
+                    .thenReturn(Optional.of(refinedChatLog(content)));
+        }
+        stubClaim(claimed);
+
+        service.embedBatch();
+
+        List<Long> remainingFromIndex25 = claimed.subList(25, 26).stream()
+                .map(EmbeddingClaimProjection::getId)
+                .toList();
+        verify(activityLogRepository, times(1))
+                .renewEmbeddingLease(ArgumentMatchers.eq(remainingFromIndex25), any(), any());
     }
 }

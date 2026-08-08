@@ -2,14 +2,15 @@ package com.plog.domain.report.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plog.domain.report.entity.ReportActivityLog;
-import com.plog.domain.report.repository.projection.EmbeddingClaimProjection;
 import com.plog.domain.report.repository.ReportActivityLogRepository;
+import com.plog.domain.report.repository.projection.EmbeddingClaimProjection;
 import com.plog.infrastructure.ai.embedding.EmbeddingClient;
 import com.plog.infrastructure.ai.embedding.EmbeddingRateLimitException;
 import com.plog.infrastructure.ai.embedding.EmbeddingResponse;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -18,20 +19,22 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * 리포트 파이프라인 3단계(임베딩 생성) 적용. 1단계에서 정제를 통과한(noiseFiltered=false) 활동을
  * 대상으로, 그 정제된 텍스트(Clean Activity)를 {@link EmbeddingClient}에 넘겨 벡터를 받아 저장한다.
- * <p>
+ *
  * 외부 API 호출(embed())은 몇 초씩 걸릴 수 있어 트랜잭션 밖에서 한다 — 하나의 긴 트랜잭션 안에서
  * 최대 {@link #BATCH_SIZE}번 순차 호출하면 그동안 DB 커넥션과 커밋 안 된 변경을 계속 물고 있게
- * 된다. 대신 세 단계로 쪼갠다:
- * <ol>
- *   <li>{@link #claimBatch()} — 짧은 트랜잭션. FOR UPDATE SKIP LOCKED로 처리할 행을
- *       원자적으로 선점(lease)한다. 동시에 여러 인스턴스가 이 메서드를 호출해도 같은 행을
- *       중복으로 집어가지 않는다.</li>
- *   <li>{@link #processOne} 안의 embed() 호출 — 트랜잭션 없음.</li>
- *   <li>결과 저장 — 짧은 트랜잭션. 성공/처리불필요 시 리스가 자동으로 해제된다.</li>
- * </ol>
- * 처리 중 앱이 죽어도 리스가 만료되면({@link #LEASE_DURATION}) 다음 배치 호출이 자동으로
- * 다시 집어간다 — 복구를 위한 별도 로직이 필요 없다.
- * <p>
+ * 된다. 대신 짧은 트랜잭션(선점 → 호출 밖 → 저장)으로 쪼갠다.
+ *
+ * 배치 1회 호출마다 {@link #leaseToken} UUID를 하나 발급해 선점한 행에 같이 찍는다. 이 토큰이
+ * 두 가지를 가능하게 한다:
+ *   429 즉시 해제 — 호출 한도에 걸리면 현재 행과 아직 처리 안 한 행의 리스를
+ *       즉시 풀어서, 다음 배치 호출이 리스 만료(30분)를 기다리지 않고 바로 재시도하게 한다.
+ *   도중 리스 연장 — {@link #LEASE_RENEWAL_INTERVAL}건마다 남은 행의 리스를
+ *       갱신해서, 배치가 오래 걸려도(느린 응답 누적) 처리 중인 행이 리스 만료로 다른 실행자에게
+ *       다시 선점되는 걸 막는다.
+ *
+ * 두 작업 모두 leaseToken이 일치하는 행만 건드린다 — 이미 리스가 만료돼 다른 실행자가 새로
+ * 선점한 행을 실수로 같이 풀거나 연장하지 않기 위한 낙관적 동시성 체크다.
+ *
  * cleanContent 자체는 저장하지 않으므로({@link ActivityContentRefiner}가 순수 함수) 매 배치마다
  * 원문에서 다시 계산한다 — 비용이 크지 않고, content 원문을 절대 수정하지 않는다는 엔티티 설계
  * 원칙과도 맞는다.
@@ -46,6 +49,10 @@ public class ActivityEmbeddingService {
     // 리스 유효기간. 개별 호출 최악의 경우(재시도 포함 커넥트+리드 타임아웃)를 다 합쳐도 넉넉히
     // 여유 있게 잡는다 — EvaluationActivityLogRecoveryScheduler의 processing-timeout(30m)과 같은 관례.
     private static final Duration LEASE_DURATION = Duration.ofMinutes(30);
+
+    // 이 건수마다 남은 행의 리스를 갱신한다. 응답이 느려지는 구간이 몰려도 리스가 배치 전체
+    // 처리 시간보다 먼저 끊기지 않도록 하기 위함.
+    private static final int LEASE_RENEWAL_INTERVAL = 25;
 
     private final ReportActivityLogRepository activityLogRepository;
     private final EmbeddingClient embeddingClient;
@@ -67,26 +74,34 @@ public class ActivityEmbeddingService {
     /**
      * 아직 임베딩되지 않은(embeddingModel이 null인) 정제 완료 활동 로그를 배치로 선점해 임베딩을 생성한다.
      * 임베딩할 텍스트가 없는 행은 {@link ReportActivityLog#markEmbeddingNotApplicable()}로 처리 완료
-     * 표시만 한다. 개별 호출 실패는 해당 행만 건너뛰고(리스가 만료되면 다음 배치에서 재시도된다)
-     * 배치 전체를 막지 않는다.
+     * 표시만 한다. 개별 호출 실패(429 제외)는 해당 행만 건너뛰고(리스가 만료되면 다음 배치에서
+     * 재시도된다) 배치 전체를 막지 않는다.
      * <p>
-     * 단, 호출 한도(429)에 걸리면 즉시 배치를 멈춘다 — 같은 시간 창 안에서는 나머지도 다 똑같이
-     * 막히니, 계속 두드려봐야 API만 낭비하고 로그만 늘어난다.
+     * 호출 한도(429)에 걸리면 즉시 배치를 멈추고, 현재 행+아직 처리 안 한 행의 리스를 전부
+     * 풀어준다 — 같은 시간 창 안에서는 계속 두드려봐야 API만 낭비하고, 리스를 그대로 두면
+     * 다음 배치가 최대 30분을 기다려야 하기 때문이다.
      *
      * @return 이번 호출에서 실제로 벡터를 생성해 저장한 건수(처리 완료 표시만 한 건 제외)
      */
     public int embedBatch() {
-        List<EmbeddingClaimProjection> claimed = claimBatch();
+        String leaseToken = UUID.randomUUID().toString();
+        List<EmbeddingClaimProjection> claimed = claimBatch(leaseToken);
         if (claimed.isEmpty()) {
             return 0;
         }
 
         int embedded = 0;
-        for (EmbeddingClaimProjection activity : claimed) {
+        for (int i = 0; i < claimed.size(); i++) {
+            if (i > 0 && i % LEASE_RENEWAL_INTERVAL == 0) {
+                renewLease(remainingIds(claimed, i), leaseToken);
+            }
+
+            EmbeddingClaimProjection activity = claimed.get(i);
             EmbedResult result = processOne(activity.getId(), activity.getContent());
             if (result == EmbedResult.SUCCESS) {
                 embedded++;
             } else if (result == EmbedResult.RATE_LIMITED) {
+                releaseLease(remainingIds(claimed, i), leaseToken); // 현재 행 포함, 이후 전부
                 log.warn("activity_embedding_rate_limited batch_stopped_early embedded={} total={}",
                         embedded, claimed.size());
                 break;
@@ -97,8 +112,14 @@ public class ActivityEmbeddingService {
         return embedded;
     }
 
-    /** 짧은 트랜잭션 — FOR UPDATE SKIP LOCKED로 선점하고 곧바로 리스를 찍은 뒤 커밋한다. */
-    private List<EmbeddingClaimProjection> claimBatch() {
+    private List<Long> remainingIds(List<EmbeddingClaimProjection> claimed, int fromIndexInclusive) {
+        return claimed.subList(fromIndexInclusive, claimed.size()).stream()
+                .map(EmbeddingClaimProjection::getId)
+                .toList();
+    }
+
+    /** 짧은 트랜잭션 — FOR UPDATE SKIP LOCKED로 선점하고 곧바로 리스+토큰을 찍은 뒤 커밋한다. */
+    private List<EmbeddingClaimProjection> claimBatch(String leaseToken) {
         return transactionTemplate.execute(status -> {
             LocalDateTime now = LocalDateTime.now();
             List<EmbeddingClaimProjection> claimed =
@@ -107,9 +128,27 @@ public class ActivityEmbeddingService {
                 return List.of();
             }
             List<Long> ids = claimed.stream().map(EmbeddingClaimProjection::getId).toList();
-            activityLogRepository.leaseForEmbedding(ids, now.plus(LEASE_DURATION));
+            activityLogRepository.leaseForEmbedding(ids, now.plus(LEASE_DURATION), leaseToken);
             return claimed;
         });
+    }
+
+    /** 짧은 트랜잭션 — 아직 처리 안 한 행의 리스를 즉시 해제해 다음 배치가 바로 재시도하게 한다. */
+    private void releaseLease(List<Long> ids, String leaseToken) {
+        if (ids.isEmpty()) {
+            return;
+        }
+        transactionTemplate.executeWithoutResult(status ->
+                activityLogRepository.releaseEmbeddingLease(ids, leaseToken));
+    }
+
+    /** 짧은 트랜잭션 — 아직 처리 안 한 행의 리스를 연장해 배치 도중 만료되지 않게 한다. */
+    private void renewLease(List<Long> ids, String leaseToken) {
+        if (ids.isEmpty()) {
+            return;
+        }
+        transactionTemplate.executeWithoutResult(status ->
+                activityLogRepository.renewEmbeddingLease(ids, leaseToken, LocalDateTime.now().plus(LEASE_DURATION)));
     }
 
     private enum EmbedResult {

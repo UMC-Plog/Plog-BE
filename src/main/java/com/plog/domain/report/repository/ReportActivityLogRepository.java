@@ -77,11 +77,42 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
     List<EmbeddingClaimProjection> selectClaimableEmbeddingActivities(
             @Param("now") LocalDateTime now, @Param("limit") int limit);
 
-    // 위에서 선점한 행에 리스 만료 시각을 찍는다. selectClaimableEmbeddingActivities와 같은
-    // 트랜잭션 안에서 호출해야 SKIP LOCKED로 잡은 락이 유효한 동안 반영된다.
+    // 위에서 선점한 행에 리스 만료 시각 + 소유권 토큰을 찍는다. selectClaimableEmbeddingActivities와
+    // 같은 트랜잭션 안에서 호출해야 SKIP LOCKED로 잡은 락이 유효한 동안 반영된다.
     @Modifying
-    @Query("update ReportActivityLog a set a.embeddingLeaseUntil = :leaseUntil where a.id in :ids")
-    void leaseForEmbedding(@Param("ids") List<Long> ids, @Param("leaseUntil") LocalDateTime leaseUntil);
+    @Query("""
+            update ReportActivityLog a
+            set a.embeddingLeaseUntil = :leaseUntil, a.embeddingLeaseToken = :leaseToken
+            where a.id in :ids
+            """)
+    void leaseForEmbedding(
+            @Param("ids") List<Long> ids,
+            @Param("leaseUntil") LocalDateTime leaseUntil,
+            @Param("leaseToken") String leaseToken);
+
+    // 429 등으로 배치를 중단할 때, 현재 배치가 아직 처리 안 한 행의 리스를 즉시 풀어준다.
+    // leaseToken이 일치하는 행만 건드린다 — 이미 만료돼 다른 실행자가 새로 선점한 행을
+    // 실수로 같이 풀어버리지 않기 위한 낙관적 동시성 체크.
+    @Modifying
+    @Query("""
+            update ReportActivityLog a
+            set a.embeddingLeaseUntil = null, a.embeddingLeaseToken = null
+            where a.id in :ids and a.embeddingLeaseToken = :leaseToken
+            """)
+    void releaseEmbeddingLease(@Param("ids") List<Long> ids, @Param("leaseToken") String leaseToken);
+
+    // 배치 처리가 오래 걸려 리스가 도중에 만료될 위험이 있을 때, 아직 처리 안 한 행의 리스를
+    // 연장한다. leaseToken이 일치하는 행만 건드린다(release와 같은 이유).
+    @Modifying
+    @Query("""
+            update ReportActivityLog a
+            set a.embeddingLeaseUntil = :leaseUntil
+            where a.id in :ids and a.embeddingLeaseToken = :leaseToken
+            """)
+    void renewEmbeddingLease(
+            @Param("ids") List<Long> ids,
+            @Param("leaseToken") String leaseToken,
+            @Param("leaseUntil") LocalDateTime leaseUntil);
 
     // 4단계 정량계산에서 멤버별로 묶어서 집계할 때 사용
     List<ReportActivityLog> findByProjectMember_IdAndSourceDomainIn(
