@@ -3,6 +3,7 @@ package com.plog.domain.report.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 
@@ -14,6 +15,17 @@ class ReportActivityLogTest {
                 "정제된 텍스트", LocalDateTime.of(2026, 8, 7, 10, 0), null, null);
         log.applyNoiseFilter(false);
         return log;
+    }
+
+    /** 테스트 전용: embeddingLeaseUntil은 리포지토리 벌크 업데이트로만 채워져서 public setter가 없다. */
+    private void assignLease(ReportActivityLog activity, LocalDateTime leaseUntil) {
+        try {
+            Field field = ReportActivityLog.class.getDeclaredField("embeddingLeaseUntil");
+            field.setAccessible(true);
+            field.set(activity, leaseUntil);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Test
@@ -46,6 +58,29 @@ class ReportActivityLogTest {
         assertThat(log.getEmbeddingModel()).isEqualTo("bge-m3");
         assertThat(log.getEmbedding()).isEqualTo("[0.1,0.2,0.3]");
         assertThat(log.hasEmbedding()).isTrue();
+    }
+
+    @Test
+    void 임베딩을_적용하면_걸려있던_리스가_해제된다() {
+        ReportActivityLog log = refinedChatLog();
+        assignLease(log, LocalDateTime.now().plusMinutes(30));
+
+        log.applyEmbedding("bge-m3", "[0.1,0.2,0.3]");
+
+        assertThat(log.getEmbeddingLeaseUntil()).isNull();
+    }
+
+    @Test
+    void 처리완료로만_표시해도_걸려있던_리스가_해제된다() {
+        ReportActivityLog log = ReportActivityLog.create(
+                null, SourceDomain.TASK, RawActivityType.TASK_STATUS_CHANGE,
+                null, LocalDateTime.now(), null, null);
+        log.applyNoiseFilter(false);
+        assignLease(log, LocalDateTime.now().plusMinutes(30));
+
+        log.markEmbeddingNotApplicable();
+
+        assertThat(log.getEmbeddingLeaseUntil()).isNull();
     }
 
     @Test

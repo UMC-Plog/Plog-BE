@@ -11,7 +11,6 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -61,6 +60,36 @@ class GeminiEmbeddingClientTest {
     }
 
     @Test
+    void values_배열에_숫자가_아닌_원소가_있으면_예외를_던진다() {
+        server.expect(requestTo(URL))
+                .andRespond(withSuccess(
+                        "{\"embedding\":{\"values\":[0.1,null,0.3]}}", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.embed("텍스트"))
+                .isInstanceOf(EmbeddingGenerationException.class);
+    }
+
+    @Test
+    void values_배열에_문자열_원소가_있으면_예외를_던진다() {
+        server.expect(requestTo(URL))
+                .andRespond(withSuccess(
+                        "{\"embedding\":{\"values\":[0.1,\"0.2\",0.3]}}", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.embed("텍스트"))
+                .isInstanceOf(EmbeddingGenerationException.class);
+    }
+
+    @Test
+    void values_배열에_객체나_배열_원소가_있으면_예외를_던진다() {
+        server.expect(requestTo(URL))
+                .andRespond(withSuccess(
+                        "{\"embedding\":{\"values\":[0.1,{\"x\":1},0.3]}}", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.embed("텍스트"))
+                .isInstanceOf(EmbeddingGenerationException.class);
+    }
+
+    @Test
     void 사백이십구_응답은_EmbeddingRateLimitException을_던지고_재시도하지_않는다() {
         server.expect(requestTo(URL))
                 .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
@@ -94,14 +123,9 @@ class GeminiEmbeddingClientTest {
     }
 
     private EmbeddingProperties properties() {
-        return new EmbeddingProperties(
-                "gemini",
-                "key-123",
-                "https://generativelanguage.googleapis.com",
-                "gemini-embedding-001",
-                Duration.ofSeconds(5),
-                Duration.ofSeconds(30),
-                3072
-        );
+        EmbeddingProperties.GeminiConfig gemini = new EmbeddingProperties.GeminiConfig(
+                "key-123", "https://generativelanguage.googleapis.com", "gemini-embedding-001");
+        EmbeddingProperties.OllamaConfig ollama = new EmbeddingProperties.OllamaConfig(null, null);
+        return new EmbeddingProperties(gemini, ollama, Duration.ofSeconds(5), Duration.ofSeconds(30), 3072);
     }
 }

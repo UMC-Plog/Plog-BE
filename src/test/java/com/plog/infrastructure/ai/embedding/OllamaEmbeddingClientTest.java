@@ -10,7 +10,6 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -58,12 +57,32 @@ class OllamaEmbeddingClientTest {
     }
 
     @Test
+    void embedding_배열에_숫자가_아닌_원소가_있으면_예외를_던진다() {
+        server.expect(requestTo(URL))
+                .andRespond(withSuccess("{\"embedding\":[0.1,null,0.3]}", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.embed("텍스트"))
+                .isInstanceOf(EmbeddingGenerationException.class);
+    }
+
+    @Test
+    void 사백이십구_응답은_EmbeddingRateLimitException을_던지고_재시도하지_않는다() {
+        server.expect(requestTo(URL))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+
+        assertThatThrownBy(() -> client.embed("텍스트"))
+                .isInstanceOf(EmbeddingRateLimitException.class);
+        server.verify(); // 요청이 정확히 1회만 나갔는지 (재시도 안 함) 확인
+    }
+
+    @Test
     void 클라이언트_오류_응답은_재시도하지_않고_바로_예외를_던진다() {
         server.expect(requestTo(URL))
                 .andRespond(withStatus(HttpStatus.BAD_REQUEST));
 
         assertThatThrownBy(() -> client.embed("텍스트"))
-                .isInstanceOf(EmbeddingGenerationException.class);
+                .isInstanceOf(EmbeddingGenerationException.class)
+                .isNotInstanceOf(EmbeddingRateLimitException.class);
         server.verify();
     }
 
@@ -80,14 +99,9 @@ class OllamaEmbeddingClientTest {
     }
 
     private EmbeddingProperties properties() {
-        return new EmbeddingProperties(
-                "ollama",
-                null,
-                "http://localhost:11434",
-                "bge-m3",
-                Duration.ofSeconds(5),
-                Duration.ofSeconds(30),
-                1024
-        );
+        EmbeddingProperties.GeminiConfig gemini = new EmbeddingProperties.GeminiConfig(null, null, null);
+        EmbeddingProperties.OllamaConfig ollama =
+                new EmbeddingProperties.OllamaConfig("http://localhost:11434", "bge-m3");
+        return new EmbeddingProperties(gemini, ollama, Duration.ofSeconds(5), Duration.ofSeconds(30), 1024);
     }
 }

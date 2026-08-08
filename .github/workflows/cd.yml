@@ -136,7 +136,6 @@ jobs:
             LLM_PROVIDER=gemini
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
             GEMINI_MODEL=gemini-2.5-flash
-            EMBEDDING_PROVIDER=gemini
             EMBEDDING_MODEL=gemini-embedding-001
             EOF
             chmod 600 .env
@@ -178,7 +177,6 @@ jobs:
                             GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
                             KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET \
                             SOCIAL_GOOGLE_CLIENT_ID SOCIAL_GOOGLE_CLIENT_SECRET \
-                            GEMINI_API_KEY; do
               if ! grep -q "^${optional}=." .env; then
                 echo "⚠️ 연동 설정이 비어 있습니다(해당 provider 연동 비활성): ${optional}"
               fi

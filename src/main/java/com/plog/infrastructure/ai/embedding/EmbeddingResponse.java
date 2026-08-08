@@ -20,6 +20,7 @@ public record EmbeddingResponse(List<Float> vector, String model) {
     }
 
     public int dimension() {
+
         return vector.size();
     }
 }

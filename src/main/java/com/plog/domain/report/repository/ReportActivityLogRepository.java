@@ -2,11 +2,13 @@ package com.plog.domain.report.repository;
 
 import com.plog.domain.report.entity.ReportActivityLog;
 import com.plog.domain.report.entity.SourceDomain;
+import com.plog.domain.report.repository.projection.EmbeddingClaimProjection;
 import com.plog.domain.report.repository.projection.EvaluationLogRecoveryTarget;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -58,10 +60,28 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
     boolean existsByProjectMember_IdAndSourceDomainAndContentAndNoiseFilteredFalseAndIdLessThan(
             Long projectMemberId, SourceDomain sourceDomain, String content, Long id);
 
-    // 3단계 임베딩 대상 조회용 — 정제를 통과했고(noiseFiltered=false) 아직 임베딩 처리 전인(embeddingModel이
-    // null인) 행. embeddingModel은 실제 모델명 또는 ReportActivityLog.EMBEDDING_NOT_APPLICABLE로 채워지므로
-    // null은 "처리 전"만을 뜻한다 — 임베딩할 텍스트가 없는 행도 한 번 처리되면 다시 선택되지 않는다.
-    List<ReportActivityLog> findByNoiseFilteredFalseAndEmbeddingModelIsNullOrderByOccurredAtAscIdAsc(Limit limit);
+    // 3단계 임베딩 대상 원자적 선점(claim)용. FOR UPDATE SKIP LOCKED로 동시에 여러 배치가 호출돼도
+    // 같은 행을 중복으로 집어가지 않는다. embedding_lease_until이 비었거나 이미 만료된 행만 대상 —
+    // 즉 처리 중 앱이 죽어도 리스가 풀리면 자동으로 다시 선점 대상이 된다(복구 가능).
+    // 엔티티 전체가 아니라 id/content만 반환해서 이 시점엔 커넥션을 짧게만 잡는다.
+    @Query(value = """
+            SELECT report_activity_log_id AS id, content AS content
+            FROM report_activity_log
+            WHERE noise_filtered = false
+              AND embedding_model IS NULL
+              AND (embedding_lease_until IS NULL OR embedding_lease_until < :now)
+            ORDER BY occurred_at ASC, report_activity_log_id ASC
+            LIMIT :limit
+            FOR UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    List<EmbeddingClaimProjection> selectClaimableEmbeddingActivities(
+            @Param("now") LocalDateTime now, @Param("limit") int limit);
+
+    // 위에서 선점한 행에 리스 만료 시각을 찍는다. selectClaimableEmbeddingActivities와 같은
+    // 트랜잭션 안에서 호출해야 SKIP LOCKED로 잡은 락이 유효한 동안 반영된다.
+    @Modifying
+    @Query("update ReportActivityLog a set a.embeddingLeaseUntil = :leaseUntil where a.id in :ids")
+    void leaseForEmbedding(@Param("ids") List<Long> ids, @Param("leaseUntil") LocalDateTime leaseUntil);
 
     // 4단계 정량계산에서 멤버별로 묶어서 집계할 때 사용
     List<ReportActivityLog> findByProjectMember_IdAndSourceDomainIn(

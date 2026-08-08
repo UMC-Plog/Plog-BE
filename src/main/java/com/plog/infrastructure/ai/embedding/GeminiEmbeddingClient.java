@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -30,7 +29,7 @@ public class GeminiEmbeddingClient implements EmbeddingClient {
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
-    private final EmbeddingProperties properties;
+    private final EmbeddingProperties.GeminiConfig config;
 
     public GeminiEmbeddingClient(EmbeddingProperties properties, ObjectMapper objectMapper) {
         this(properties, objectMapper, RestClient.builder()
@@ -39,9 +38,9 @@ public class GeminiEmbeddingClient implements EmbeddingClient {
 
     /** 테스트가 MockRestServiceServer 를 물린 builder 를 넘길 수 있도록 분리한 생성자. */
     GeminiEmbeddingClient(EmbeddingProperties properties, ObjectMapper objectMapper, RestClient.Builder builder) {
-        this.properties = properties;
+        this.config = properties.gemini();
         this.objectMapper = objectMapper;
-        this.restClient = builder.baseUrl(properties.baseUrl()).build();
+        this.restClient = builder.baseUrl(config.baseUrl()).build();
     }
 
     @Override
@@ -51,8 +50,8 @@ public class GeminiEmbeddingClient implements EmbeddingClient {
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
                 String raw = restClient.post()
-                        .uri("/v1beta/models/{model}:embedContent", properties.model())
-                        .header(API_KEY_HEADER, properties.apiKey())
+                        .uri("/v1beta/models/{model}:embedContent", config.model())
+                        .header(API_KEY_HEADER, config.apiKey())
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(body)
                         .retrieve()
@@ -83,7 +82,7 @@ public class GeminiEmbeddingClient implements EmbeddingClient {
 
     private String buildRequestBody(String text) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("model", "models/" + properties.model());
+        root.put("model", "models/" + config.model());
         root.putObject("content").putArray("parts").addObject().put("text", text);
         // 저장해두고 나중에 유사도 검색에 쓸 문서 텍스트라 RETRIEVAL_DOCUMENT로 최적화한다.
         root.put("taskType", "RETRIEVAL_DOCUMENT");
@@ -109,11 +108,8 @@ public class GeminiEmbeddingClient implements EmbeddingClient {
         if (!values.isArray() || values.isEmpty()) {
             throw new EmbeddingGenerationException("Gemini 임베딩 응답에 embedding.values 배열이 없습니다.");
         }
-        List<Float> vector = new ArrayList<>(values.size());
-        for (JsonNode value : values) {
-            vector.add((float) value.asDouble());
-        }
-        return new EmbeddingResponse(vector, properties.model());
+        List<Float> vector = EmbeddingVectorParser.parseFiniteVector(values, "Gemini 임베딩 응답");
+        return new EmbeddingResponse(vector, config.model());
     }
 
     private static SimpleClientHttpRequestFactory requestFactory(Duration connect, Duration read) {

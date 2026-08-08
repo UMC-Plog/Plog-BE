@@ -116,6 +116,15 @@ public class ReportActivityLog extends BaseEntity {
     @Column(name = "embedding", columnDefinition = "jsonb")
     private String embedding;
 
+    /**
+     * 임베딩 배치가 이 행을 "처리 중"으로 선점(lease)한 만료 시각. 이 값이 미래면 다른 배치
+     * 호출이 같은 행을 다시 집어가지 않는다 — 동시 배치 실행이 같은 활동에 중복으로 API를
+     * 호출하는 걸 막기 위함. 처리(성공/처리불필요)가 끝나면 null로 되돌린다. 앱이 죽는 등으로
+     * 처리가 안 끝난 채 남아도, 이 시각이 지나면 자동으로 다시 선점 대상이 된다(복구 가능).
+     */
+    @Column(name = "embedding_lease_until")
+    private LocalDateTime embeddingLeaseUntil;
+
     public static ReportActivityLog create(
             ProjectMember projectMember,
             SourceDomain sourceDomain,
@@ -206,6 +215,7 @@ public class ReportActivityLog extends BaseEntity {
         }
         this.embeddingModel = model;
         this.embedding = embeddingJson;
+        this.embeddingLeaseUntil = null; // 완료됐으니 리스 해제
     }
 
     /**
@@ -217,6 +227,7 @@ public class ReportActivityLog extends BaseEntity {
         requireRefined();
         this.embeddingModel = EMBEDDING_NOT_APPLICABLE;
         this.embedding = null;
+        this.embeddingLeaseUntil = null; // 완료됐으니 리스 해제
     }
 
     /** 실제 임베딩 벡터가 채워져 있는지. markEmbeddingNotApplicable만 호출된 행은 false. */
