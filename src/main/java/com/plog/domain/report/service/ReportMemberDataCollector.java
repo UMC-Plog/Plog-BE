@@ -7,6 +7,7 @@ import com.plog.domain.report.llm.MemberLlmInput;
 import com.plog.domain.report.port.EvaluationSummaryProvider;
 import com.plog.domain.report.port.ExternalReportData;
 import com.plog.domain.report.port.ExternalReportDataProvider;
+import com.plog.domain.report.port.TaskSummary;
 import com.plog.domain.report.port.InternalReportData;
 import com.plog.domain.report.port.InternalReportDataProvider;
 import com.plog.domain.report.port.PeerEvaluationSummary;
@@ -70,6 +71,14 @@ public class ReportMemberDataCollector {
                         external.cautionText()
                 )
         );
+
+        // result 는 memberScoreService.calculateAndSave 가 이미 저장(관리 상태)한 엔티티다.
+        // 같은 트랜잭션 안이라 여기서 필드만 채워도 커밋 시점에 더티체킹으로 반영된다
+        // (TaskStatusService.changeStatus 등 기존 코드베이스와 같은 패턴).
+        int deadlineMetTaskCount = (int) internal.taskCardSummary().stream()
+                .filter(TaskSummary::metDeadline)
+                .count();
+        result.applyTaskCounts(internal.totalTaskCount(), internal.completedTaskCount(), deadlineMetTaskCount);
 
         // projectType 을 member 에서 읽지 않는다 — member 는 오케스트레이션에서 트랜잭션 밖으로
         // 들고 나온 엔티티라 project 가 초기화되지 않은 프록시다(EntityGraph 는 user 만 채운다).

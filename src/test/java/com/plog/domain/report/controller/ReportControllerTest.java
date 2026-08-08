@@ -322,6 +322,9 @@ class ReportControllerTest {
                 false,
                 ReliabilityTier.P2,
                 "Notion이 연동되지 않아 일부 작업 과정은 반영되지 않았을 수 있습니다.",
+                13,
+                12,
+                11,
                 "적극적인 리더십으로 팀의 방향을 잡았어요",
                 List.of(new MemberReportText.StrengthCard("주도성", "일정을 주도적으로 관리하고 실행해요")),
                 new MemberReportText.Weakness("의견 제시 빈도가 낮음", List.of("의견 제시를 늘려보세요")),
@@ -339,6 +342,9 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$.result.reliabilityTier").value("P2"))
                 // 미연동이면 externalScore 는 아예 내려가지 않는다 (0점으로 오해되면 안 된다)
                 .andExpect(jsonPath("$.result.externalScore").doesNotExist())
+                .andExpect(jsonPath("$.result.totalTaskCount").value(13))
+                .andExpect(jsonPath("$.result.completedTaskCount").value(12))
+                .andExpect(jsonPath("$.result.deadlineMetTaskCount").value(11))
                 // 개인 리포트 ②③④⑤ — 이스케이프된 문자열이 아니라 객체로 나가야 한다
                 .andExpect(jsonPath("$.result.headline").value("적극적인 리더십으로 팀의 방향을 잡았어요"))
                 .andExpect(jsonPath("$.result.strengths[0].title").value("주도성"))
