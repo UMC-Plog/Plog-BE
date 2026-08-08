@@ -28,10 +28,10 @@ import org.hibernate.type.SqlTypes;
 
 /**
  * 리포트 파이프라인(0~4단계) 공통 활동 로그. 활동 1건 = 행 1개.
- * 0단계(수집)에서 각 도메인이 행을 생성하고, 1~3단계(정제/분류/연결)는 내부 도메인
+ * 0단계(수집)에서 각 도메인이 행을 생성하고, 1~3단계(정제/분류/연결/임베딩)는 내부 도메인
  * (TASK/CHAT/POST)에 대해서만 {@link #applyNoiseFilter}, {@link #classify},
- * {@link #linkTask}가 순서대로 호출된다. 외부 도메인(GITHUB/FIGMA/NOTION/GOOGLE)은
- * rawActivityType 자체가 이미 세분류라 이 세 단계를 거치지 않고 바로 4단계 점수 계산에 쓰인다.
+ * {@link #linkTask}, {@link #applyEmbedding}이 순서대로 호출된다. 외부 도메인(GITHUB/FIGMA/NOTION/GOOGLE)은
+ * rawActivityType 자체가 이미 세분류라 이 단계들을 거치지 않고 바로 4단계 점수 계산에 쓰인다.
  * 이 계약은 아래 메서드들이 직접 검증한다 — 위반하면 IllegalStateException.
  * 레거시 {@code activity_log} 테이블은 resource_id가 필수라 재사용하지 않고 report 도메인에 별도로 둔다.
  */
@@ -47,9 +47,12 @@ import org.hibernate.type.SqlTypes;
 })
 public class ReportActivityLog extends BaseEntity {
 
-    /** 1~3단계(정제/분류/연결) 대상 도메인. 그 외(외부 연동)는 rawActivityType이 이미 세분류라 대상이 아니다. */
+    /** 1~3단계(정제/분류/연결/임베딩) 대상 도메인. 그 외(외부 연동)는 rawActivityType이 이미 세분류라 대상이 아니다. */
     private static final Set<SourceDomain> REFINABLE_DOMAINS =
             EnumSet.of(SourceDomain.TASK, SourceDomain.CHAT, SourceDomain.POST);
+
+    /** 정제 후에도 임베딩할 텍스트가 없는 행(예: content가 없는 TASK_STATUS_CHANGE)의 embeddingModel 값. */
+    private static final String EMBEDDING_NOT_APPLICABLE = "N/A";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -99,6 +102,36 @@ public class ReportActivityLog extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "classified_type", length = 30)
     private ActivityCategory classifiedType;
+
+    /**
+     * 3단계 임베딩 생성에 쓰인 모델명. 실제 벡터가 있으면 모델명, 임베딩할 텍스트 자체가 없어
+     * ({@link #content}가 정제 후에도 비면) 처리 완료 표시만 한 경우는 {@link #EMBEDDING_NOT_APPLICABLE}.
+     * 아직 처리 전이면 null — 배치 조회의 "아직 안 한 것" 판별 기준이 된다.
+     */
+    @Column(name = "embedding_model", length = 100)
+    private String embeddingModel;
+
+    /** 임베딩 벡터(JSON 배열 텍스트). embeddingModel이 실제 모델명일 때만 값이 있다. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "embedding", columnDefinition = "jsonb")
+    private String embedding;
+
+    /**
+     * 임베딩 배치가 이 행을 "처리 중"으로 선점(lease)한 만료 시각. 이 값이 미래면 다른 배치
+     * 호출이 같은 행을 다시 집어가지 않는다 — 동시 배치 실행이 같은 활동에 중복으로 API를
+     * 호출하는 걸 막기 위함. 처리(성공/처리불필요)가 끝나면 null로 되돌린다. 앱이 죽는 등으로
+     * 처리가 안 끝난 채 남아도, 이 시각이 지나면 자동으로 다시 선점 대상이 된다(복구 가능).
+     */
+    @Column(name = "embedding_lease_until")
+    private LocalDateTime embeddingLeaseUntil;
+
+    /**
+     * {@link #embeddingLeaseUntil}과 함께 찍히는 소유권 토큰(배치 1회 호출당 UUID 하나).
+     * 리스를 해제·갱신할 때 이 토큰이 일치하는 행만 건드린다 — 이미 만료돼서 다른 실행자가
+     * 새로 선점한 행을 실수로 건드리지 않기 위한 낙관적 동시성 체크다.
+     */
+    @Column(name = "embedding_lease_token", length = 36)
+    private String embeddingLeaseToken;
 
     public static ReportActivityLog create(
             ProjectMember projectMember,
@@ -174,5 +207,41 @@ public class ReportActivityLog extends BaseEntity {
     /** 정제 결과 "노이즈"로 판정돼 2~3단계 대상에서 제외되는지 여부. */
     public boolean isNoise() {
         return Boolean.TRUE.equals(noiseFiltered);
+    }
+
+    /**
+     * 3단계 임베딩 결과 기록. 정제를 거쳐 noiseFiltered=false로 확정된 행에만 호출 가능.
+     * 임베딩할 정제된 텍스트가 없는 행은 이 메서드가 아니라 {@link #markEmbeddingNotApplicable()}를 쓴다.
+     */
+    public void applyEmbedding(String model, String embeddingJson) {
+        requireRefined();
+        if (model == null || model.isBlank()) {
+            throw new IllegalArgumentException("model은 필수입니다.");
+        }
+        if (embeddingJson == null || embeddingJson.isBlank()) {
+            throw new IllegalArgumentException("embeddingJson은 필수입니다.");
+        }
+        this.embeddingModel = model;
+        this.embedding = embeddingJson;
+        this.embeddingLeaseUntil = null; // 완료됐으니 리스 해제
+        this.embeddingLeaseToken = null;
+    }
+
+    /**
+     * 정제를 통과했지만(noiseFiltered=false) 임베딩할 텍스트 자체가 없는 행(예: content가 없는
+     * TASK_STATUS_CHANGE)의 3단계 처리를 "완료"로 표시한다. 이 표시가 없으면 배치 조회가 매번
+     * 같은 행을 다시 골라내 반복 처리하게 된다.
+     */
+    public void markEmbeddingNotApplicable() {
+        requireRefined();
+        this.embeddingModel = EMBEDDING_NOT_APPLICABLE;
+        this.embedding = null;
+        this.embeddingLeaseUntil = null; // 완료됐으니 리스 해제
+        this.embeddingLeaseToken = null;
+    }
+
+    /** 실제 임베딩 벡터가 채워져 있는지. markEmbeddingNotApplicable만 호출된 행은 false. */
+    public boolean hasEmbedding() {
+        return embedding != null;
     }
 }
