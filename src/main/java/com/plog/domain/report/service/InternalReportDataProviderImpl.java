@@ -13,6 +13,7 @@ import com.plog.domain.task.entity.TaskOverdueCalculator;
 import com.plog.domain.task.entity.TaskStatus;
 import com.plog.domain.task.repository.TaskAttachmentRepository;
 import com.plog.domain.task.repository.TaskRepository;
+import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,9 +25,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * {@link InternalReportDataProvider} 실제 구현 (0~2단계: 업무카드 집계 + 활동 유형 요약/역량 근거).
+ * {@link InternalReportDataProvider} 실제 구현 (0~4단계: 업무카드 집계 + 활동 유형 요약/역량 근거
+ * + 내부 점수 계산).
  * <p>
- * 내부 점수({@code internalScore})는 스코어링 단계가 없어 여전히 null이다 — 별도 이슈에서 채운다.
+ * 내부 점수({@code internalScore}) 계산은 {@link InternalScoreCalculator}에 위임한다 — 가중치·정규화
+ * 방식이 바뀌어도 이 클래스는 손댈 필요가 없도록 분리했다.
  * <p>
  * 활동(업무카드·활동 로그)이 하나도 없는 멤버는 예외 대신 {@link InternalReportData#empty()}를
  * 돌려준다 — 참여가 저조한 멤버도 리포트에 나와야 한다는 포트 계약을 지키기 위해서다.
@@ -70,6 +73,10 @@ public class InternalReportDataProviderImpl implements InternalReportDataProvide
         double completionRate = totalTaskCount == 0 ? 0.0 : completedTaskCount / (double) totalTaskCount;
         double deadlineComplianceRate = totalTaskCount == 0 ? 0.0 : deadlineMetTaskCount / (double) totalTaskCount;
 
+        Map<ActivityCategory, Integer> activityTypeSummary = summarizeActivityTypes(activities);
+        BigDecimal internalScore = InternalScoreCalculator.calculate(
+                activityTypeSummary, totalTaskCount, completionRate, deadlineComplianceRate);
+
         return new InternalReportData(
                 taskCardSummary,
                 totalTaskCount,
@@ -77,9 +84,9 @@ public class InternalReportDataProviderImpl implements InternalReportDataProvide
                 completionRate,
                 deadlineComplianceRate,
                 summarizeAttachments(tasks),
-                summarizeActivityTypes(activities),
+                activityTypeSummary,
                 extractCompetencyEvidence(activities),
-                null
+                internalScore
         );
     }
 
