@@ -119,4 +119,12 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
             Long projectMemberId, List<SourceDomain> sourceDomains);
 
     List<ReportActivityLog> findByProjectMember_Id(Long projectMemberId);
+
+    // 2단계 분류 대상 조회용 — 3단계(임베딩)가 끝났고(embeddingModel이 채워짐, 실제 모델명이든
+    // N/A sentinel이든) 아직 분류되지 않은(classifiedType IS NULL) 내부 도메인 행.
+    // 정렬 관례는 1단계 정제 조회와 동일: occurredAt만으로는 동시각 행 사이의 순서가 불안정해
+    // id를 안정적인 tie-breaker로 더한다.
+    List<ReportActivityLog>
+    findBySourceDomainInAndNoiseFilteredFalseAndEmbeddingModelIsNotNullAndClassifiedTypeIsNullOrderByOccurredAtAscIdAsc(
+            List<SourceDomain> sourceDomains, Limit limit);
 }
