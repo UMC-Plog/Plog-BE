@@ -36,7 +36,7 @@ class EvaluationSummaryProviderImplTest {
     // 받은 평가가 없는 멤버는 예외가 아니라 none() — 참여 저조한 멤버도 리포트에 나와야 한다.
     @Test
     void peer_받은_평가가_없으면_none을_돌려준다() {
-        when(peerEvaluationRepository.findAllByEvaluateeId(MEMBER_ID)).thenReturn(List.of());
+        when(peerEvaluationRepository.findAllByEvaluateeIdOrderByCreatedAtAscIdAsc(MEMBER_ID)).thenReturn(List.of());
 
         PeerEvaluationSummary summary = provider.peer(PROJECT_ID, MEMBER_ID);
 
@@ -58,7 +58,7 @@ class EvaluationSummaryProviderImplTest {
                 .collaborationScore(5).initiativeScore(3).communicationScore(4).outputScore(5)
                 .keywords(List.of("리더십", "꼼꼼함"))
                 .build();
-        when(peerEvaluationRepository.findAllByEvaluateeId(MEMBER_ID)).thenReturn(List.of(first, second));
+        when(peerEvaluationRepository.findAllByEvaluateeIdOrderByCreatedAtAscIdAsc(MEMBER_ID)).thenReturn(List.of(first, second));
         when(calculationService.calculatePeerScore(PROJECT_ID, MEMBER_ID))
                 .thenReturn(new EvaluationScoreCalculationService.PeerScoreResult(
                         new BigDecimal("80.00"), new BigDecimal("4.25"), Map.of()));

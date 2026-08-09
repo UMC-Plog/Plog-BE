@@ -50,7 +50,8 @@ public class EvaluationSummaryProviderImpl implements EvaluationSummaryProvider 
     @Override
     @Transactional(readOnly = true)
     public PeerEvaluationSummary peer(Long projectId, Long projectMemberId) {
-        List<PeerEvaluation> received = peerEvaluationRepository.findAllByEvaluateeId(projectMemberId);
+        List<PeerEvaluation> received =
+                peerEvaluationRepository.findAllByEvaluateeIdOrderByCreatedAtAscIdAsc(projectMemberId);
         if (received.isEmpty()) {
             // 아직 아무에게도 평가받지 못한 멤버 — 타임아웃 발행 경로에서 실제로 발생한다.
             return PeerEvaluationSummary.none();
