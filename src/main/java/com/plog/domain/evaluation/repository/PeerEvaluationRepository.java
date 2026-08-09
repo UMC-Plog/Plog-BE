@@ -19,6 +19,9 @@ public interface PeerEvaluationRepository extends JpaRepository<PeerEvaluation, 
 
     List<PeerEvaluation> findAllByEvaluateeProjectId(Long projectId);
 
+    /** 멤버 1명이 받은 평가 전부. Peer 집계(평균·역량점수·키워드·평가자 수) 계산에 쓴다. */
+    List<PeerEvaluation> findAllByEvaluateeId(Long evaluateeId);
+
     @Query("""
             select count(peerEvaluation)
             from PeerEvaluation peerEvaluation

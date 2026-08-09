@@ -79,6 +79,10 @@ public class ReportMemberDataCollector {
                 .count();
         result.applyTaskCounts(internal.totalTaskCount(), internal.completedTaskCount(), deadlineMetTaskCount);
 
+        // 팀 리포트 시안의 역량 점수/태그 표시용 Peer 집계(5점 척도). 점수와 같은 트랜잭션에서 더티체킹으로 반영된다.
+        // 받은 평가가 없는 멤버(none())도 리포트에 나와야 하므로 null/빈 값을 그대로 저장한다.
+        result.applyPeerBreakdown(peer.average(), peer.categoryScores(), peer.keywords());
+
         // projectType 을 member 에서 읽지 않는다 — member 는 오케스트레이션에서 트랜잭션 밖으로
         // 들고 나온 엔티티라 project 가 초기화되지 않은 프록시다(EntityGraph 는 user 만 채운다).
         MemberLlmInput llmInput = MemberLlmInput.of(

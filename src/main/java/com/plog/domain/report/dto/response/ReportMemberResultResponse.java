@@ -1,10 +1,12 @@
 package com.plog.domain.report.dto.response;
 
+import com.plog.domain.report.entity.CompetencyCategory;
 import com.plog.domain.report.entity.ReliabilityTier;
 import com.plog.domain.report.llm.MemberReportText;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 @Schema(description = "리포트 멤버별 결과 응답")
 public record ReportMemberResultResponse(
@@ -18,8 +20,15 @@ public record ReportMemberResultResponse(
         BigDecimal internalScore,
         @Schema(description = "외부 연동 활동 점수. 계정 매핑이 없거나 점수화 가능한 활동이 없으면 null", example = "74.00")
         BigDecimal externalScore,
-        @Schema(description = "동료 평가 점수", example = "80.00")
+        @Schema(description = "동료 평가 점수(0~100, Z-score 보정)", example = "80.00")
         BigDecimal peerScore,
+        @Schema(description = "종합 Peer 평균(5점 척도). 받은 평가가 없으면 null", example = "4.25")
+        BigDecimal peerAverage,
+        @Schema(description = "역량별 평균(5점 척도). LEADERSHIP 은 주도성 점수. 근거 없으면 빈 객체",
+                example = "{\"COLLABORATION\":4.4,\"LEADERSHIP\":4.2,\"COMMUNICATION\":4.0,\"OUTPUT\":4.4}")
+        Map<CompetencyCategory, BigDecimal> competencyScores,
+        @Schema(description = "동료 평가 키워드(태그 칩). 근거 없으면 빈 배열", example = "[\"리더십\",\"책임감\"]")
+        List<String> peerKeywords,
         @Schema(description = "자기 피드백 일치도 점수", example = "70.00")
         BigDecimal selfFeedbackScore,
         @Schema(description = "가중합 최종 점수", example = "82.50")
@@ -54,5 +63,7 @@ public record ReportMemberResultResponse(
 ) {
     public ReportMemberResultResponse {
         strengths = strengths == null ? List.of() : List.copyOf(strengths);
+        competencyScores = competencyScores == null ? Map.of() : Map.copyOf(competencyScores);
+        peerKeywords = peerKeywords == null ? List.of() : List.copyOf(peerKeywords);
     }
 }
