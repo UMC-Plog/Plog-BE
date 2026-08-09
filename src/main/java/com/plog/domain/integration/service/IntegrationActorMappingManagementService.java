@@ -18,6 +18,7 @@ import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -46,6 +47,7 @@ public class IntegrationActorMappingManagementService {
     private final ProjectMemberIntegrationIdentityAliasRepository aliasRepository;
     private final IntegrationActivityRepository activityRepository;
     private final ProjectAccessService projectAccessService;
+    private final IntegrationActivityReportLogAdapter reportLogAdapter;
 
     @Transactional(readOnly = true)
     public IntegrationActorMappingListResponse getMappings(Long projectId, Long userId, LinkType linkType) {
@@ -150,10 +152,19 @@ public class IntegrationActorMappingManagementService {
             throw exception;
         }
 
+        ActorIdentity selectedActor = new ActorIdentity(
+                storedProviderActorId,
+                providerActor.providerLogin(),
+                providerActor.providerEmail()
+        );
         if (oldActor != null) {
             clearActivities(integration.getId(), currentMember, linkType, oldActor);
+            if (!oldActor.equals(selectedActor)) {
+                reportLogAdapter.deleteProjectMemberProjection(projectId, linkType, currentMember.getId());
+            }
         }
         assignActivities(integration.getId(), currentMember, linkType, providerActor);
+        reportLogAdapter.synchronizeProjectMemberActivities(integration.getId(), currentMember.getId());
         return toMappingResponse(identity, true);
     }
 
@@ -172,6 +183,7 @@ public class IntegrationActorMappingManagementService {
         identityRepository.delete(identity);
         identityRepository.flush();
         clearActivities(integration.getId(), currentMember, linkType, actor);
+        reportLogAdapter.deleteProjectMemberProjection(projectId, linkType, currentMember.getId());
         return response;
     }
 

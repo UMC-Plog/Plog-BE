@@ -3,6 +3,7 @@ package com.plog.domain.integration.service;
 import com.plog.domain.integration.entity.IntegrationActivityType;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.repository.IntegrationActivityRepository;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -18,6 +19,7 @@ public class IntegrationActivityStoreService {
 
     private final IntegrationActivityRepository integrationActivityRepository;
     private final IntegrationActorMappingService integrationActorMappingService;
+    private final IntegrationActivityReportLogAdapter reportLogAdapter;
     private final ThreadLocal<Map<ActorKey, Optional<com.plog.domain.project.entity.ProjectMember>>> actorCache
             = ThreadLocal.withInitial(HashMap::new);
 
@@ -47,6 +49,7 @@ public class IntegrationActivityStoreService {
         }
         com.plog.domain.project.entity.ProjectMember projectMember =
                 resolveActor(resource, actorProviderId, actorLogin, actorEmail);
+        String payload = providerPayload == null ? "{}" : providerPayload;
         integrationActivityRepository.insertIfAbsent(
                 resource.getId(),
                 projectMember == null ? null : projectMember.getId(),
@@ -57,7 +60,17 @@ public class IntegrationActivityStoreService {
                 actorEmail,
                 occurredAt,
                 sourceUrl,
-                providerPayload == null ? "{}" : providerPayload
+                payload
+        );
+        reportLogAdapter.upsert(
+                resource,
+                projectMember,
+                activityType,
+                providerEventKey,
+                actorLogin,
+                actorEmail,
+                occurredAt,
+                payload
         );
     }
 
@@ -82,6 +95,7 @@ public class IntegrationActivityStoreService {
             integrationActivityRepository.updateProviderPayloadIfChanged(
                     resource.getId(), providerEventKey, payload
             );
+            reportLogAdapter.synchronizeActivity(resource.getId(), providerEventKey);
             return;
         }
         com.plog.domain.project.entity.ProjectMember projectMember =
@@ -96,6 +110,16 @@ public class IntegrationActivityStoreService {
                 actorEmail,
                 occurredAt,
                 sourceUrl,
+                payload
+        );
+        reportLogAdapter.upsert(
+                resource,
+                projectMember,
+                activityType,
+                providerEventKey,
+                actorLogin,
+                actorEmail,
+                occurredAt,
                 payload
         );
     }

@@ -1,10 +1,12 @@
 package com.plog.domain.integration.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -16,6 +18,7 @@ import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.IntegrationActivityRepository;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +34,9 @@ class IntegrationActivityStoreServiceTest {
 
     @Mock
     private IntegrationActorMappingService integrationActorMappingService;
+
+    @Mock
+    private IntegrationActivityReportLogAdapter reportLogAdapter;
 
     @InjectMocks
     private IntegrationActivityStoreService integrationActivityStoreService;
@@ -66,6 +72,16 @@ class IntegrationActivityStoreServiceTest {
                 "https://github.com/UMC-Plog/Plog-BE/commit/abc123",
                 "{\"sha\":\"abc123\"}"
         );
+        verify(reportLogAdapter).upsert(
+                resource,
+                member,
+                IntegrationActivityType.GITHUB_COMMIT,
+                "commit:abc123",
+                "vana",
+                "vana@plog.test",
+                Instant.parse("2026-07-26T00:00:00Z"),
+                "{\"sha\":\"abc123\"}"
+        );
     }
 
     @Test
@@ -97,6 +113,16 @@ class IntegrationActivityStoreServiceTest {
                 "c@plog.test",
                 Instant.parse("2026-08-01T12:00:00Z"),
                 "https://docs.google.com/document/d/google-file-1/edit",
+                "{\"id\":\"comment-1\",\"deleted\":true}"
+        );
+        verify(reportLogAdapter).upsert(
+                resource,
+                member,
+                IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
+                "comment:comment-1",
+                "Commenter",
+                "c@plog.test",
+                Instant.parse("2026-08-01T12:00:00Z"),
                 "{\"id\":\"comment-1\",\"deleted\":true}"
         );
     }
@@ -154,6 +180,7 @@ class IntegrationActivityStoreServiceTest {
         verify(integrationActivityRepository).updateProviderPayloadIfChanged(
                 10L, "comment:comment-1", "{}"
         );
+        verify(reportLogAdapter).synchronizeActivity(10L, "comment:comment-1");
         verify(integrationActivityRepository, never()).upsertProviderPayloadIfChanged(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
         );
@@ -181,6 +208,43 @@ class IntegrationActivityStoreServiceTest {
                 null,
                 "https://docs.google.com/presentation/d/file-1/edit",
                 "{}"
+        );
+    }
+
+    @Test
+    void propagatesReportProjectionFailuresSoTheTransactionCanRollBack() {
+        IntegrationResource resource = resource();
+        ProjectMember member = ProjectMember.builder().id(20L).build();
+        given(integrationActorMappingService.resolve(any(), eq("actor-1"), eq("vana"), eq("vana@plog.test")))
+                .willReturn(member);
+        doThrow(new RuntimeException("projection failed"))
+                .when(reportLogAdapter)
+                .upsert(any(), any(), any(), any(), any(), any(), any(), any());
+
+        assertThatThrownBy(() -> integrationActivityStoreService.store(
+                resource,
+                IntegrationActivityType.GITHUB_COMMIT,
+                "commit:abc123",
+                "actor-1",
+                "vana",
+                "vana@plog.test",
+                Instant.parse("2026-07-26T00:00:00Z"),
+                "https://github.com/UMC-Plog/Plog-BE/commit/abc123",
+                "{\"sha\":\"abc123\"}"
+        )).isInstanceOf(RuntimeException.class)
+                .hasMessage("projection failed");
+
+        verify(integrationActivityRepository).insertIfAbsent(
+                10L,
+                20L,
+                IntegrationActivityType.GITHUB_COMMIT.name(),
+                "commit:abc123",
+                "actor-1",
+                "vana",
+                "vana@plog.test",
+                Instant.parse("2026-07-26T00:00:00Z"),
+                "https://github.com/UMC-Plog/Plog-BE/commit/abc123",
+                "{\"sha\":\"abc123\"}"
         );
     }
 
