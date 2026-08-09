@@ -206,7 +206,45 @@ class IntegrationActorMappingManagementServiceTest {
                 new IntegrationActorMappingRequest(ProviderActorKey.providerId("123").selectionKey())
         );
 
-        verify(reportLogAdapter, never()).deleteProjectMemberProjection(1L, LinkType.GITHUB, 3L);
+        verify(reportLogAdapter, never()).deleteProjectMemberProjection(any(), any(), any());
+        verify(reportLogAdapter).synchronizeProjectMemberActivities(5L, 3L);
+    }
+
+    @Test
+    void changingMappingReprojectsPreviousActorAsUnassigned() {
+        given(currentMember.getUser().getName()).willReturn("유상완");
+        given(currentMember.getUser().getNickname()).willReturn("바나");
+        IntegrationActorObservation selectedObservation = observation(
+                "456", "new-login", "new@example.com", 2L);
+        ProjectMemberIntegrationIdentity identity = ProjectMemberIntegrationIdentity.builder()
+                .id(20L)
+                .projectIntegration(integration)
+                .projectMember(currentMember)
+                .providerActorId("123")
+                .providerLogin("wantkdd")
+                .providerEmail("vana@example.com")
+                .build();
+        given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GITHUB))
+                .willReturn(Optional.of(integration));
+        given(activityRepository.findActorObservations(5L)).willReturn(List.of(selectedObservation));
+        given(identityRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of(identity));
+        given(aliasRepository.findAllByProjectIntegrationId(5L)).willReturn(List.of());
+        given(identityRepository.findByProjectIntegrationIdAndProjectMemberId(5L, 3L))
+                .willReturn(Optional.of(identity));
+
+        service.saveMyMapping(
+                1L,
+                10L,
+                LinkType.GITHUB,
+                new IntegrationActorMappingRequest(ProviderActorKey.providerId("456").selectionKey())
+        );
+
+        verify(activityRepository).clearProjectMemberByProviderId(5L, currentMember, "123");
+        verify(activityRepository).clearProjectMemberByEmail(5L, currentMember, "vana@example.com");
+        verify(activityRepository).clearProjectMemberByLogin(5L, currentMember, "wantkdd");
+        verify(reportLogAdapter).deleteProjectMemberProjection(1L, LinkType.GITHUB, 3L);
+        verify(reportLogAdapter).synchronizeProviderActorActivities(
+                5L, "123", "wantkdd", "vana@example.com");
         verify(reportLogAdapter).synchronizeProjectMemberActivities(5L, 3L);
     }
 
@@ -361,6 +399,8 @@ class IntegrationActorMappingManagementServiceTest {
         verify(activityRepository).clearProjectMemberByProviderId(20L, currentMember, "google-user-1");
         verify(activityRepository).clearProjectMemberByEmail(20L, currentMember, "shared@example.com");
         verify(reportLogAdapter).deleteProjectMemberProjection(1L, LinkType.GOOGLE_DOCS, 3L);
+        verify(reportLogAdapter).synchronizeProviderActorActivities(
+                20L, "google-user-1", null, "shared@example.com");
         verifyNoMoreInteractions(activityRepository);
     }
 
@@ -525,6 +565,8 @@ class IntegrationActorMappingManagementServiceTest {
                 5L, currentMember, "vana@example.com");
         verify(activityRepository).clearProjectMemberByLogin(5L, currentMember, "wantkdd");
         verify(reportLogAdapter).deleteProjectMemberProjection(1L, LinkType.GITHUB, 3L);
+        verify(reportLogAdapter).synchronizeProviderActorActivities(
+                5L, "123", "wantkdd", "vana@example.com");
     }
 
     @Test

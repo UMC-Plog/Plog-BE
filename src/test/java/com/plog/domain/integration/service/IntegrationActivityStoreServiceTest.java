@@ -47,6 +47,11 @@ class IntegrationActivityStoreServiceTest {
         ProjectMember member = ProjectMember.builder().id(20L).build();
         given(integrationActorMappingService.resolve(any(), eq("actor-1"), eq("vana"), eq("vana@plog.test")))
                 .willReturn(member);
+        given(integrationActivityRepository.insertIfAbsent(
+                10L, 20L, IntegrationActivityType.GITHUB_COMMIT.name(), "commit:abc123",
+                "actor-1", "vana", "vana@plog.test", Instant.parse("2026-07-26T00:00:00Z"),
+                "https://github.com/UMC-Plog/Plog-BE/commit/abc123", "{\"sha\":\"abc123\"}"
+        )).willReturn(1);
 
         integrationActivityStoreService.store(
                 resource,
@@ -82,6 +87,7 @@ class IntegrationActivityStoreServiceTest {
                 Instant.parse("2026-07-26T00:00:00Z"),
                 "{\"sha\":\"abc123\"}"
         );
+        verify(reportLogAdapter, never()).synchronizeActivity(any(), any());
     }
 
     @Test
@@ -115,16 +121,60 @@ class IntegrationActivityStoreServiceTest {
                 "https://docs.google.com/document/d/google-file-1/edit",
                 "{\"id\":\"comment-1\",\"deleted\":true}"
         );
-        verify(reportLogAdapter).upsert(
+        verify(reportLogAdapter).synchronizeActivity(10L, "comment:comment-1");
+        verify(reportLogAdapter, never()).upsert(
+                any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void newEventWithoutProviderTimestampSynchronizesPersistedActivityForCreatedAtFallback() {
+        IntegrationResource resource = resource();
+        given(integrationActivityRepository.insertIfAbsent(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+        )).willReturn(1);
+
+        integrationActivityStoreService.store(
                 resource,
-                member,
-                IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
-                "comment:comment-1",
-                "Commenter",
-                "c@plog.test",
-                Instant.parse("2026-08-01T12:00:00Z"),
-                "{\"id\":\"comment-1\",\"deleted\":true}"
+                IntegrationActivityType.GOOGLE_PRESENTATION_SNAPSHOT,
+                "presentation:snapshot",
+                null,
+                null,
+                null,
+                null,
+                "https://docs.google.com/presentation/d/file-1/edit",
+                "{\"id\":\"file-1\"}"
         );
+
+        verify(reportLogAdapter).synchronizeActivity(10L, "presentation:snapshot");
+        verify(reportLogAdapter, never()).upsert(
+                any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void duplicateEventSynchronizesPersistedActivityInsteadOfIncomingSnapshot() {
+        IntegrationResource resource = resource();
+        ProjectMember member = ProjectMember.builder().id(20L).build();
+        given(integrationActorMappingService.resolve(any(), eq("actor-1"), eq("vana"), eq("vana@plog.test")))
+                .willReturn(member);
+        given(integrationActivityRepository.insertIfAbsent(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+        )).willReturn(0);
+
+        integrationActivityStoreService.store(
+                resource,
+                IntegrationActivityType.GITHUB_COMMIT,
+                "commit:abc123",
+                "actor-1",
+                "vana",
+                "vana@plog.test",
+                Instant.parse("2026-07-26T00:00:00Z"),
+                "https://github.com/UMC-Plog/Plog-BE/commit/abc123",
+                "{\"sha\":\"new-snapshot\"}"
+        );
+
+        verify(reportLogAdapter).synchronizeActivity(10L, "commit:abc123");
+        verify(reportLogAdapter, never()).upsert(
+                any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -217,6 +267,9 @@ class IntegrationActivityStoreServiceTest {
         ProjectMember member = ProjectMember.builder().id(20L).build();
         given(integrationActorMappingService.resolve(any(), eq("actor-1"), eq("vana"), eq("vana@plog.test")))
                 .willReturn(member);
+        given(integrationActivityRepository.insertIfAbsent(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+        )).willReturn(1);
         doThrow(new RuntimeException("projection failed"))
                 .when(reportLogAdapter)
                 .upsert(any(), any(), any(), any(), any(), any(), any(), any());
@@ -262,6 +315,8 @@ class IntegrationActivityStoreServiceTest {
         verify(integrationActivityRepository).backfillActorSnapshotByProviderId(
                 1L, "actor-1", "vana", "vana@plog.test"
         );
+        verify(reportLogAdapter).synchronizeProviderActorActivities(
+                1L, "actor-1", null, null);
     }
 
     @Test

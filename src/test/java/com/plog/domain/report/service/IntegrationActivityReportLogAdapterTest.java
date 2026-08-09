@@ -35,6 +35,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class IntegrationActivityReportLogAdapterTest {
@@ -52,7 +53,6 @@ class IntegrationActivityReportLogAdapterTest {
         adapter = new IntegrationActivityReportLogAdapter(
                 integrationActivityRepository,
                 reportActivityLogRepository,
-                new ExternalActivityCompetencyMapper(objectMapper),
                 objectMapper
         );
     }
@@ -185,7 +185,7 @@ class IntegrationActivityReportLogAdapterTest {
 
         verify(reportActivityLogRepository).upsertExternalActivityLog(
                 eq(63L), eq("FIGMA"), eq("FIGMA_COMMENT"), eq(null),
-                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)), eq("{}"), sourceRefIdCaptor().capture()
+                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)), eq("{}"), any()
         );
         verify(reportActivityLogRepository, times(1)).upsertExternalActivityLog(
                 any(), any(), any(), any(), any(), any(), any());
@@ -213,13 +213,13 @@ class IntegrationActivityReportLogAdapterTest {
                 eq(null),
                 eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
                 eq("{\"id\":\"comment-1\"}"),
-                sourceRefIdCaptor().capture()
+                any()
         );
         verify(reportActivityLogRepository, never()).deleteExternalActivityLog(any(), any());
     }
 
     @Test
-    void emptyCompetencyActivityIsSkippedWithoutDeletingProjectedLog() {
+    void activityWithoutCompetencyMappingIsStillProjectedAsRawLog() {
         IntegrationResource resource = resource(LinkType.FIGMA);
         ProjectMember member = ProjectMember.builder().id(63L).build();
 
@@ -234,14 +234,13 @@ class IntegrationActivityReportLogAdapterTest {
                 "{}"
         );
 
-        verify(reportActivityLogRepository, never()).deleteExternalActivityLog(any(), any());
-        verify(reportActivityLogRepository, never()).upsertExternalActivityLog(
-                any(), any(), any(), any(), any(), any(), any()
-        );
+        verify(reportActivityLogRepository).upsertExternalActivityLog(
+                eq(63L), eq("FIGMA"), eq("FIGMA_FILE_METADATA"), eq(null),
+                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)), eq("{}"), any());
     }
 
     @Test
-    void googleDriveMoveActionIsSkippedWithoutDeletingProjectedLog() {
+    void googleDriveMoveActionIsStillProjectedAsRawLog() {
         IntegrationResource resource = resource(LinkType.GOOGLE_DOCS);
         ProjectMember member = ProjectMember.builder().id(63L).build();
 
@@ -256,10 +255,26 @@ class IntegrationActivityReportLogAdapterTest {
                 "{\"action\":\"move\"}"
         );
 
-        verify(reportActivityLogRepository, never()).deleteExternalActivityLog(any(), any());
-        verify(reportActivityLogRepository, never()).upsertExternalActivityLog(
-                any(), any(), any(), any(), any(), any(), any()
+        verify(reportActivityLogRepository).upsertExternalActivityLog(
+                eq(63L), eq("GOOGLE"), eq("GOOGLE_DRIVE_ACTIVITY"), eq(null),
+                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)), eq("{\"action\":\"move\"}"), any());
+    }
+
+    @Test
+    void notionWebhookCarrierEventIsNotProjectedAsUserActivity() {
+        adapter.upsert(
+                resource(LinkType.NOTION),
+                null,
+                IntegrationActivityType.NOTION_WEBHOOK_EVENT,
+                "webhook:event-1",
+                "유상완",
+                "sangwan@example.com",
+                Instant.parse("2026-08-01T03:04:05Z"),
+                "{}"
         );
+
+        verify(reportActivityLogRepository, never()).upsertExternalActivityLog(
+                any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -300,7 +315,7 @@ class IntegrationActivityReportLogAdapterTest {
                 eq(null),
                 eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
                 eq("{\"sha\":\"abc123\"}"),
-                sourceRefIdCaptor().capture()
+                any()
         );
     }
 
@@ -329,7 +344,34 @@ class IntegrationActivityReportLogAdapterTest {
                 eq(null),
                 eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
                 eq("{\"id\":\"comment-1\"}"),
-                sourceRefIdCaptor().capture()
+                any()
+        );
+    }
+
+    @Test
+    void synchronizeActivityUsesPersistedCreatedAtWhenProviderTimestampIsMissing() {
+        IntegrationActivity activity = IntegrationActivity.builder()
+                .id(33L)
+                .integrationResource(resource(LinkType.GOOGLE_SLIDES))
+                .projectMember(null)
+                .activityType(IntegrationActivityType.GOOGLE_PRESENTATION_SNAPSHOT)
+                .providerEventKey("presentation:snapshot")
+                .providerPayload("{\"id\":\"file-1\"}")
+                .build();
+        ReflectionTestUtils.setField(activity, "createdAt", LocalDateTime.of(2026, 8, 1, 3, 4, 5));
+        when(integrationActivityRepository.findReportProjectionTarget(10L, "presentation:snapshot"))
+                .thenReturn(Optional.of(activity));
+
+        adapter.synchronizeActivity(10L, "presentation:snapshot");
+
+        verify(reportActivityLogRepository).upsertExternalActivityLog(
+                eq(null),
+                eq("GOOGLE"),
+                eq("GOOGLE_PRESENTATION_SNAPSHOT"),
+                eq(null),
+                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
+                eq("{\"id\":\"file-1\"}"),
+                any()
         );
     }
 
@@ -348,8 +390,96 @@ class IntegrationActivityReportLogAdapterTest {
                 eq(null),
                 eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
                 eq("{\"sha\":\"abc123\"}"),
-                sourceRefIdCaptor().capture()
+                any()
         );
+    }
+
+    @Test
+    void synchronizeProjectIntegrationFetchesAndProjectsEveryIntegrationTarget() {
+        when(integrationActivityRepository.findReportProjectionTargetsByProjectIntegration(5L))
+                .thenReturn(List.of(activity()));
+
+        adapter.synchronizeProjectIntegrationActivities(5L);
+
+        verify(integrationActivityRepository).findReportProjectionTargetsByProjectIntegration(5L);
+        verify(reportActivityLogRepository).upsertExternalActivityLog(
+                eq(63L),
+                eq("GITHUB"),
+                eq("GITHUB_COMMIT"),
+                eq(null),
+                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
+                eq("{\"sha\":\"abc123\"}"),
+                any()
+        );
+    }
+
+    @Test
+    void synchronizeProviderActorProjectsClearedActivityAsUnassigned() {
+        IntegrationActivity clearedActivity = IntegrationActivity.builder()
+                .id(31L)
+                .integrationResource(resource(LinkType.GITHUB))
+                .projectMember(null)
+                .activityType(IntegrationActivityType.GITHUB_COMMIT)
+                .providerEventKey("commit:cleared")
+                .actorProviderId("123")
+                .actorLogin("wantkdd")
+                .actorEmail("wantkdd@example.com")
+                .occurredAt(Instant.parse("2026-08-01T03:04:05Z"))
+                .providerPayload("{\"sha\":\"cleared\"}")
+                .build();
+        when(integrationActivityRepository.findReportProjectionTargetsByProviderActor(
+                5L, "123", "wantkdd", "wantkdd@example.com"
+        )).thenReturn(List.of(clearedActivity));
+
+        adapter.synchronizeProviderActorActivities(
+                5L, "123", "WANTKDD", "WANTKDD@EXAMPLE.COM");
+
+        verify(reportActivityLogRepository).upsertExternalActivityLog(
+                eq(null), eq("GITHUB"), eq("GITHUB_COMMIT"), eq(null),
+                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
+                eq("{\"sha\":\"cleared\"}"), any());
+    }
+
+    @Test
+    void synchronizeActivityDeletesProjectionWhenPersistedActivityIsNoLongerEligible() {
+        IntegrationActivity actorlessActivity = IntegrationActivity.builder()
+                .id(32L)
+                .integrationResource(resource(LinkType.GITHUB))
+                .projectMember(ProjectMember.builder().id(63L).build())
+                .activityType(IntegrationActivityType.GITHUB_COMMIT)
+                .providerEventKey("commit:actorless")
+                .occurredAt(Instant.parse("2026-08-01T03:04:05Z"))
+                .providerPayload("{\"sha\":\"actorless\"}")
+                .build();
+        when(integrationActivityRepository.findReportProjectionTarget(10L, "commit:actorless"))
+                .thenReturn(Optional.of(actorlessActivity));
+
+        adapter.synchronizeActivity(10L, "commit:actorless");
+
+        ArgumentCaptor<String> sourceRefId = ArgumentCaptor.forClass(String.class);
+        verify(reportActivityLogRepository).deleteExternalActivityLog(eq("GITHUB"), sourceRefId.capture());
+        assertThat(sourceRefId.getValue()).startsWith("integration:40:GITHUB:");
+        verify(reportActivityLogRepository, never()).upsertExternalActivityLog(
+                any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void nonObjectPayloadIsWrappedWithoutLosingRawValue() {
+        adapter.upsert(
+                resource(LinkType.GITHUB),
+                ProjectMember.builder().id(63L).build(),
+                IntegrationActivityType.GITHUB_COMMIT,
+                "commit:invalid-json",
+                "wantkdd",
+                "wantkdd@example.com",
+                Instant.parse("2026-08-01T03:04:05Z"),
+                "[\"raw\"]"
+        );
+
+        verify(reportActivityLogRepository).upsertExternalActivityLog(
+                eq(63L), eq("GITHUB"), eq("GITHUB_COMMIT"), eq(null),
+                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
+                eq("{\"raw\":\"[\\\"raw\\\"]\"}"), any());
     }
 
     @Test
@@ -383,6 +513,9 @@ class IntegrationActivityReportLogAdapterTest {
         adapter.synchronizeActivity(10L, " ");
         adapter.synchronizeProjectMemberActivities(null, 63L);
         adapter.synchronizeProjectMemberActivities(5L, null);
+        adapter.synchronizeProviderActorActivities(null, "actor", null, null);
+        adapter.synchronizeProviderActorActivities(5L, " ", null, null);
+        adapter.synchronizeProjectIntegrationActivities(null);
         adapter.deleteProjectMemberProjection(null, LinkType.GITHUB, 63L);
         adapter.deleteProjectMemberProjection(40L, null, 63L);
         adapter.deleteProjectMemberProjection(40L, LinkType.GITHUB, null);
@@ -449,7 +582,4 @@ class IntegrationActivityReportLogAdapterTest {
                 .build();
     }
 
-    private ArgumentCaptor<String> sourceRefIdCaptor() {
-        return ArgumentCaptor.forClass(String.class);
-    }
 }

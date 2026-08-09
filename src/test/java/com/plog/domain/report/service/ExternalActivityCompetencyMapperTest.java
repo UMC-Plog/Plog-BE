@@ -70,6 +70,11 @@ class ExternalActivityCompetencyMapperTest {
         assertThat(mapper.map(IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY,
                 "{\"primaryActionDetail\":{\"edit\":{}}}"))
                 .containsExactly(CompetencyCategory.OUTPUT);
+        assertThat(mapper.map(IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY,
+                "{\"primaryActionDetail\":{\" Create \":{}}}"))
+                .containsExactly(CompetencyCategory.OUTPUT);
+        assertThat(mapper.map(IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY, "{\"action\":\" EDIT \"}"))
+                .containsExactly(CompetencyCategory.OUTPUT);
 
         assertThat(mapper.map(IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY, "{\"action\":\"move\"}")).isEmpty();
         assertThat(mapper.map(IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY,

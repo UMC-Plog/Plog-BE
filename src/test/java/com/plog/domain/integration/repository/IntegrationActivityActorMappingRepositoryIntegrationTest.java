@@ -3,6 +3,7 @@ package com.plog.domain.integration.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plog.domain.integration.entity.IntegrationActivity;
 import com.plog.domain.integration.entity.IntegrationActivityType;
 import com.plog.domain.integration.entity.IntegrationAuthorizationState;
@@ -26,6 +27,10 @@ import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.service.ProjectPurgeService;
+import com.plog.domain.report.entity.RawActivityType;
+import com.plog.domain.report.entity.SourceDomain;
+import com.plog.domain.report.repository.ReportActivityLogRepository;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import com.plog.domain.user.entity.User;
 import com.plog.infrastructure.s3.UploadedFileService;
 import java.time.Instant;
@@ -69,6 +74,9 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
 
     @Autowired
     private IntegrationActivityRepository activityRepository;
+
+    @Autowired
+    private ReportActivityLogRepository reportActivityLogRepository;
 
     @Autowired
     private ProjectPurgeService projectPurgeService;
@@ -122,6 +130,129 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
         assertThat(activityRepository.findById(unassigned.getId()).orElseThrow().getProjectMember()).isNull();
         assertThat(activityRepository.findById(ownedByAnother.getId()).orElseThrow().getProjectMember().getId())
                 .isEqualTo(anotherMember.getId());
+    }
+
+    @Test
+    void providerActorProjectionQueryReturnsClearedRowsByProviderIdAndFallbackAliases() {
+        Project project = entityManager.persist(project("provider-projection"));
+        ProjectMember currentMember = entityManager.persist(member(
+                project,
+                User.createLocal("provider-current@example.com", "encoded", "현재", "provider-current"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration integration = entityManager.persist(integration(project, currentMember));
+        IntegrationResource resource = entityManager.persist(resource(integration, currentMember));
+        entityManager.persist(activity(
+                resource, currentMember, "event-provider", "123", "provider-login", "provider@example.com"));
+        entityManager.persist(activity(
+                resource, currentMember, "event-email", null, null, "WANTKDD@EXAMPLE.COM"));
+        entityManager.persist(activity(
+                resource, currentMember, "event-login", null, "WANTKDD", null));
+        entityManager.persist(activity(
+                resource, currentMember, "event-other-provider", "other", "WANTKDD", "WANTKDD@EXAMPLE.COM"));
+
+        Project otherProject = entityManager.persist(project("provider-projection-other"));
+        ProjectMember otherMember = entityManager.persist(member(
+                otherProject,
+                User.createLocal("provider-other@example.com", "encoded", "다른", "provider-other"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration otherIntegration = entityManager.persist(integration(otherProject, otherMember));
+        IntegrationResource otherResource = entityManager.persist(resource(otherIntegration, otherMember));
+        entityManager.persist(activity(
+                otherResource, otherMember, "event-other-integration", "123", "WANTKDD", "WANTKDD@EXAMPLE.COM"));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(activityRepository.clearProjectMemberByProviderId(
+                integration.getId(), currentMember, "123")).isOne();
+        assertThat(activityRepository.clearProjectMemberByEmail(
+                integration.getId(), currentMember, "wantkdd@example.com")).isOne();
+        assertThat(activityRepository.clearProjectMemberByLogin(
+                integration.getId(), currentMember, "wantkdd")).isOne();
+        entityManager.clear();
+
+        var targets = activityRepository.findReportProjectionTargetsByProviderActor(
+                integration.getId(), "123", "wantkdd", "wantkdd@example.com");
+
+        assertThat(targets)
+                .extracting(IntegrationActivity::getProviderEventKey)
+                .containsExactlyInAnyOrder("event-provider", "event-email", "event-login");
+        assertThat(targets).allSatisfy(target -> assertThat(target.getProjectMember()).isNull());
+    }
+
+    @Test
+    void projectIntegrationProjectionQueryReturnsOnlyRequestedIntegrationRows() {
+        Project project = entityManager.persist(project("integration-projection"));
+        ProjectMember member = entityManager.persist(member(
+                project,
+                User.createLocal("integration-target@example.com", "encoded", "대상", "integration-target"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration integration = entityManager.persist(integration(project, member));
+        IntegrationResource resource = entityManager.persist(resource(integration, member));
+        entityManager.persist(activity(resource, member, "event-target-1", "actor-1", "actor-1@example.com"));
+        entityManager.persist(activity(resource, null, "event-target-2", "actor-2", "actor-2@example.com"));
+
+        Project otherProject = entityManager.persist(project("integration-projection-other"));
+        ProjectMember otherMember = entityManager.persist(member(
+                otherProject,
+                User.createLocal("integration-control@example.com", "encoded", "대조", "integration-control"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration otherIntegration = entityManager.persist(integration(otherProject, otherMember));
+        IntegrationResource otherResource = entityManager.persist(resource(otherIntegration, otherMember));
+        entityManager.persist(activity(
+                otherResource, otherMember, "event-control", "actor-control", "control@example.com"));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(activityRepository.findReportProjectionTargetsByProjectIntegration(integration.getId()))
+                .extracting(IntegrationActivity::getProviderEventKey)
+                .containsExactlyInAnyOrder("event-target-1", "event-target-2");
+    }
+
+    @Test
+    void persistedDuplicateWithMissingProviderTimestampProjectsOriginalRowUsingCreatedAt() {
+        Project project = entityManager.persist(projectCoveringCurrentTimestamp("created-at-projection"));
+        ProjectMember member = entityManager.persist(member(
+                project,
+                User.createLocal("created-at@example.com", "encoded", "생성시각", "created-at"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration integration = entityManager.persist(integration(project, member));
+        IntegrationResource resource = entityManager.persist(resource(integration, member));
+        entityManager.flush();
+
+        assertThat(activityRepository.insertIfAbsent(
+                resource.getId(), member.getId(), IntegrationActivityType.GITHUB_ISSUE.name(),
+                "issue:duplicate", "actor-original", "original", "original@example.com",
+                null, "https://github.com/Plog/backend/issues/1", "{\"state\":\"persisted\"}"
+        )).isOne();
+        assertThat(activityRepository.insertIfAbsent(
+                resource.getId(), null, IntegrationActivityType.GITHUB_COMMIT.name(),
+                "issue:duplicate", "actor-incoming", "incoming", "incoming@example.com",
+                Instant.now(), "https://github.com/Plog/backend/commit/incoming", "{\"state\":\"incoming\"}"
+        )).isZero();
+        entityManager.clear();
+
+        IntegrationActivity persisted = activityRepository.findReportProjectionTarget(
+                resource.getId(), "issue:duplicate").orElseThrow();
+        assertThat(persisted.getCreatedAt()).isNotNull();
+
+        IntegrationActivityReportLogAdapter adapter = new IntegrationActivityReportLogAdapter(
+                activityRepository, reportActivityLogRepository, new ObjectMapper());
+        adapter.synchronizeActivity(resource.getId(), "issue:duplicate");
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(reportActivityLogRepository.findAll()).singleElement().satisfies(log -> {
+            assertThat(log.getProjectMember().getId()).isEqualTo(member.getId());
+            assertThat(log.getSourceDomain()).isEqualTo(SourceDomain.GITHUB);
+            assertThat(log.getRawActivityType()).isEqualTo(RawActivityType.GITHUB_ISSUE);
+            assertThat(log.getOccurredAt()).isEqualTo(persisted.getCreatedAt());
+            assertThat(log.getMetadata()).isEqualToIgnoringWhitespace("{\"state\":\"persisted\"}");
+        });
     }
 
     @Test
@@ -534,6 +665,19 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
                 .status(ProjectStatus.IN_PROGRESS)
                 .startDay(today)
                 .endDay(today.plusDays(30))
+                .build();
+    }
+
+    private Project projectCoveringCurrentTimestamp(String name) {
+        LocalDate utcToday = LocalDate.now(java.time.ZoneOffset.UTC);
+        return Project.builder()
+                .projectName(name)
+                .inviteTokenHash(name + "-hash")
+                .inviteTokenEncrypted(name + "-encrypted")
+                .projectType(ProjectType.DEVELOP)
+                .status(ProjectStatus.IN_PROGRESS)
+                .startDay(utcToday.minusDays(1))
+                .endDay(utcToday.plusDays(1))
                 .build();
     }
 

@@ -2,7 +2,9 @@ package com.plog.domain.project.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 import com.plog.domain.integration.entity.IntegrationCredentialType;
@@ -17,6 +19,7 @@ import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.exception.ProjectApiErrorCode;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
 import java.util.List;
@@ -33,6 +36,7 @@ class ProjectSettingsServiceTest {
     @Mock private ProjectMemberRepository projectMemberRepository;
     @Mock private ProjectIntegrationRepository projectIntegrationRepository;
     @Mock private InviteTokenCipher inviteTokenCipher;
+    @Mock private IntegrationActivityReportLogAdapter reportLogAdapter;
 
     private ProjectSettingsService service;
 
@@ -43,7 +47,8 @@ class ProjectSettingsServiceTest {
                 projectMemberRepository,
                 projectIntegrationRepository,
                 inviteTokenCipher,
-                new ProjectSettingsValidator()
+                new ProjectSettingsValidator(),
+                reportLogAdapter
         );
     }
 
@@ -95,6 +100,60 @@ class ProjectSettingsServiceTest {
     }
 
     @Test
+    void endDayChangeReprojectsEveryExistingIntegration() {
+        LocalDate today = LocalDate.now(java.time.ZoneOffset.UTC);
+        Project project = project();
+        ProjectMember owner = ProjectMember.builder()
+                .id(3L).role(ProjectRole.OWNER).status(MemberStatus.ACTIVE).build();
+        ProjectIntegration github = ProjectIntegration.builder()
+                .id(20L)
+                .project(project)
+                .linkType(LinkType.GITHUB)
+                .credentialType(IntegrationCredentialType.APP_INSTALLATION)
+                .externalAccountId("umc-plog")
+                .externalAccountName("UMC-Plog")
+                .providerConnectionId("1234")
+                .build();
+        ProjectIntegration google = ProjectIntegration.builder()
+                .id(21L)
+                .project(project)
+                .linkType(LinkType.GOOGLE_DOCS)
+                .credentialType(IntegrationCredentialType.OAUTH)
+                .externalAccountId("google")
+                .externalAccountName("Google")
+                .providerConnectionId("google-account")
+                .build();
+        when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(owner));
+        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(1L))
+                .thenReturn(List.of(github, google));
+
+        service.updateSettings(
+                1L, 7L, new ProjectSettingsDto.UpdateRequest(null, today.plusDays(7), null));
+
+        verify(reportLogAdapter).synchronizeProjectIntegrationActivities(20L);
+        verify(reportLogAdapter).synchronizeProjectIntegrationActivities(21L);
+    }
+
+    @Test
+    void unchangedEndDayDoesNotReprojectIntegrations() {
+        LocalDate today = LocalDate.now(java.time.ZoneOffset.UTC);
+        Project project = project(today);
+        ProjectMember owner = ProjectMember.builder()
+                .id(3L).role(ProjectRole.OWNER).status(MemberStatus.ACTIVE).build();
+        when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(owner));
+
+        service.updateSettings(
+                1L, 7L, new ProjectSettingsDto.UpdateRequest(null, today, null));
+
+        verify(projectIntegrationRepository, never()).findAllByProjectIdOrderByLinkTypeAsc(1L);
+        verify(reportLogAdapter, never()).synchronizeProjectIntegrationActivities(any());
+    }
+
+    @Test
     void ownerCannotSetAPastDateAsExpectedEndDate() {
         Project project = project();
         ProjectMember owner = ProjectMember.builder()
@@ -138,6 +197,10 @@ class ProjectSettingsServiceTest {
     }
 
     private Project project() {
+        return project(LocalDate.of(2026, 8, 1));
+    }
+
+    private Project project(LocalDate endDay) {
         return Project.builder()
                 .id(1L)
                 .projectName("Plog")
@@ -146,7 +209,7 @@ class ProjectSettingsServiceTest {
                 .projectType(com.plog.domain.project.entity.ProjectType.DEVELOP)
                 .status(com.plog.domain.project.entity.ProjectStatus.IN_PROGRESS)
                 .startDay(LocalDate.of(2026, 7, 1))
-                .endDay(LocalDate.of(2026, 8, 1))
+                .endDay(endDay)
                 .build();
     }
 }
