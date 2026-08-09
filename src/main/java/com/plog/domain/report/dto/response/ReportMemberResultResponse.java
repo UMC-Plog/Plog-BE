@@ -24,7 +24,8 @@ public record ReportMemberResultResponse(
         BigDecimal selfFeedbackScore,
         @Schema(description = "가중합 최종 점수", example = "82.50")
         BigDecimal finalScore,
-        @Schema(description = "외부 도구 연동 여부. false면 가중치가 비례 재분배된 점수다", example = "true")
+        @Schema(description = "이 멤버에게 매핑되어 리포트에 사용할 수 있는 외부 활동 연결 여부. "
+                + "false면 가중치가 비례 재분배된 점수다", example = "true")
         boolean externalToolConnected,
         @Schema(description = "분석 신뢰도 등급", example = "P1")
         ReliabilityTier reliabilityTier,

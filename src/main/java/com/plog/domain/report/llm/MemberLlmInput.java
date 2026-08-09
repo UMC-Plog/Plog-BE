@@ -33,6 +33,7 @@ public record MemberLlmInput(
         List<String> deliverables,
         Map<String, Integer> activityTypeSummary,
         Map<String, Long> externalActivityCountByDomain,
+        Map<String, Long> externalCompetencyActivityCount,
         Map<String, List<String>> competencyEvidence,
         BigDecimal finalScore,
         Map<String, BigDecimal> peerCategoryScores,
@@ -42,6 +43,7 @@ public record MemberLlmInput(
         boolean selfFeedbackSubmitted,
         BigDecimal selfFeedbackMatchRatio,
         boolean externalToolConnected,
+        boolean externalScoreAvailable,
         ReliabilityTier reliabilityTier,
         String cautionText
 ) {
@@ -71,6 +73,7 @@ public record MemberLlmInput(
                 internal.deliverableAttachmentInfo(),
                 toStringKeyed(internal.activityTypeSummary()),
                 toStringKeyed(external.activityCountByDomain()),
+                toStringKeyed(external.competencyActivityCount()),
                 mergeEvidence(internal.competencyEvidence(), external.competencyEvidence()),
                 finalScore,
                 toStringKeyed(peer.categoryScores()),
@@ -80,6 +83,7 @@ public record MemberLlmInput(
                 self.submitted(),
                 self.matchRatio(),
                 external.externalToolConnected(),
+                external.externalScoreAvailable(),
                 external.reliabilityTier(),
                 external.cautionText()
         );

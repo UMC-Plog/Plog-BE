@@ -3,7 +3,6 @@ package com.plog.domain.report.port.fake;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.plog.domain.report.port.EvaluationSummaryProvider;
-import com.plog.domain.report.port.ExternalReportData;
 import com.plog.domain.report.port.ExternalReportDataProvider;
 import com.plog.domain.report.port.InternalReportData;
 import com.plog.domain.report.port.InternalReportDataProvider;
@@ -16,8 +15,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 이 테스트가 지키는 계약: <b>담당자가 구현체에 {@code @Component} 만 붙이면 더미가 물러난다.</b>
- * 팀원 4명이 각자 다른 시점에 머지하므로, 일부만 실제 구현으로 바뀐 중간 상태도 함께 검증한다.
+ * 이 테스트가 지키는 계약: 실제 구현이 아직 없는 내부/평가 포트만 더미로 채운다.
  */
 class ReportPortFallbackConfigTest {
 
@@ -28,26 +26,23 @@ class ReportPortFallbackConfigTest {
     void registersFakesWhenNoRealImplementationExists() {
         contextRunner.run(context -> {
             assertThat(context).hasSingleBean(InternalReportDataProvider.class);
-            assertThat(context).hasSingleBean(ExternalReportDataProvider.class);
+            assertThat(context).doesNotHaveBean(ExternalReportDataProvider.class);
             assertThat(context).hasSingleBean(EvaluationSummaryProvider.class);
             assertThat(context.getBean(InternalReportDataProvider.class))
                     .isInstanceOf(FakeInternalReportDataProvider.class);
-            assertThat(context.getBean(ExternalReportDataProvider.class))
-                    .isInstanceOf(FakeExternalReportDataProvider.class);
             assertThat(context.getBean(EvaluationSummaryProvider.class))
                     .isInstanceOf(FakeEvaluationSummaryProvider.class);
         });
     }
 
-    // 송민만 먼저 머지한 상태 — 내부 포트만 실제 구현이고 나머지 둘은 더미로 남아야 한다.
+    // 송민만 먼저 머지한 상태 — 내부 포트만 실제 구현이고 평가는 더미로 남아야 한다.
     @Test
     void backsOffOnlyForThePortThatGotARealImplementation() {
         contextRunner.withUserConfiguration(RealInternalOnlyConfig.class).run(context -> {
             assertThat(context).hasSingleBean(InternalReportDataProvider.class);
             assertThat(context.getBean(InternalReportDataProvider.class))
                     .isInstanceOf(RealInternalReportDataProvider.class);
-            assertThat(context.getBean(ExternalReportDataProvider.class))
-                    .isInstanceOf(FakeExternalReportDataProvider.class);
+            assertThat(context).doesNotHaveBean(ExternalReportDataProvider.class);
             assertThat(context.getBean(EvaluationSummaryProvider.class))
                     .isInstanceOf(FakeEvaluationSummaryProvider.class);
         });
@@ -66,14 +61,11 @@ class ReportPortFallbackConfigTest {
         });
     }
 
-    // 더미 값이 프롬프트 분기(미연동·미제출 경로)를 실제로 태우는지 — 정상 경로만 검증되면 의미가 없다.
+    // 더미 값이 프롬프트 분기(미제출 경로)를 실제로 태우는지 — 정상 경로만 검증되면 의미가 없다.
     @Test
     void fakesCoverBothConnectedAndDisconnectedBranches() {
-        FakeExternalReportDataProvider external = new FakeExternalReportDataProvider();
         FakeEvaluationSummaryProvider evaluation = new FakeEvaluationSummaryProvider();
 
-        assertThat(external.provide(1L, 1L).externalToolConnected()).isTrue();
-        assertThat(external.provide(1L, 2L).externalToolConnected()).isFalse();
         assertThat(evaluation.self(1L, 1L).submitted()).isTrue();
         assertThat(evaluation.self(1L, 3L).submitted()).isFalse();
     }
@@ -108,7 +100,10 @@ class ReportPortFallbackConfigTest {
 
         @Bean
         ExternalReportDataProvider realExternalReportDataProvider() {
-            return (projectId, projectMemberId) -> ExternalReportData.notConnected();
+            return (projectId, projectMemberIds) -> projectMemberIds.stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            id -> id,
+                            id -> com.plog.domain.report.port.ExternalReportData.notConnected()));
         }
 
         @Bean

@@ -131,8 +131,9 @@ public interface ReportControllerDoc {
             description = """
                     리포트에 포함된 멤버 1명의 점수 상세를 조회합니다. 해당 프로젝트의 ACTIVE 멤버라면
                     자신뿐 아니라 같은 팀 다른 멤버의 결과도 조회할 수 있습니다(리포트는 팀 공용 산출물입니다).
-                    externalToolConnected가 false면 externalScore는 null이고, 나머지 항목의 가중치가
-                    비례 재분배된 finalScore가 내려갑니다. 발행 전에는 결과 행이 없어 404입니다 —
+                    externalScore는 외부 도구 미연동, 멤버 계정 미매핑 또는 점수화 가능한 외부 활동이 없으면 null입니다.
+                    이때 나머지 항목의 가중치가 비례 재분배된 finalScore가 내려갑니다.
+                    발행 전에는 결과 행이 없어 404입니다 —
                     상태만 필요하면 리포트 상세 API를 사용하세요.
                     """
     )

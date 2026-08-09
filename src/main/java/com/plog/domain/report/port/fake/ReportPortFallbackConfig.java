@@ -1,7 +1,6 @@
 package com.plog.domain.report.port.fake;
 
 import com.plog.domain.report.port.EvaluationSummaryProvider;
-import com.plog.domain.report.port.ExternalReportDataProvider;
 import com.plog.domain.report.port.InternalReportDataProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -25,12 +24,6 @@ public class ReportPortFallbackConfig {
     @ConditionalOnMissingBean(InternalReportDataProvider.class)
     public InternalReportDataProvider fakeInternalReportDataProvider() {
         return new FakeInternalReportDataProvider();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean(ExternalReportDataProvider.class)
-    public ExternalReportDataProvider fakeExternalReportDataProvider() {
-        return new FakeExternalReportDataProvider();
     }
 
     @Bean
