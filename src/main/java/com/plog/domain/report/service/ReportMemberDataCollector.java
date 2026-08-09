@@ -65,7 +65,7 @@ public class ReportMemberDataCollector {
                         peer.normalizedScore(),
                         self.normalizedScore(),
                         external.externalToolConnected(),
-                        external.externalScoreAvailable(),
+                        external.externalScore() != null,
                         external.reliabilityTier(),
                         external.cautionText()
                 )
