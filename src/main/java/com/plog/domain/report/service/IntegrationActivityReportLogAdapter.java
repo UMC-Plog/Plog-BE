@@ -167,7 +167,8 @@ public class IntegrationActivityReportLogAdapter {
             return Optional.empty();
         }
         String metadata = safeJson(activity.getProviderPayload());
-        if (competencyMapper.map(rawActivityType, metadata).isEmpty()) {
+        if (competencyMapper.map(rawActivityType, metadata).isEmpty()
+                && !isNotionEvidenceOnlySnapshot(rawActivityType)) {
             return Optional.empty();
         }
 
@@ -244,6 +245,11 @@ public class IntegrationActivityReportLogAdapter {
             case NOTION -> SourceDomain.NOTION;
             case GOOGLE_DOCS, GOOGLE_SLIDES -> SourceDomain.GOOGLE;
         });
+    }
+
+    private boolean isNotionEvidenceOnlySnapshot(RawActivityType rawActivityType) {
+        return rawActivityType == RawActivityType.NOTION_PAGE_SNAPSHOT
+                || rawActivityType == RawActivityType.NOTION_BLOCK_SNAPSHOT;
     }
 
     private String sourceRefId(Long projectId, LinkType linkType, String providerResourceId, String providerEventKey) {

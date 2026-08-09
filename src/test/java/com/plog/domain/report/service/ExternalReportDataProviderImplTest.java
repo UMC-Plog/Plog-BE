@@ -183,7 +183,7 @@ class ExternalReportDataProviderImplTest {
         assertThat(result.get(MEMBER_1).externalScore()).isEqualByComparingTo("100.00");
         assertThat(result.get(MEMBER_2).externalScore()).isEqualByComparingTo("100.00");
         assertThat(result.get(MEMBER_1).competencyActivityCount())
-                .containsEntry(CompetencyCategory.COLLABORATION, 2L);
+                .containsEntry(CompetencyCategory.COLLABORATION, 1L);
         assertThat(result.get(MEMBER_2).competencyActivityCount())
                 .containsEntry(CompetencyCategory.COLLABORATION, 1L);
     }
@@ -211,6 +211,8 @@ class ExternalReportDataProviderImplTest {
 
         assertThat(result.get(MEMBER_1).externalScore()).isEqualByComparingTo("100.00");
         assertThat(result.get(MEMBER_2).externalScore()).isEqualByComparingTo("100.00");
+        assertThat(result.get(MEMBER_1).competencyActivityCount())
+                .containsEntry(CompetencyCategory.COLLABORATION, 2L);
     }
 
     @Test
@@ -253,9 +255,220 @@ class ExternalReportDataProviderImplTest {
         ExternalReportData data = provider.provide(PROJECT_ID, List.of(MEMBER_1)).get(MEMBER_1);
 
         assertThat(data.externalScore()).isEqualByComparingTo("100.00");
-        assertThat(data.competencyActivityCount()).containsEntry(CompetencyCategory.COLLABORATION, 3L);
+        assertThat(data.competencyActivityCount()).containsEntry(CompetencyCategory.COLLABORATION, 2L);
         assertThat(data.competencyEvidence().get(CompetencyCategory.COLLABORATION))
                 .singleElement().asString().contains("레이아웃 확인").doesNotContain("heart");
+    }
+
+    @Test
+    void mappedNotionSnapshotsAreOutputEvidenceOnly() {
+        ProjectIntegration notion = integration(10L, LinkType.NOTION);
+        ProjectMember member = member(MEMBER_1);
+        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(PROJECT_ID)).thenReturn(List.of(notion));
+        when(identityRepository.findActiveMappedIdentities(List.of(10L), List.of(MEMBER_1), MemberStatus.ACTIVE))
+                .thenReturn(List.of(identity(notion, member)));
+        when(reportActivityLogRepository.findExternalLogsForActiveProjectMembers(List.of(MEMBER_1), externalDomains()))
+                .thenReturn(List.of(
+                        logWithSourceRef(
+                                member,
+                                LinkType.NOTION,
+                                RawActivityType.NOTION_PAGE_SNAPSHOT,
+                                "{\"id\":\"page-1\",\"properties\":{\"이름\":{\"type\":\"title\",\"title\":[{\"plain_text\":\"API 명세 페이지\"}]}}}",
+                                "notion-resource",
+                                "page-snapshot"
+                        ),
+                        logWithSourceRef(
+                                member,
+                                LinkType.NOTION,
+                                RawActivityType.NOTION_BLOCK_SNAPSHOT,
+                                "{\"id\":\"parent-block-1\",\"parent\":{\"page_id\":\"page-1\"},\"type\":\"paragraph\",\"paragraph\":{\"rich_text\":[{\"plain_text\":\"배포 체크리스트\"}]}}",
+                                "notion-resource",
+                                "parent-block-snapshot-1"
+                        ),
+                        logWithSourceRef(
+                                member,
+                                LinkType.NOTION,
+                                RawActivityType.NOTION_BLOCK_SNAPSHOT,
+                                "{\"id\":\"nested-block-1\",\"parent\":{\"block_id\":\"parent-block-1\"},\"type\":\"paragraph\",\"paragraph\":{\"rich_text\":[{\"plain_text\":\"첫 중첩 블록\"}]}}",
+                                "notion-resource",
+                                "nested-block-snapshot-1"
+                        ),
+                        logWithSourceRef(
+                                member,
+                                LinkType.NOTION,
+                                RawActivityType.NOTION_BLOCK_SNAPSHOT,
+                                "{\"id\":\"parent-block-2\",\"parent\":{\"page_id\":\"page-1\"},\"type\":\"paragraph\",\"paragraph\":{\"rich_text\":[{\"plain_text\":\"검수 체크리스트\"}]}}",
+                                "notion-resource",
+                                "parent-block-snapshot-2"
+                        ),
+                        logWithSourceRef(
+                                member,
+                                LinkType.NOTION,
+                                RawActivityType.NOTION_BLOCK_SNAPSHOT,
+                                "{\"id\":\"nested-block-2\",\"parent\":{\"block_id\":\"parent-block-2\"},\"type\":\"paragraph\",\"paragraph\":{\"rich_text\":[{\"plain_text\":\"두 번째 중첩 블록\"}]}}",
+                                "notion-resource",
+                                "nested-block-snapshot-2"
+                        )
+                ));
+
+        ExternalReportData data = provider.provide(PROJECT_ID, List.of(MEMBER_1)).get(MEMBER_1);
+
+        assertThat(data.externalToolConnected()).isTrue();
+        assertThat(data.externalScoreAvailable()).isFalse();
+        assertThat(data.externalScore()).isNull();
+        assertThat(data.reliabilityTier()).isEqualTo(ReliabilityTier.P3);
+        assertThat(data.activityCountByDomain()).doesNotContainKey(SourceDomain.NOTION);
+        assertThat(data.competencyActivityCount()).containsEntry(CompetencyCategory.OUTPUT, 0L);
+        assertThat(data.competencyEvidence().get(CompetencyCategory.OUTPUT))
+                .singleElement().asString().contains("API 명세 페이지");
+        assertThat(data.competencyEvidence()).doesNotContainKeys(
+                CompetencyCategory.COLLABORATION,
+                CompetencyCategory.COMMUNICATION,
+                CompetencyCategory.LEADERSHIP
+        );
+    }
+
+    @Test
+    void mappedP2ToolKeepsP2ReliabilityWhenOnlyNotionSnapshotEvidenceExists() {
+        ProjectIntegration github = integration(10L, LinkType.GITHUB);
+        ProjectIntegration notion = integration(11L, LinkType.NOTION);
+        ProjectMember member = member(MEMBER_1);
+        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(PROJECT_ID))
+                .thenReturn(List.of(github, notion));
+        when(identityRepository.findActiveMappedIdentities(List.of(10L, 11L), List.of(MEMBER_1), MemberStatus.ACTIVE))
+                .thenReturn(List.of(identity(github, member), identity(notion, member)));
+        when(reportActivityLogRepository.findExternalLogsForActiveProjectMembers(List.of(MEMBER_1), externalDomains()))
+                .thenReturn(List.of(logWithSourceRef(
+                        member,
+                        LinkType.NOTION,
+                        RawActivityType.NOTION_PAGE_SNAPSHOT,
+                        "{\"id\":\"page-1\",\"properties\":{\"이름\":{\"type\":\"title\",\"title\":[{\"plain_text\":\"API 명세 페이지\"}]}}}",
+                        "notion-resource",
+                        "page-snapshot"
+                )));
+
+        ExternalReportData data = provider.provide(PROJECT_ID, List.of(MEMBER_1)).get(MEMBER_1);
+
+        assertThat(data.reliabilityTier()).isEqualTo(ReliabilityTier.P2);
+        assertThat(data.externalScoreAvailable()).isFalse();
+        assertThat(data.competencyEvidence().get(CompetencyCategory.OUTPUT)).hasSize(1);
+    }
+
+    @Test
+    void selectsOneOutputEvidenceForCommitsInSamePullRequest() {
+        ProjectIntegration github = integration(10L, LinkType.GITHUB);
+        ProjectMember member1 = member(MEMBER_1);
+        ProjectMember member2 = member(MEMBER_2);
+        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(PROJECT_ID)).thenReturn(List.of(github));
+        when(identityRepository.findActiveMappedIdentities(List.of(10L), List.of(MEMBER_1, MEMBER_2), MemberStatus.ACTIVE))
+                .thenReturn(List.of(identity(github, member1), identity(github, member2)));
+        when(reportActivityLogRepository.findExternalLogsForActiveProjectMembers(
+                List.of(MEMBER_1, MEMBER_2), externalDomains()))
+                .thenReturn(List.of(
+                        logWithSourceRef(member1, LinkType.GITHUB, RawActivityType.GITHUB_COMMIT,
+                                "{\"sha\":\"commit-2\",\"commit\":{\"message\":\"두 번째 커밋\"},\"parents\":[{\"sha\":\"commit-1\"}]}",
+                                "repo-a", "commit-2"),
+                        logWithSourceRef(member1, LinkType.GITHUB, RawActivityType.GITHUB_COMMIT,
+                                "{\"sha\":\"commit-1\",\"commit\":{\"message\":\"첫 번째 커밋\"},\"parents\":[{\"sha\":\"base\"}]}",
+                                "repo-a", "commit-1"),
+                        logWithSourceRef(member1, LinkType.GITHUB, RawActivityType.GITHUB_PULL_REQUEST,
+                                "{\"number\":7,\"title\":\"인증 기능 PR\",\"head\":{\"sha\":\"commit-2\"},\"base\":{\"sha\":\"base\"}}",
+                                "repo-a", "pull-request-7"),
+                        logWithSourceRef(member1, LinkType.GITHUB, RawActivityType.GITHUB_PULL_REQUEST,
+                                "{\"number\":8,\"title\":\"알림 기능 PR\"}",
+                                "repo-a", "pull-request-8"),
+                        logWithSourceRef(member2, LinkType.GITHUB, RawActivityType.GITHUB_COMMIT,
+                                "{\"sha\":\"comparison\",\"commit\":{\"message\":\"비교 커밋\"}}",
+                                "repo-a", "comparison")
+                ));
+
+        Map<Long, ExternalReportData> result = provider.provide(PROJECT_ID, List.of(MEMBER_1, MEMBER_2));
+        ExternalReportData data = result.get(MEMBER_1);
+
+        assertThat(data.activityCountByDomain()).containsEntry(SourceDomain.GITHUB, 4L);
+        assertThat(data.competencyActivityCount()).containsEntry(CompetencyCategory.OUTPUT, 4L);
+        assertThat(data.competencyEvidence().get(CompetencyCategory.OUTPUT)).hasSize(2);
+        assertThat(data.externalScore()).isEqualByComparingTo("100.00");
+        assertThat(result.get(MEMBER_2).externalScore()).isEqualByComparingTo("25.00");
+    }
+
+    @Test
+    void selectsOneCommunicationEvidenceForSameGithubIssue() {
+        ProjectIntegration github = integration(10L, LinkType.GITHUB);
+        ProjectMember member = member(MEMBER_1);
+        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(PROJECT_ID)).thenReturn(List.of(github));
+        when(identityRepository.findActiveMappedIdentities(List.of(10L), List.of(MEMBER_1), MemberStatus.ACTIVE))
+                .thenReturn(List.of(identity(github, member)));
+        when(reportActivityLogRepository.findExternalLogsForActiveProjectMembers(List.of(MEMBER_1), externalDomains()))
+                .thenReturn(List.of(
+                        logWithSourceRef(member, LinkType.GITHUB, RawActivityType.GITHUB_ISSUE,
+                                "{\"number\":9,\"title\":\"로그인 오류\"}", "repo-a", "issue-9"),
+                        logWithSourceRef(member, LinkType.GITHUB, RawActivityType.GITHUB_ISSUE_COMMENT,
+                                "{\"issue_url\":\"https://api.github.com/repos/acme/repo/issues/9\",\"body\":\"원인 확인\"}",
+                                "repo-a", "issue-comment-1"),
+                        logWithSourceRef(member, LinkType.GITHUB, RawActivityType.GITHUB_ISSUE_COMMENT,
+                                "{\"issue_url\":\"https://api.github.com/repos/acme/repo/issues/9\",\"body\":\"수정 완료\"}",
+                                "repo-a", "issue-comment-2"),
+                        logWithSourceRef(member, LinkType.GITHUB, RawActivityType.GITHUB_ISSUE,
+                                "{\"number\":10,\"title\":\"배포 오류\"}", "repo-a", "issue-10")
+                ));
+
+        ExternalReportData data = provider.provide(PROJECT_ID, List.of(MEMBER_1)).get(MEMBER_1);
+
+        assertThat(data.activityCountByDomain()).containsEntry(SourceDomain.GITHUB, 4L);
+        assertThat(data.competencyActivityCount()).containsEntry(CompetencyCategory.COMMUNICATION, 4L);
+        assertThat(data.competencyEvidence().get(CompetencyCategory.COMMUNICATION)).hasSize(2);
+    }
+
+    @Test
+    void selectsOneCollaborationEvidenceForReviewsInSamePullRequest() {
+        ProjectIntegration github = integration(10L, LinkType.GITHUB);
+        ProjectMember member = member(MEMBER_1);
+        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(PROJECT_ID)).thenReturn(List.of(github));
+        when(identityRepository.findActiveMappedIdentities(List.of(10L), List.of(MEMBER_1), MemberStatus.ACTIVE))
+                .thenReturn(List.of(identity(github, member)));
+        when(reportActivityLogRepository.findExternalLogsForActiveProjectMembers(List.of(MEMBER_1), externalDomains()))
+                .thenReturn(List.of(
+                        logWithSourceRef(member, LinkType.GITHUB, RawActivityType.GITHUB_PULL_REQUEST_REVIEW,
+                                "{\"pull_request_url\":\"https://api.github.com/repos/acme/repo/pulls/7\",\"body\":\"첫 리뷰\"}",
+                                "repo-a", "review-1"),
+                        logWithSourceRef(member, LinkType.GITHUB, RawActivityType.GITHUB_PULL_REQUEST_REVIEW,
+                                "{\"pull_request_url\":\"https://api.github.com/repos/acme/repo/pulls/7\",\"body\":\"두 번째 리뷰\"}",
+                                "repo-a", "review-2"),
+                        logWithSourceRef(member, LinkType.GITHUB, RawActivityType.GITHUB_PULL_REQUEST_REVIEW,
+                                "{\"pull_request_url\":\"invalid\",\"html_url\":\"https://github.com/acme/repo/pull/8\",\"body\":\"다른 PR 리뷰\"}",
+                                "repo-a", "review-3")
+                ));
+
+        ExternalReportData data = provider.provide(PROJECT_ID, List.of(MEMBER_1)).get(MEMBER_1);
+
+        assertThat(data.activityCountByDomain()).containsEntry(SourceDomain.GITHUB, 3L);
+        assertThat(data.competencyActivityCount()).containsEntry(CompetencyCategory.COLLABORATION, 3L);
+        assertThat(data.competencyEvidence().get(CompetencyCategory.COLLABORATION)).hasSize(2);
+    }
+
+    @Test
+    void selectsOneOutputEvidencePerGoogleDocument() {
+        ProjectIntegration docs = integration(10L, LinkType.GOOGLE_DOCS);
+        ProjectMember member = member(MEMBER_1);
+        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(PROJECT_ID)).thenReturn(List.of(docs));
+        when(identityRepository.findActiveMappedIdentities(List.of(10L), List.of(MEMBER_1), MemberStatus.ACTIVE))
+                .thenReturn(List.of(identity(docs, member)));
+        when(reportActivityLogRepository.findExternalLogsForActiveProjectMembers(List.of(MEMBER_1), externalDomains()))
+                .thenReturn(List.of(
+                        logWithSourceRef(member, LinkType.GOOGLE_DOCS, RawActivityType.GOOGLE_DRIVE_REVISION,
+                                "{\"originalFilename\":\"API 명세 v1\"}", "doc-a", "revision-1"),
+                        logWithSourceRef(member, LinkType.GOOGLE_DOCS, RawActivityType.GOOGLE_DRIVE_REVISION,
+                                "{\"originalFilename\":\"API 명세 v2\"}", "doc-a", "revision-2"),
+                        logWithSourceRef(member, LinkType.GOOGLE_DOCS, RawActivityType.GOOGLE_DRIVE_REVISION,
+                                "{\"originalFilename\":\"회의록\"}", "doc-b", "revision-1")
+                ));
+
+        ExternalReportData data = provider.provide(PROJECT_ID, List.of(MEMBER_1)).get(MEMBER_1);
+
+        assertThat(data.activityCountByDomain()).containsEntry(SourceDomain.GOOGLE, 3L);
+        assertThat(data.competencyActivityCount()).containsEntry(CompetencyCategory.OUTPUT, 3L);
+        assertThat(data.competencyEvidence().get(CompetencyCategory.OUTPUT)).hasSize(2);
     }
 
     @Test
@@ -316,6 +529,25 @@ class ExternalReportDataProviderImplTest {
 
     private ReportActivityLog log(ProjectMember member, LinkType linkType, RawActivityType type, String metadata) {
         return log(member, linkType, type, metadata, LocalDateTime.of(2026, 8, 7, 10, 0));
+    }
+
+    private ReportActivityLog logWithSourceRef(
+            ProjectMember member,
+            LinkType linkType,
+            RawActivityType type,
+            String metadata,
+            String resourceKey,
+            String eventKey
+    ) {
+        return ReportActivityLog.create(
+                member,
+                type.owningDomain(),
+                type,
+                "content",
+                LocalDateTime.of(2026, 8, 7, 10, 0),
+                metadata,
+                "integration:%s:%s:%s:%s".formatted(PROJECT_ID, linkType.name(), resourceKey, eventKey)
+        );
     }
 
     private void assertGithubMergeAggregation(Map<Long, ExternalReportData> result) {

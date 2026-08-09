@@ -158,6 +158,47 @@ class IntegrationActivityReportLogAdapterTest {
     }
 
     @Test
+    void mappedNotionPageAndBlockSnapshotsAreProjectedForEvidence() {
+        when(integrationActivityRepository.findReportProjectionTarget(10L, "page:page-1:edited"))
+                .thenReturn(Optional.of(activity(
+                        LinkType.NOTION,
+                        IntegrationActivityType.NOTION_PAGE_SNAPSHOT,
+                        ProjectMember.builder().id(63L).build(),
+                        "page:page-1:edited",
+                        "유상완",
+                        "sangwan@example.com",
+                        "{\"id\":\"page-1\",\"properties\":{\"이름\":{\"type\":\"title\",\"title\":[{\"plain_text\":\"API 명세\"}]}}}"
+                )));
+        when(integrationActivityRepository.findReportProjectionTarget(10L, "block:block-1:edited"))
+                .thenReturn(Optional.of(activity(
+                        LinkType.NOTION,
+                        IntegrationActivityType.NOTION_BLOCK_SNAPSHOT,
+                        ProjectMember.builder().id(63L).build(),
+                        "block:block-1:edited",
+                        "유상완",
+                        "sangwan@example.com",
+                        "{\"id\":\"block-1\",\"type\":\"paragraph\",\"paragraph\":{\"rich_text\":[{\"plain_text\":\"배포 체크\"}]}}"
+                )));
+
+        adapter.synchronizeActivity(10L, "page:page-1:edited");
+        adapter.synchronizeActivity(10L, "block:block-1:edited");
+
+        ArgumentCaptor<String> rawType = ArgumentCaptor.forClass(String.class);
+        verify(reportActivityLogRepository, times(2)).upsertExternalActivityLog(
+                eq(63L),
+                eq("NOTION"),
+                rawType.capture(),
+                eq(null),
+                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
+                any(),
+                any()
+        );
+        assertThat(rawType.getAllValues())
+                .containsExactly("NOTION_PAGE_SNAPSHOT", "NOTION_BLOCK_SNAPSHOT");
+        verify(reportActivityLogRepository, never()).deleteExternalActivityLog(eq("NOTION"), any());
+    }
+
+    @Test
     void unsupportedSnapshotAndGithubBotDeleteStaleProjection() {
         when(integrationActivityRepository.findReportProjectionTarget(10L, "metadata:file"))
                 .thenReturn(Optional.of(activity(
