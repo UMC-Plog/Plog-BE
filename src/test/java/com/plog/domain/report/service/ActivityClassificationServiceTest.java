@@ -310,7 +310,7 @@ class ActivityClassificationServiceTest {
         stubFetch(List.of(log));
 
         // MAX_RETRY_COUNT=5 — 1~4번째 실패까지는 backoff만 찍히고 계속 재처리 대상으로 남는다.
-        for (int attempt = 1; attempt <= 4; attempt++) {
+        for (int attempt = 1; attempt <= 5; attempt++) {
             service.classifyBatch();
 
             assertThat(log.getClassificationRetryCount()).isEqualTo(attempt);
