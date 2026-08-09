@@ -19,6 +19,88 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
 
     boolean existsBySourceDomainAndSourceRefId(SourceDomain sourceDomain, String sourceRefId);
 
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            INSERT INTO report_activity_log (
+                project_member_id,
+                source_domain,
+                raw_activity_type,
+                content,
+                occurred_at,
+                metadata,
+                source_ref_id,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                :projectMemberId,
+                :sourceDomain,
+                :rawActivityType,
+                :content,
+                :occurredAt,
+                CAST(:metadata AS jsonb),
+                :sourceRefId,
+                current_timestamp,
+                current_timestamp
+            )
+            ON CONFLICT (source_domain, source_ref_id) DO UPDATE
+            SET project_member_id = EXCLUDED.project_member_id,
+                raw_activity_type = EXCLUDED.raw_activity_type,
+                content = EXCLUDED.content,
+                occurred_at = EXCLUDED.occurred_at,
+                metadata = EXCLUDED.metadata,
+                updated_at = current_timestamp
+            WHERE report_activity_log.project_member_id IS DISTINCT FROM EXCLUDED.project_member_id
+               OR report_activity_log.raw_activity_type IS DISTINCT FROM EXCLUDED.raw_activity_type
+               OR report_activity_log.content IS DISTINCT FROM EXCLUDED.content
+               OR report_activity_log.occurred_at IS DISTINCT FROM EXCLUDED.occurred_at
+               OR report_activity_log.metadata IS DISTINCT FROM EXCLUDED.metadata
+            """, nativeQuery = true)
+    int upsertExternalActivityLog(
+            @Param("projectMemberId") Long projectMemberId,
+            @Param("sourceDomain") String sourceDomain,
+            @Param("rawActivityType") String rawActivityType,
+            @Param("content") String content,
+            @Param("occurredAt") LocalDateTime occurredAt,
+            @Param("metadata") String metadata,
+            @Param("sourceRefId") String sourceRefId
+    );
+
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            DELETE FROM report_activity_log
+            WHERE source_domain = :sourceDomain
+              AND source_ref_id = :sourceRefId
+            """, nativeQuery = true)
+    int deleteExternalActivityLog(
+            @Param("sourceDomain") String sourceDomain,
+            @Param("sourceRefId") String sourceRefId
+    );
+
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            DELETE FROM report_activity_log
+            WHERE project_member_id = :projectMemberId
+              AND source_domain = :sourceDomain
+              AND starts_with(source_ref_id, :sourceRefPrefix)
+            """, nativeQuery = true)
+    int deleteExternalActivityLogsByMemberAndSourcePrefix(
+            @Param("projectMemberId") Long projectMemberId,
+            @Param("sourceDomain") String sourceDomain,
+            @Param("sourceRefPrefix") String sourceRefPrefix
+    );
+
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            DELETE FROM report_activity_log
+            WHERE source_domain = :sourceDomain
+              AND starts_with(source_ref_id, :sourceRefPrefix)
+            """, nativeQuery = true)
+    int deleteExternalActivityLogsBySourcePrefix(
+            @Param("sourceDomain") String sourceDomain,
+            @Param("sourceRefPrefix") String sourceRefPrefix
+    );
+
     // 안전망 재수집 대상 조회 — AFTER_COMMIT 리스너가 유실해 아직 활동 로그가 없는 제출.
     // sourceRefId 규칙("peer-evaluation:"+id, "self-feedback:"+id)은 EvaluationActivityLogService의
     // 적재 규칙과 짝을 이룬다. threshold보다 오래된 행만 잡아 정상 비동기 처리 중인 건과 겹치지 않게 한다.
@@ -114,12 +196,6 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
             @Param("leaseToken") String leaseToken,
             @Param("leaseUntil") LocalDateTime leaseUntil);
 
-    // 4단계 정량계산에서 멤버별로 묶어서 집계할 때 사용
-    List<ReportActivityLog> findByProjectMember_IdAndSourceDomainIn(
-            Long projectMemberId, List<SourceDomain> sourceDomains);
-
-    List<ReportActivityLog> findByProjectMember_Id(Long projectMemberId);
-
     // 2단계 분류 대상 조회용 — 3단계(임베딩)가 끝났고(embeddingModel이 채워짐, 실제 모델명이든
     // N/A sentinel이든) 아직 분류되지 않은(classifiedType IS NULL) 내부 도메인 행.
     // classificationFailed=true(최대 재시도 초과로 영구 실패 확정)인 행과, classificationNextRetryAt이
@@ -144,4 +220,19 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
             @Param("sourceDomains") List<SourceDomain> sourceDomains,
             @Param("now") LocalDateTime now,
             Limit limit);
+
+    @Query("""
+            select log from ReportActivityLog log
+              join fetch log.projectMember member
+            where member.id in :projectMemberIds
+              and member.status = com.plog.domain.project.entity.MemberStatus.ACTIVE
+              and log.sourceDomain in :sourceDomains
+            order by log.occurredAt desc, log.id desc
+            """)
+    List<ReportActivityLog> findExternalLogsForActiveProjectMembers(
+            @Param("projectMemberIds") List<Long> projectMemberIds,
+            @Param("sourceDomains") List<SourceDomain> sourceDomains
+    );
+
+    List<ReportActivityLog> findByProjectMember_Id(Long projectMemberId);
 }
