@@ -53,6 +53,7 @@ class IntegrationActivityReportLogAdapterTest {
         adapter = new IntegrationActivityReportLogAdapter(
                 integrationActivityRepository,
                 reportActivityLogRepository,
+                new ExternalActivityCompetencyMapper(objectMapper),
                 objectMapper
         );
     }
@@ -219,7 +220,7 @@ class IntegrationActivityReportLogAdapterTest {
     }
 
     @Test
-    void activityWithoutCompetencyMappingIsStillProjectedAsRawLog() {
+    void activityWithoutCompetencyMappingIsExcludedFromReportLog() {
         IntegrationResource resource = resource(LinkType.FIGMA);
         ProjectMember member = ProjectMember.builder().id(63L).build();
 
@@ -234,13 +235,13 @@ class IntegrationActivityReportLogAdapterTest {
                 "{}"
         );
 
-        verify(reportActivityLogRepository).upsertExternalActivityLog(
-                eq(63L), eq("FIGMA"), eq("FIGMA_FILE_METADATA"), eq(null),
-                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)), eq("{}"), any());
+        verify(reportActivityLogRepository, never()).upsertExternalActivityLog(
+                any(), any(), any(), any(), any(), any(), any());
+        verify(reportActivityLogRepository, never()).deleteExternalActivityLog(any(), any());
     }
 
     @Test
-    void googleDriveMoveActionIsStillProjectedAsRawLog() {
+    void googleDriveMoveActionWithoutCompetencyMappingIsExcludedFromReportLog() {
         IntegrationResource resource = resource(LinkType.GOOGLE_DOCS);
         ProjectMember member = ProjectMember.builder().id(63L).build();
 
@@ -255,9 +256,9 @@ class IntegrationActivityReportLogAdapterTest {
                 "{\"action\":\"move\"}"
         );
 
-        verify(reportActivityLogRepository).upsertExternalActivityLog(
-                eq(63L), eq("GOOGLE"), eq("GOOGLE_DRIVE_ACTIVITY"), eq(null),
-                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)), eq("{\"action\":\"move\"}"), any());
+        verify(reportActivityLogRepository, never()).upsertExternalActivityLog(
+                any(), any(), any(), any(), any(), any(), any());
+        verify(reportActivityLogRepository, never()).deleteExternalActivityLog(any(), any());
     }
 
     @Test
@@ -352,25 +353,27 @@ class IntegrationActivityReportLogAdapterTest {
     void synchronizeActivityUsesPersistedCreatedAtWhenProviderTimestampIsMissing() {
         IntegrationActivity activity = IntegrationActivity.builder()
                 .id(33L)
-                .integrationResource(resource(LinkType.GOOGLE_SLIDES))
+                .integrationResource(resource(LinkType.GITHUB))
                 .projectMember(null)
-                .activityType(IntegrationActivityType.GOOGLE_PRESENTATION_SNAPSHOT)
-                .providerEventKey("presentation:snapshot")
-                .providerPayload("{\"id\":\"file-1\"}")
+                .activityType(IntegrationActivityType.GITHUB_ISSUE)
+                .providerEventKey("issue:created-at-fallback")
+                .actorLogin("wantkdd")
+                .actorEmail("wantkdd@example.com")
+                .providerPayload("{\"number\":1}")
                 .build();
         ReflectionTestUtils.setField(activity, "createdAt", LocalDateTime.of(2026, 8, 1, 3, 4, 5));
-        when(integrationActivityRepository.findReportProjectionTarget(10L, "presentation:snapshot"))
+        when(integrationActivityRepository.findReportProjectionTarget(10L, "issue:created-at-fallback"))
                 .thenReturn(Optional.of(activity));
 
-        adapter.synchronizeActivity(10L, "presentation:snapshot");
+        adapter.synchronizeActivity(10L, "issue:created-at-fallback");
 
         verify(reportActivityLogRepository).upsertExternalActivityLog(
                 eq(null),
-                eq("GOOGLE"),
-                eq("GOOGLE_PRESENTATION_SNAPSHOT"),
+                eq("GITHUB"),
+                eq("GITHUB_ISSUE"),
                 eq(null),
                 eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
-                eq("{\"id\":\"file-1\"}"),
+                eq("{\"number\":1}"),
                 any()
         );
     }

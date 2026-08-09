@@ -33,6 +33,7 @@ public class IntegrationActivityReportLogAdapter {
 
     private final IntegrationActivityRepository integrationActivityRepository;
     private final ReportActivityLogRepository reportActivityLogRepository;
+    private final ExternalActivityCompetencyMapper competencyMapper;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -217,6 +218,9 @@ public class IntegrationActivityReportLogAdapter {
             return Optional.empty();
         }
         if (isBot(source.sourceDomain(), actorLogin, actorEmail)) {
+            return Optional.empty();
+        }
+        if (competencyMapper.map(activityType, providerPayload).isEmpty()) {
             return Optional.empty();
         }
         RawActivityType rawActivityType = rawActivityType(activityType).orElse(null);

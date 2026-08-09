@@ -135,17 +135,17 @@ class IntegrationActivityStoreServiceTest {
 
         integrationActivityStoreService.store(
                 resource,
-                IntegrationActivityType.GOOGLE_PRESENTATION_SNAPSHOT,
-                "presentation:snapshot",
+                IntegrationActivityType.GITHUB_ISSUE,
+                "issue:created-at-fallback",
+                "actor-1",
+                "vana",
+                "vana@plog.test",
                 null,
-                null,
-                null,
-                null,
-                "https://docs.google.com/presentation/d/file-1/edit",
-                "{\"id\":\"file-1\"}"
+                "https://github.com/UMC-Plog/Plog-BE/issues/1",
+                "{\"number\":1}"
         );
 
-        verify(reportLogAdapter).synchronizeActivity(10L, "presentation:snapshot");
+        verify(reportLogAdapter).synchronizeActivity(10L, "issue:created-at-fallback");
         verify(reportLogAdapter, never()).upsert(
                 any(), any(), any(), any(), any(), any(), any(), any());
     }

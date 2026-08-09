@@ -30,6 +30,7 @@ import com.plog.domain.project.service.ProjectPurgeService;
 import com.plog.domain.report.entity.RawActivityType;
 import com.plog.domain.report.entity.SourceDomain;
 import com.plog.domain.report.repository.ReportActivityLogRepository;
+import com.plog.domain.report.service.ExternalActivityCompetencyMapper;
 import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import com.plog.domain.user.entity.User;
 import com.plog.infrastructure.s3.UploadedFileService;
@@ -240,8 +241,12 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
                 resource.getId(), "issue:duplicate").orElseThrow();
         assertThat(persisted.getCreatedAt()).isNotNull();
 
+        ObjectMapper objectMapper = new ObjectMapper();
         IntegrationActivityReportLogAdapter adapter = new IntegrationActivityReportLogAdapter(
-                activityRepository, reportActivityLogRepository, new ObjectMapper());
+                activityRepository,
+                reportActivityLogRepository,
+                new ExternalActivityCompetencyMapper(objectMapper),
+                objectMapper);
         adapter.synchronizeActivity(resource.getId(), "issue:duplicate");
         entityManager.flush();
         entityManager.clear();
