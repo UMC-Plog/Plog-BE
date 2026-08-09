@@ -20,6 +20,7 @@ import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -47,6 +48,8 @@ class IntegrationResourceServiceNotionSearchTest {
             mock(IntegrationResourceRepository.class);
     private final IntegrationActivityRepository integrationActivityRepository =
             mock(IntegrationActivityRepository.class);
+    private final IntegrationActivityReportLogAdapter reportLogAdapter =
+            mock(IntegrationActivityReportLogAdapter.class);
     private final GithubAppClient githubAppClient = mock(GithubAppClient.class);
 
     @Test
@@ -60,6 +63,7 @@ class IntegrationResourceServiceNotionSearchTest {
                 .withBean(IntegrationVerificationService.class, () -> integrationVerificationService)
                 .withBean(IntegrationResourceRepository.class, () -> integrationResourceRepository)
                 .withBean(IntegrationActivityRepository.class, () -> integrationActivityRepository)
+                .withBean(IntegrationActivityReportLogAdapter.class, () -> reportLogAdapter)
                 .withBean(GithubAppClient.class, () -> githubAppClient)
                 .withUserConfiguration(IntegrationResourceService.class)
                 .run(context -> {
@@ -133,6 +137,7 @@ class IntegrationResourceServiceNotionSearchTest {
                 integrationVerificationService,
                 integrationResourceRepository,
                 integrationActivityRepository,
+                reportLogAdapter,
                 githubAppClient,
                 restClient
         );

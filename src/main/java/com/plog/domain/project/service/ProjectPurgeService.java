@@ -43,6 +43,7 @@ public class ProjectPurgeService {
                 + "where collectionRun.project.id = :projectId", projectId);
         delete("delete from ProjectIntegration integration "
                 + "where integration.project.id = :projectId", projectId);
+        deleteReportActivityLogs(projectId);
         delete("delete from TaskAttachment attachment where attachment.task.projectMember.project.id = :projectId", projectId);
         delete("delete from Task task where task.projectMember.project.id = :projectId", projectId);
         delete("delete from PostLike postLike where postLike.post.projectMember.project.id = :projectId", projectId);
@@ -89,6 +90,28 @@ public class ProjectPurgeService {
         entityManager.createQuery(query)
                 .setParameter("projectId", projectId)
                 .executeUpdate();
+    }
+
+    private void deleteReportActivityLogs(Long projectId) {
+        // 미매핑 외부 활동은 projectMember가 null이므로 sourceRefId의 프로젝트 prefix로 먼저 정리한다.
+        nativeDelete("""
+                delete from report_activity_log activity
+                where starts_with(activity.source_ref_id, concat('integration:', cast(?1 as text), ':'))
+                """, projectId);
+        // 업무나 멤버 FK가 붙은 내부·평가 활동은 참조 대상보다 먼저 제거해야 프로젝트 purge가 가능하다.
+        nativeDelete("""
+                delete from report_activity_log activity
+                using tasks task, project_members member
+                where activity.linked_task_id = task.task_id
+                and task.project_member_id = member.project_member_id
+                and member.project_id = ?1
+                """, projectId);
+        nativeDelete("""
+                delete from report_activity_log activity
+                using project_members member
+                where activity.project_member_id = member.project_member_id
+                and member.project_id = ?1
+                """, projectId);
     }
 
     private void deleteLegacyIntegrationRows(Long projectId) {

@@ -12,6 +12,14 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.domain.report.entity.RawActivityType;
+import com.plog.domain.report.entity.ReportActivityLog;
+import com.plog.domain.report.entity.SourceDomain;
+import com.plog.domain.report.repository.ReportActivityLogRepository;
+import com.plog.domain.task.entity.Task;
+import com.plog.domain.task.entity.TaskCategory;
+import com.plog.domain.task.entity.TaskStatus;
+import com.plog.domain.task.repository.TaskRepository;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.UserRepository;
 import com.plog.infrastructure.s3.FileStorageService;
@@ -19,6 +27,7 @@ import com.plog.infrastructure.s3.ThumbnailProperties;
 import com.plog.infrastructure.s3.UploadedFileService;
 import com.plog.global.util.HashUtil;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -89,12 +98,22 @@ class ProjectLeaveServiceIntegrationTest {
     private ProjectMemberRepository projectMemberRepository;
 
     @Autowired
+    private ReportActivityLogRepository reportActivityLogRepository;
+
+    @Autowired
+    private TaskRepository taskRepository;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @AfterEach
     void cleanUp() {
         TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
         transactionTemplate.executeWithoutResult(status -> {
+            reportActivityLogRepository.deleteAll();
+            reportActivityLogRepository.flush();
+            taskRepository.deleteAll();
+            taskRepository.flush();
             projectMemberRepository.deleteAll();
             projectMemberRepository.flush();
             projectRepository.deleteAll();
@@ -113,6 +132,22 @@ class ProjectLeaveServiceIntegrationTest {
                 .doesNotThrowAnyException();
 
         // 프로젝트와 멤버 행이 모두 사라져야 한다(하드 삭제).
+        assertThat(projectRepository.findById(fixture.projectId())).isEmpty();
+        assertThat(projectMemberRepository.count()).isZero();
+    }
+
+    @Test
+    void lastMemberLeaveDeletesMappedLinkedAndUnmappedReportActivityLogs() {
+        Fixture fixture = saveOwner("report-log-owner");
+        saveProjectScopedReportActivityLogs(fixture);
+
+        assertThat(reportActivityLogRepository.count()).isEqualTo(3);
+
+        assertThatCode(() -> projectLeaveService.leave(fixture.projectId(), fixture.userId()))
+                .doesNotThrowAnyException();
+
+        assertThat(reportActivityLogRepository.count()).isZero();
+        assertThat(taskRepository.count()).isZero();
         assertThat(projectRepository.findById(fixture.projectId())).isEmpty();
         assertThat(projectMemberRepository.count()).isZero();
     }
@@ -167,6 +202,50 @@ class ProjectLeaveServiceIntegrationTest {
                     .role(ProjectRole.MEMBER)
                     .status(MemberStatus.ACTIVE)
                     .build()).getId();
+        });
+    }
+
+    private void saveProjectScopedReportActivityLogs(Fixture fixture) {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.executeWithoutResult(status -> {
+            ProjectMember member = projectMemberRepository
+                    .findByProjectIdAndUserId(fixture.projectId(), fixture.userId())
+                    .orElseThrow();
+            Task task = taskRepository.save(Task.create(
+                    member,
+                    "외부 연동 리포트 검증",
+                    TaskCategory.DEVELOP,
+                    TaskStatus.IN_PROGRESS,
+                    LocalDate.now().plusDays(7)
+            ));
+            LocalDateTime occurredAt = LocalDateTime.now();
+            reportActivityLogRepository.save(ReportActivityLog.create(
+                    member,
+                    SourceDomain.GITHUB,
+                    RawActivityType.GITHUB_COMMIT,
+                    null,
+                    occurredAt,
+                    "{}",
+                    "integration:" + fixture.projectId() + ":GITHUB:mapped:event"
+            ));
+            reportActivityLogRepository.save(ReportActivityLog.builder()
+                    .sourceDomain(SourceDomain.TASK)
+                    .rawActivityType(RawActivityType.TASK_STATUS_CHANGE)
+                    .linkedTask(task)
+                    .occurredAt(occurredAt)
+                    .metadata("{}")
+                    .sourceRefId("task:" + task.getId() + ":status")
+                    .build());
+            reportActivityLogRepository.save(ReportActivityLog.create(
+                    null,
+                    SourceDomain.GOOGLE,
+                    RawActivityType.GOOGLE_DRIVE_COMMENT,
+                    null,
+                    occurredAt,
+                    "{}",
+                    "integration:" + fixture.projectId() + ":GOOGLE_DOCS:unmapped:event"
+            ));
+            reportActivityLogRepository.flush();
         });
     }
 

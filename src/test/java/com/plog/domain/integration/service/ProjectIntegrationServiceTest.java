@@ -18,6 +18,7 @@ import com.plog.domain.integration.repository.*;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.util.List;
@@ -52,6 +53,9 @@ class ProjectIntegrationServiceTest {
 
     @Mock
     private ProjectRepository projectRepository;
+
+    @Mock
+    private IntegrationActivityReportLogAdapter reportLogAdapter;
 
     @Test
     void rejectsStartingWorkspaceIntegrationAfterProjectCompletion() {
@@ -154,6 +158,7 @@ class ProjectIntegrationServiceTest {
             verify(notionWebhookEventRepository, never()).deleteAllByNotionIntegrationId(any());
         }
         verify(integrationActivityRepository).deleteAllByIntegrationResourceProjectIntegrationId(10L);
+        verify(reportLogAdapter).deleteProjectProjection(1L, linkType);
         verify(integrationResourceRepository).deleteAllByProjectIntegrationId(10L);
         verify(projectIntegrationRepository).delete(integration);
     }
@@ -172,6 +177,7 @@ class ProjectIntegrationServiceTest {
         service.disconnect(1L, LinkType.GOOGLE_DOCS);
 
         verify(integrationActivityRepository).deleteAllByIntegrationResourceProjectIntegrationId(10L);
+        verify(reportLogAdapter).deleteProjectProjection(1L, LinkType.GOOGLE_DOCS);
         verify(integrationResourceRepository).deleteAllByProjectIntegrationId(10L);
         verify(integrationCollectionRunRepository).deleteByProjectId(1L);
         verify(projectIntegrationRepository).delete(integration);
@@ -235,7 +241,8 @@ class ProjectIntegrationServiceTest {
                 integrationCollectionRunRepository,
                 integrationResourceRepository,
                 credentialCipher,
-                projectRepository
+                projectRepository,
+                reportLogAdapter
         );
     }
 }

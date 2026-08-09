@@ -20,6 +20,7 @@ import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -60,6 +61,7 @@ public class IntegrationResourceService {
     private final IntegrationVerificationService integrationVerificationService;
     private final IntegrationResourceRepository integrationResourceRepository;
     private final IntegrationActivityRepository integrationActivityRepository;
+    private final IntegrationActivityReportLogAdapter reportLogAdapter;
     private final GithubAppClient githubAppClient;
     private final RestClient restClient;
 
@@ -73,6 +75,7 @@ public class IntegrationResourceService {
             IntegrationVerificationService integrationVerificationService,
             IntegrationResourceRepository integrationResourceRepository,
             IntegrationActivityRepository integrationActivityRepository,
+            IntegrationActivityReportLogAdapter reportLogAdapter,
             GithubAppClient githubAppClient
     ) {
         this(
@@ -83,6 +86,7 @@ public class IntegrationResourceService {
                 integrationVerificationService,
                 integrationResourceRepository,
                 integrationActivityRepository,
+                reportLogAdapter,
                 githubAppClient,
                 ProviderRestClientFactory.create()
         );
@@ -97,6 +101,7 @@ public class IntegrationResourceService {
             IntegrationVerificationService integrationVerificationService,
             IntegrationResourceRepository integrationResourceRepository,
             IntegrationActivityRepository integrationActivityRepository,
+            IntegrationActivityReportLogAdapter reportLogAdapter,
             GithubAppClient githubAppClient,
             RestClient restClient
     ) {
@@ -107,6 +112,7 @@ public class IntegrationResourceService {
         this.integrationVerificationService = integrationVerificationService;
         this.integrationResourceRepository = integrationResourceRepository;
         this.integrationActivityRepository = integrationActivityRepository;
+        this.reportLogAdapter = reportLogAdapter;
         this.githubAppClient = githubAppClient;
         this.restClient = restClient;
     }
@@ -183,6 +189,8 @@ public class IntegrationResourceService {
                 .findByIdAndProjectIntegrationIdForUpdate(resourceId, integration.getId())
                 .orElseThrow(() -> new ApiException(IntegrationErrorCode.EXTERNAL_RESOURCE_NOT_FOUND));
 
+        reportLogAdapter.deleteResourceProjection(
+                projectId, linkType, resource.getProviderResourceId());
         integrationActivityRepository.deleteAllByIntegrationResourceId(resource.getId());
         integrationResourceRepository.delete(resource);
         return new IntegrationResourceRemovalResponse(projectId, linkType, resource.getId());
