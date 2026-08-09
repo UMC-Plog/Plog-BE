@@ -309,7 +309,8 @@ class ActivityClassificationServiceTest {
                 List.of(1.0f, 0.0f), 21L);
         stubFetch(List.of(log));
 
-        // MAX_RETRY_COUNT=5 — 1~4번째 실패까지는 backoff만 찍히고 계속 재처리 대상으로 남는다.
+        // MAX_RETRY_COUNT=5 — attemptNumber가 5를 "넘어야"(> MAX_RETRY_COUNT) 영구 실패이므로
+        // 1~5번째 실패까지는 backoff만 찍히고 계속 재처리 대상으로 남는다.
         for (int attempt = 1; attempt <= 5; attempt++) {
             service.classifyBatch();
 
@@ -319,9 +320,9 @@ class ActivityClassificationServiceTest {
             assertThat(log.getClassifiedType()).isNull();
         }
 
-        service.classifyBatch(); // 5번째 실패 — 영구 실패로 전환
+        service.classifyBatch(); // 6번째 실패 — attemptNumber(6) > MAX_RETRY_COUNT(5) → 영구 실패로 전환
 
-        assertThat(log.getClassificationRetryCount()).isEqualTo(5);
+        assertThat(log.getClassificationRetryCount()).isEqualTo(6);
         assertThat(log.isClassificationFailed()).isTrue();
         assertThat(log.getClassificationNextRetryAt()).isNull();
         assertThat(log.getClassifiedType()).isNull();
