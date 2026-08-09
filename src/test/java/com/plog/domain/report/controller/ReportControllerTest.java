@@ -317,6 +317,11 @@ class ReportControllerTest {
                 new BigDecimal("88.00"),
                 null,
                 new BigDecimal("80.00"),
+                new BigDecimal("4.25"),
+                java.util.Map.of(
+                        com.plog.domain.report.entity.CompetencyCategory.COLLABORATION, new BigDecimal("4.4"),
+                        com.plog.domain.report.entity.CompetencyCategory.LEADERSHIP, new BigDecimal("4.2")),
+                List.of("리더십", "책임감"),
                 new BigDecimal("70.00"),
                 new BigDecimal("82.50"),
                 true,
@@ -340,6 +345,10 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$.result.finalScore").value(82.50))
                 .andExpect(jsonPath("$.result.externalToolConnected").value(true))
                 .andExpect(jsonPath("$.result.reliabilityTier").value("P2"))
+                // 5점 척도 Peer 집계 — 화면의 역량 점수/태그 칩에 대응한다(peerScore 100점 척도와 별개).
+                .andExpect(jsonPath("$.result.peerAverage").value(4.25))
+                .andExpect(jsonPath("$.result.competencyScores.LEADERSHIP").value(4.2))
+                .andExpect(jsonPath("$.result.peerKeywords[0]").value("리더십"))
                 // 프로젝트 연동 여부와 멤버 점수 가용성은 별개다 — 점수가 없으면 null(응답에서는 생략)이다.
                 .andExpect(jsonPath("$.result.externalScore").doesNotExist())
                 .andExpect(jsonPath("$.result.totalTaskCount").value(13))
