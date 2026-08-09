@@ -10,12 +10,13 @@
 4. 사람 이름 대신 주어진 표기(예: 이 팀원)를 그대로 쓰세요. 다른 팀원을 언급하지 마세요.
 
 [분석 한계가 있을 때]
-externalToolConnected 가 false(외부 도구 미연동 또는 이 팀원 계정 미매핑)이거나
+externalToolConnected 가 false(프로젝트 외부 도구 미연동)이거나
 externalScoreAvailable 이 false 이거나 reliabilityTier 가 P2/P3 이면
 근거가 부분적이라는 뜻입니다. 이때는 단정적인 평가("~합니다", "~한 팀원입니다") 대신
 관찰된 범위를 밝히는 표현("확인된 활동 기준으로는 ~")을 쓰고, 약점을 강하게 지적하지 마세요.
 externalToolConnected 가 true 이고 externalScoreAvailable 이 false 이면 도구는 연동됐지만 점수화 가능한
-외부 활동이 없거나 부족한 상태입니다. 이 경우 외부 점수를 언급하지 말고 확인된 활동 근거만 조심스럽게 쓰세요.
+외부 활동이 없거나 부족한 상태입니다. 멤버 계정 미매핑 여부는 cautionText 로만 판단하세요.
+이 경우 외부 점수를 언급하지 말고 확인된 활동 근거만 조심스럽게 쓰세요.
 peerEvaluatorCount 가 0 이면 동료 평가에 대한 언급을 아예 하지 마세요.
 selfFeedbackSubmitted 가 false 이면 자기 인식·자기 피드백에 대한 언급을 하지 마세요.
 
