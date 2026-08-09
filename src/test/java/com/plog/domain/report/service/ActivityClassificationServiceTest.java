@@ -95,9 +95,7 @@ class ActivityClassificationServiceTest {
     }
 
     private void stubFetch(List<ReportActivityLog> logs) {
-        when(activityLogRepository
-                .findBySourceDomainInAndNoiseFilteredFalseAndEmbeddingModelIsNotNullAndClassifiedTypeIsNullOrderByOccurredAtAscIdAsc(
-                        any(), any(Limit.class)))
+        when(activityLogRepository.findClassificationTargets(any(), any(LocalDateTime.class), any(Limit.class)))
                 .thenReturn(logs);
     }
 
@@ -127,8 +125,7 @@ class ActivityClassificationServiceTest {
 
         ArgumentCaptor<List<SourceDomain>> domainsCaptor = ArgumentCaptor.forClass(List.class);
         verify(activityLogRepository)
-                .findBySourceDomainInAndNoiseFilteredFalseAndEmbeddingModelIsNotNullAndClassifiedTypeIsNullOrderByOccurredAtAscIdAsc(
-                        domainsCaptor.capture(), any(Limit.class));
+                .findClassificationTargets(domainsCaptor.capture(), any(LocalDateTime.class), any(Limit.class));
         assertThat(domainsCaptor.getValue())
                 .containsExactlyInAnyOrder(SourceDomain.TASK, SourceDomain.CHAT, SourceDomain.POST);
     }
@@ -296,7 +293,74 @@ class ActivityClassificationServiceTest {
         int classified = service.classifyBatch();
 
         assertThat(broken.getClassifiedType()).isNull(); // classify()가 호출되지 않아 재처리 대상으로 남음
+        assertThat(broken.getClassificationRetryCount()).isEqualTo(1); // 실패 1회 기록
+        assertThat(broken.getClassificationNextRetryAt()).isNotNull(); // backoff 시각이 찍힘
+        assertThat(broken.isClassificationFailed()).isFalse(); // 아직 최대 재시도 전
         assertThat(healthy.getClassifiedType()).isEqualTo(ActivityCategory.FEEDBACK); // 뒤의 행은 정상 분류
         assertThat(classified).isEqualTo(1);
+    }
+
+    @Test
+    void 실패가_반복되면_매번_backoff_시각을_갱신하고_최대_횟수를_넘기면_영구_실패로_전환한다() {
+        when(anchorCache.modelName()).thenReturn("gemini-embedding-001");
+        when(anchorCache.cachedCategories()).thenThrow(new RuntimeException("계속 실패"));
+        ReportActivityLog log = embeddedLog(
+                RawActivityType.CHAT_MESSAGE, SourceDomain.CHAT, "계속 실패하는 행",
+                List.of(1.0f, 0.0f), 21L);
+        stubFetch(List.of(log));
+
+        // MAX_RETRY_COUNT=5 — 1~4번째 실패까지는 backoff만 찍히고 계속 재처리 대상으로 남는다.
+        for (int attempt = 1; attempt <= 4; attempt++) {
+            service.classifyBatch();
+
+            assertThat(log.getClassificationRetryCount()).isEqualTo(attempt);
+            assertThat(log.getClassificationNextRetryAt()).isNotNull();
+            assertThat(log.isClassificationFailed()).isFalse();
+            assertThat(log.getClassifiedType()).isNull();
+        }
+
+        service.classifyBatch(); // 5번째 실패 — 영구 실패로 전환
+
+        assertThat(log.getClassificationRetryCount()).isEqualTo(5);
+        assertThat(log.isClassificationFailed()).isTrue();
+        assertThat(log.getClassificationNextRetryAt()).isNull();
+        assertThat(log.getClassifiedType()).isNull();
+    }
+
+    @Test
+    void 성공하면_이전에_쌓인_재시도_상태가_초기화된다() {
+        stubTwoCategoryAnchors();
+        ReportActivityLog log = embeddedLog(
+                RawActivityType.CHAT_MESSAGE, SourceDomain.CHAT, "리뷰 남겼습니다",
+                List.of(1.0f, 0.0f), 22L);
+        log.scheduleClassificationRetry(LocalDateTime.now().plusMinutes(5)); // 이전 실패 흔적을 미리 만들어둠
+        stubFetch(List.of(log));
+
+        service.classifyBatch();
+
+        assertThat(log.getClassifiedType()).isEqualTo(ActivityCategory.FEEDBACK);
+        assertThat(log.getClassificationRetryCount()).isZero();
+        assertThat(log.getClassificationNextRetryAt()).isNull();
+        assertThat(log.isClassificationFailed()).isFalse();
+    }
+
+    @Test
+    void 유사도가_동점이면_enum_선언_순서가_빠른_카테고리를_결정적으로_선택한다() {
+        when(anchorCache.modelName()).thenReturn("gemini-embedding-001");
+        // Set 리터럴의 내부 순서를 일부러 PROBLEM_SOLVING이 먼저 오게 섞어도 결과가 바뀌면 안 된다.
+        when(anchorCache.cachedCategories())
+                .thenReturn(Set.of(ActivityCategory.PROBLEM_SOLVING, ActivityCategory.DECISION));
+        when(anchorCache.centroidOf(ActivityCategory.DECISION)).thenReturn(List.of(1.0f, 0.0f));
+        when(anchorCache.centroidOf(ActivityCategory.PROBLEM_SOLVING)).thenReturn(List.of(0.0f, 1.0f));
+        // [1,1]은 두 centroid와 코사인 유사도가 1/√2로 완전히 동일한 진짜 동점 상황이다.
+        ReportActivityLog log = embeddedLog(
+                RawActivityType.CHAT_MESSAGE, SourceDomain.CHAT, "동점 유사도 테스트",
+                List.of(1.0f, 1.0f), 23L);
+        stubFetch(List.of(log));
+
+        service.classifyBatch();
+
+        // ActivityCategory 선언 순서상 DECISION이 PROBLEM_SOLVING보다 먼저이므로 항상 DECISION이 이긴다.
+        assertThat(log.getClassifiedType()).isEqualTo(ActivityCategory.DECISION);
     }
 }

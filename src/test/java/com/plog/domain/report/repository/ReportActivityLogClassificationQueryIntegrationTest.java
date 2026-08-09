@@ -35,8 +35,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * 2단계(활동 유형 분류) 배치 대상 조회 쿼리 검증. "정제 통과(noiseFiltered=false) +
- * 임베딩 완료(embeddingModel IS NOT NULL) + 미분류(classifiedType IS NULL) + TASK/CHAT/POST
- * 도메인"이라는 4개 조건이 실제 DB 레벨에서 정확히 걸리는지 확인한다.
+ * 임베딩 완료(embeddingModel IS NOT NULL) + 미분류(classifiedType IS NULL) + backoff 대기 중이
+ * 아님(classificationNextRetryAt) + 영구 실패가 아님(classificationFailed=false) + TASK/CHAT/POST
+ * 도메인"이라는 조건이 실제 DB 레벨에서 정확히 걸리는지 확인한다.
  */
 @DataJpaTest(properties = "spring.jpa.hibernate.ddl-auto=create-drop")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -71,6 +72,7 @@ class ReportActivityLogClassificationQueryIntegrationTest {
     void 정제_통과_임베딩_완료_미분류_행만_대상으로_조회한다() {
         Project project = saveProject();
         ProjectMember member = saveMember(project);
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
         // 대상: 정제 통과 + 임베딩 완료 + 미분류
         ReportActivityLog target = save(member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE,
@@ -87,18 +89,17 @@ class ReportActivityLogClassificationQueryIntegrationTest {
         // 제외: 아직 정제 전(noiseFiltered null)
         ReportActivityLog notRefined = ReportActivityLog.create(
                 member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE, "정제 전 메시지",
-                LocalDateTime.now(ZoneOffset.UTC), null, null);
+                now, null, null);
         activityLogRepository.save(notRefined);
 
         // 제외: 분류 대상 도메인이 아님(EVALUATION)
         ReportActivityLog evaluationLog = ReportActivityLog.create(
                 member, SourceDomain.EVALUATION, RawActivityType.SELF_FEEDBACK_SUBMIT, "자기 피드백",
-                LocalDateTime.now(ZoneOffset.UTC), null, "self-feedback:1");
+                now, null, "self-feedback:1");
         activityLogRepository.save(evaluationLog);
 
         List<ReportActivityLog> result = activityLogRepository
-                .findBySourceDomainInAndNoiseFilteredFalseAndEmbeddingModelIsNotNullAndClassifiedTypeIsNullOrderByOccurredAtAscIdAsc(
-                        CLASSIFIABLE_DOMAINS, Limit.of(500));
+                .findClassificationTargets(CLASSIFIABLE_DOMAINS, now, Limit.of(500));
 
         assertThat(result).extracting(ReportActivityLog::getId).containsExactly(target.getId());
     }
@@ -107,19 +108,51 @@ class ReportActivityLogClassificationQueryIntegrationTest {
     void content가_없어_N_A로_찍힌_행도_대상에_포함된다() {
         Project project = saveProject();
         ProjectMember member = saveMember(project);
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
         ReportActivityLog statusChange = ReportActivityLog.create(
                 member, SourceDomain.TASK, RawActivityType.TASK_STATUS_CHANGE, null,
-                LocalDateTime.now(ZoneOffset.UTC), "{\"newStatus\":\"DONE\"}", null);
+                now, "{\"newStatus\":\"DONE\"}", null);
         activityLogRepository.save(statusChange);
         statusChange.applyNoiseFilter(false);
         statusChange.markEmbeddingNotApplicable();
 
         List<ReportActivityLog> result = activityLogRepository
-                .findBySourceDomainInAndNoiseFilteredFalseAndEmbeddingModelIsNotNullAndClassifiedTypeIsNullOrderByOccurredAtAscIdAsc(
-                        CLASSIFIABLE_DOMAINS, Limit.of(500));
+                .findClassificationTargets(CLASSIFIABLE_DOMAINS, now, Limit.of(500));
 
         assertThat(result).extracting(ReportActivityLog::getId).containsExactly(statusChange.getId());
+    }
+
+    @Test
+    void backoff_대기중이거나_영구_실패한_행은_대상에서_제외된다() {
+        Project project = saveProject();
+        ProjectMember member = saveMember(project);
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+
+        // 대상: backoff 없이 즉시 재시도 가능(nextRetryAt=null)
+        ReportActivityLog readyNow = save(member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE,
+                "즉시 재시도 가능", "gemini-embedding-001", "[0.1,0.2]", false, null);
+
+        // 대상: backoff 시각이 이미 지남
+        ReportActivityLog backoffExpired = save(member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE,
+                "backoff 만료됨", "gemini-embedding-001", "[0.1,0.2]", false, null);
+        backoffExpired.scheduleClassificationRetry(now.minusMinutes(1));
+
+        // 제외: backoff 시각이 아직 미래
+        ReportActivityLog backoffPending = save(member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE,
+                "backoff 대기중", "gemini-embedding-001", "[0.1,0.2]", false, null);
+        backoffPending.scheduleClassificationRetry(now.plusMinutes(10));
+
+        // 제외: 최대 재시도를 넘겨 영구 실패로 확정됨(nextRetryAt이 null이어도 제외돼야 함)
+        ReportActivityLog permanentlyFailed = save(member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE,
+                "영구 실패", "gemini-embedding-001", "[0.1,0.2]", false, null);
+        permanentlyFailed.markClassificationFailed();
+
+        List<ReportActivityLog> result = activityLogRepository
+                .findClassificationTargets(CLASSIFIABLE_DOMAINS, now, Limit.of(500));
+
+        assertThat(result).extracting(ReportActivityLog::getId)
+                .containsExactlyInAnyOrder(readyNow.getId(), backoffExpired.getId());
     }
 
     @Test
@@ -143,8 +176,7 @@ class ReportActivityLogClassificationQueryIntegrationTest {
                 "동시각 나중 저장", "gemini-embedding-001", "[0.1,0.2]", false, null, baseTime.plusMinutes(10));
 
         List<ReportActivityLog> result = activityLogRepository
-                .findBySourceDomainInAndNoiseFilteredFalseAndEmbeddingModelIsNotNullAndClassifiedTypeIsNullOrderByOccurredAtAscIdAsc(
-                        CLASSIFIABLE_DOMAINS, Limit.of(500));
+                .findClassificationTargets(CLASSIFIABLE_DOMAINS, LocalDateTime.now(ZoneOffset.UTC), Limit.of(500));
 
         assertThat(result).extracting(ReportActivityLog::getId).containsExactly(
                 earliest.getId(),
@@ -169,8 +201,7 @@ class ReportActivityLogClassificationQueryIntegrationTest {
                 "세번째(제한에 걸려 제외)", "gemini-embedding-001", "[0.1,0.2]", false, null, baseTime.plusMinutes(2));
 
         List<ReportActivityLog> result = activityLogRepository
-                .findBySourceDomainInAndNoiseFilteredFalseAndEmbeddingModelIsNotNullAndClassifiedTypeIsNullOrderByOccurredAtAscIdAsc(
-                        CLASSIFIABLE_DOMAINS, Limit.of(2));
+                .findClassificationTargets(CLASSIFIABLE_DOMAINS, LocalDateTime.now(ZoneOffset.UTC), Limit.of(2));
 
         assertThat(result).extracting(ReportActivityLog::getId).containsExactly(first.getId(), second.getId());
     }
