@@ -248,7 +248,8 @@ public class IntegrationActivityReportLogAdapter {
     }
 
     private boolean isNotionEvidenceOnlySnapshot(RawActivityType rawActivityType) {
-        return rawActivityType == RawActivityType.NOTION_PAGE_SNAPSHOT
+        return rawActivityType == RawActivityType.NOTION_DATA_SOURCE_SNAPSHOT
+                || rawActivityType == RawActivityType.NOTION_PAGE_SNAPSHOT
                 || rawActivityType == RawActivityType.NOTION_BLOCK_SNAPSHOT;
     }
 

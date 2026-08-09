@@ -14,10 +14,9 @@ import java.util.stream.Collectors;
  * <p>
  * 외부 연동은 1~3단계(정제/분류/연결)를 건너뛴다 — rawActivityType 자체가 이미 세분류이기 때문이다.
  *
- * @param externalToolConnected 이 멤버에게 매핑되어 리포트에 사용할 수 있는 외부 활동이 있는지.
- *                              프로젝트에 도구만 연동되고 멤버 계정이 미매핑이면 false이며,
- *                              점수 가중치가 비례 재분배되고 LLM도 단정적 평가를 피한다
- * @param externalScoreAvailable 외부 점수를 최종 점수에 반영할 수 있는지. false 면 externalScore 는 null 이다
+ * @param externalToolConnected 프로젝트에 ACTIVE 외부 도구 연동이 하나라도 있는지.
+ *                              멤버 계정이 미매핑이어도 프로젝트에 연결된 도구가 있으면 true 이며,
+ *                              점수 반영 가능 여부는 externalScore null 여부로 판단한다
  * @param activityCountByDomain  외부 도메인별 활동 건수. 미연동 도메인은 키를 생략한다
  * @param competencyActivityCount 역량별 외부 활동 건수. 모든 역량 키를 0 기본값으로 포함한다
  * @param competencyEvidence     역량축 근거. 송민 쪽 내부 활동 근거와 병합되어 LLM 에 전달된다
@@ -28,7 +27,6 @@ import java.util.stream.Collectors;
  */
 public record ExternalReportData(
         boolean externalToolConnected,
-        boolean externalScoreAvailable,
         Map<SourceDomain, Long> activityCountByDomain,
         Map<CompetencyCategory, Long> competencyActivityCount,
         Map<CompetencyCategory, List<String>> competencyEvidence,
@@ -37,7 +35,7 @@ public record ExternalReportData(
         String cautionText
 ) {
     public ExternalReportData {
-        validateScoreContract(externalToolConnected, externalScoreAvailable, externalScore);
+        validateScoreContract(externalToolConnected, externalScore);
         activityCountByDomain = activityCountByDomain == null ? Map.of() : Map.copyOf(activityCountByDomain);
         competencyActivityCount = withAllCompetencyKeys(competencyActivityCount);
         competencyEvidence = copyEvidence(competencyEvidence);
@@ -50,7 +48,6 @@ public record ExternalReportData(
     public static ExternalReportData notConnected() {
         return new ExternalReportData(
                 false,
-                false,
                 Map.of(),
                 Map.of(),
                 Map.of(),
@@ -62,8 +59,7 @@ public record ExternalReportData(
 
     public static ExternalReportData notMapped() {
         return new ExternalReportData(
-                false,
-                false,
+                true,
                 Map.of(),
                 Map.of(),
                 Map.of(),
@@ -82,7 +78,6 @@ public record ExternalReportData(
     ) {
         return new ExternalReportData(
                 true,
-                false,
                 activityCountByDomain,
                 competencyActivityCount,
                 competencyEvidence,
@@ -94,17 +89,10 @@ public record ExternalReportData(
 
     private static void validateScoreContract(
             boolean externalToolConnected,
-            boolean externalScoreAvailable,
             BigDecimal externalScore
     ) {
-        if (externalScoreAvailable && !externalToolConnected) {
-            throw new IllegalArgumentException("externalScoreAvailable requires externalToolConnected");
-        }
-        if (externalScoreAvailable && externalScore == null) {
-            throw new IllegalArgumentException("externalScoreAvailable requires externalScore");
-        }
-        if (!externalScoreAvailable && externalScore != null) {
-            throw new IllegalArgumentException("externalScore must be null when unavailable");
+        if (externalScore != null && !externalToolConnected) {
+            throw new IllegalArgumentException("externalScore requires externalToolConnected");
         }
         if (externalScore != null
                 && (externalScore.compareTo(BigDecimal.ZERO) < 0

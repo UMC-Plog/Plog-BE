@@ -86,7 +86,6 @@ class ExternalReportDataProviderImplTest {
         ExternalReportData data = provider.provide(PROJECT_ID, List.of(MEMBER_1)).get(MEMBER_1);
 
         assertThat(data.externalToolConnected()).isTrue();
-        assertThat(data.externalScoreAvailable()).isFalse();
         assertThat(data.externalScore()).isNull();
         assertThat(data.reliabilityTier()).isEqualTo(ReliabilityTier.P3);
         assertThat(data.activityCountByDomain()).containsEntry(SourceDomain.NOTION, 1L);
@@ -109,10 +108,8 @@ class ExternalReportDataProviderImplTest {
         ExternalReportData mapped = result.get(MEMBER_1);
         ExternalReportData unmapped = result.get(MEMBER_2);
         assertThat(mapped.externalToolConnected()).isTrue();
-        assertThat(mapped.externalScoreAvailable()).isTrue();
         assertThat(mapped.externalScore()).isEqualByComparingTo("100.00");
-        assertThat(unmapped.externalToolConnected()).isFalse();
-        assertThat(unmapped.externalScoreAvailable()).isFalse();
+        assertThat(unmapped.externalToolConnected()).isTrue();
         assertThat(unmapped.externalScore()).isNull();
         assertThat(unmapped.cautionText()).contains("계정 매핑이 없어");
     }
@@ -272,6 +269,22 @@ class ExternalReportDataProviderImplTest {
                         logWithSourceRef(
                                 member,
                                 LinkType.NOTION,
+                                RawActivityType.NOTION_DATA_SOURCE_SNAPSHOT,
+                                "{\"id\":\"data-source-1\",\"title\":[{\"plain_text\":\"요구사항 DB\"}]}",
+                                "notion-datasource",
+                                "data-source-snapshot-1"
+                        ),
+                        logWithSourceRef(
+                                member,
+                                LinkType.NOTION,
+                                RawActivityType.NOTION_DATA_SOURCE_SNAPSHOT,
+                                "{\"id\":\"data-source-1\",\"title\":[{\"plain_text\":\"요구사항 DB 반복\"}]}",
+                                "notion-datasource",
+                                "data-source-snapshot-2"
+                        ),
+                        logWithSourceRef(
+                                member,
+                                LinkType.NOTION,
                                 RawActivityType.NOTION_PAGE_SNAPSHOT,
                                 "{\"id\":\"page-1\",\"properties\":{\"이름\":{\"type\":\"title\",\"title\":[{\"plain_text\":\"API 명세 페이지\"}]}}}",
                                 "notion-resource",
@@ -314,13 +327,15 @@ class ExternalReportDataProviderImplTest {
         ExternalReportData data = provider.provide(PROJECT_ID, List.of(MEMBER_1)).get(MEMBER_1);
 
         assertThat(data.externalToolConnected()).isTrue();
-        assertThat(data.externalScoreAvailable()).isFalse();
         assertThat(data.externalScore()).isNull();
         assertThat(data.reliabilityTier()).isEqualTo(ReliabilityTier.P3);
         assertThat(data.activityCountByDomain()).doesNotContainKey(SourceDomain.NOTION);
         assertThat(data.competencyActivityCount()).containsEntry(CompetencyCategory.OUTPUT, 0L);
         assertThat(data.competencyEvidence().get(CompetencyCategory.OUTPUT))
-                .singleElement().asString().contains("API 명세 페이지");
+                .hasSize(2)
+                .first().asString().contains("API 명세 페이지");
+        assertThat(data.competencyEvidence().get(CompetencyCategory.OUTPUT).get(1))
+                .contains("요구사항 DB");
         assertThat(data.competencyEvidence()).doesNotContainKeys(
                 CompetencyCategory.COLLABORATION,
                 CompetencyCategory.COMMUNICATION,
@@ -350,8 +365,54 @@ class ExternalReportDataProviderImplTest {
         ExternalReportData data = provider.provide(PROJECT_ID, List.of(MEMBER_1)).get(MEMBER_1);
 
         assertThat(data.reliabilityTier()).isEqualTo(ReliabilityTier.P2);
-        assertThat(data.externalScoreAvailable()).isFalse();
+        assertThat(data.externalScore()).isNull();
         assertThat(data.competencyEvidence().get(CompetencyCategory.OUTPUT)).hasSize(1);
+    }
+
+    @Test
+    void notionEvidencePriorityDoesNotAffectExternalScore() {
+        ProjectIntegration github = integration(10L, LinkType.GITHUB);
+        ProjectIntegration notion = integration(11L, LinkType.NOTION);
+        ProjectMember member1 = member(MEMBER_1);
+        ProjectMember member2 = member(MEMBER_2);
+        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(PROJECT_ID))
+                .thenReturn(List.of(github, notion));
+        when(identityRepository.findActiveMappedIdentities(List.of(10L, 11L), List.of(MEMBER_1, MEMBER_2), MemberStatus.ACTIVE))
+                .thenReturn(List.of(identity(github, member1), identity(notion, member1), identity(github, member2)));
+        when(reportActivityLogRepository.findExternalLogsForActiveProjectMembers(
+                List.of(MEMBER_1, MEMBER_2), externalDomains()))
+                .thenReturn(List.of(
+                        logWithSourceRef(member1, LinkType.GITHUB, RawActivityType.GITHUB_COMMIT,
+                                "{\"sha\":\"member-1\",\"message\":\"인증 구현\"}", "repo-a", "commit-1"),
+                        logWithSourceRef(member1, LinkType.NOTION, RawActivityType.NOTION_PAGE_SNAPSHOT,
+                                "{\"id\":\"page-1\",\"properties\":{\"이름\":{\"type\":\"title\",\"title\":[{\"plain_text\":\"설계 페이지\"}]}}}",
+                                "notion-page", "page-1"),
+                        logWithSourceRef(member1, LinkType.NOTION, RawActivityType.NOTION_BLOCK_SNAPSHOT,
+                                "{\"id\":\"block-1\",\"parent\":{\"page_id\":\"page-1\"},\"type\":\"paragraph\",\"paragraph\":{\"rich_text\":[{\"plain_text\":\"설계 내용\"}]}}",
+                                "notion-page", "block-1"),
+                        logWithSourceRef(member1, LinkType.NOTION, RawActivityType.NOTION_DATA_SOURCE_SNAPSHOT,
+                                "{\"id\":\"data-source-1\",\"title\":[{\"plain_text\":\"업무 DB\"}]}",
+                                "notion-datasource", "data-source-1"),
+                        logWithSourceRef(member1, LinkType.NOTION, RawActivityType.NOTION_COMMENT,
+                                "{\"parent\":{\"page_id\":\"page-1\"},\"rich_text\":[{\"plain_text\":\"확인했습니다\"}]}",
+                                "notion-page", "comment-1"),
+                        logWithSourceRef(member2, LinkType.GITHUB, RawActivityType.GITHUB_COMMIT,
+                                "{\"sha\":\"member-2\",\"message\":\"비교 구현\"}", "repo-a", "commit-2")
+                ));
+
+        Map<Long, ExternalReportData> result = provider.provide(PROJECT_ID, List.of(MEMBER_1, MEMBER_2));
+        ExternalReportData member1Data = result.get(MEMBER_1);
+
+        assertThat(member1Data.externalScore()).isEqualByComparingTo("100.00");
+        assertThat(result.get(MEMBER_2).externalScore()).isEqualByComparingTo("100.00");
+        assertThat(member1Data.activityCountByDomain()).containsEntry(SourceDomain.GITHUB, 1L)
+                .containsEntry(SourceDomain.NOTION, 1L);
+        assertThat(member1Data.competencyActivityCount())
+                .containsEntry(CompetencyCategory.OUTPUT, 1L)
+                .containsEntry(CompetencyCategory.COLLABORATION, 1L)
+                .containsEntry(CompetencyCategory.COMMUNICATION, 1L);
+        assertThat(member1Data.competencyEvidence().get(CompetencyCategory.OUTPUT))
+                .anySatisfy(text -> assertThat(text).contains("설계 페이지"));
     }
 
     @Test

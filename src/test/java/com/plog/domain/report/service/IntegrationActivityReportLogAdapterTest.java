@@ -158,7 +158,17 @@ class IntegrationActivityReportLogAdapterTest {
     }
 
     @Test
-    void mappedNotionPageAndBlockSnapshotsAreProjectedForEvidence() {
+    void mappedNotionPageBlockAndDataSourceSnapshotsAreProjectedForEvidence() {
+        when(integrationActivityRepository.findReportProjectionTarget(10L, "data-source:data-source-1:edited"))
+                .thenReturn(Optional.of(activity(
+                        LinkType.NOTION,
+                        IntegrationActivityType.NOTION_DATA_SOURCE_SNAPSHOT,
+                        ProjectMember.builder().id(63L).build(),
+                        "data-source:data-source-1:edited",
+                        "유상완",
+                        "sangwan@example.com",
+                        "{\"id\":\"data-source-1\",\"title\":[{\"plain_text\":\"요구사항 DB\"}]}"
+                )));
         when(integrationActivityRepository.findReportProjectionTarget(10L, "page:page-1:edited"))
                 .thenReturn(Optional.of(activity(
                         LinkType.NOTION,
@@ -180,11 +190,12 @@ class IntegrationActivityReportLogAdapterTest {
                         "{\"id\":\"block-1\",\"type\":\"paragraph\",\"paragraph\":{\"rich_text\":[{\"plain_text\":\"배포 체크\"}]}}"
                 )));
 
+        adapter.synchronizeActivity(10L, "data-source:data-source-1:edited");
         adapter.synchronizeActivity(10L, "page:page-1:edited");
         adapter.synchronizeActivity(10L, "block:block-1:edited");
 
         ArgumentCaptor<String> rawType = ArgumentCaptor.forClass(String.class);
-        verify(reportActivityLogRepository, times(2)).upsertExternalActivityLog(
+        verify(reportActivityLogRepository, times(3)).upsertExternalActivityLog(
                 eq(63L),
                 eq("NOTION"),
                 rawType.capture(),
@@ -194,8 +205,28 @@ class IntegrationActivityReportLogAdapterTest {
                 any()
         );
         assertThat(rawType.getAllValues())
-                .containsExactly("NOTION_PAGE_SNAPSHOT", "NOTION_BLOCK_SNAPSHOT");
+                .containsExactly("NOTION_DATA_SOURCE_SNAPSHOT", "NOTION_PAGE_SNAPSHOT", "NOTION_BLOCK_SNAPSHOT");
         verify(reportActivityLogRepository, never()).deleteExternalActivityLog(eq("NOTION"), any());
+    }
+
+    @Test
+    void notionWebhookEventIsNotProjectedAsReportActivityLog() {
+        when(integrationActivityRepository.findReportProjectionTarget(10L, "webhook:event-1"))
+                .thenReturn(Optional.of(activity(
+                        LinkType.NOTION,
+                        IntegrationActivityType.NOTION_WEBHOOK_EVENT,
+                        ProjectMember.builder().id(63L).build(),
+                        "webhook:event-1",
+                        "유상완",
+                        "sangwan@example.com",
+                        "{\"entity\":{\"id\":\"page-1\"}}"
+                )));
+
+        adapter.synchronizeActivity(10L, "webhook:event-1");
+
+        verify(reportActivityLogRepository).deleteExternalActivityLog(eq("NOTION"), any());
+        verify(reportActivityLogRepository, never()).upsertExternalActivityLog(
+                any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

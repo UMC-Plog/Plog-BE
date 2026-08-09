@@ -83,7 +83,7 @@ public record MemberLlmInput(
                 self.submitted(),
                 self.matchRatio(),
                 external.externalToolConnected(),
-                external.externalScoreAvailable(),
+                external.externalScore() != null,
                 external.reliabilityTier(),
                 external.cautionText()
         );

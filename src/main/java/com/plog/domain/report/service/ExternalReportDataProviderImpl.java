@@ -365,11 +365,11 @@ public class ExternalReportDataProviderImpl implements ExternalReportDataProvide
             if (isNotionEvidenceOnlySnapshot(type)) {
                 addEvidenceCandidate(
                         CompetencyCategory.OUTPUT, log, linkType, root,
-                        BigDecimal.ZERO, evidenceRelations);
+                        evidencePriorityOf(log), evidenceRelations);
                 return;
             }
 
-            BigDecimal weight = weightOf(log);
+            BigDecimal weight = scoreWeightOf(log);
             if (type == RawActivityType.GITHUB_COMMIT && mergeCommitShas.contains(commitSha(log, root))) {
                 weight = BigDecimal.ZERO;
             }
@@ -392,7 +392,7 @@ public class ExternalReportDataProviderImpl implements ExternalReportDataProvide
             for (CompetencyCategory category : categories) {
                 competencyCounts.merge(category, 1L, Long::sum);
                 if (type != RawActivityType.FIGMA_COMMENT_REACTION) {
-                    addEvidenceCandidate(category, log, linkType, root, weight, evidenceRelations);
+                    addEvidenceCandidate(category, log, linkType, root, evidencePriorityOf(log), evidenceRelations);
                 }
             }
         }
@@ -430,7 +430,6 @@ public class ExternalReportDataProviderImpl implements ExternalReportDataProvide
                     .divide(teamMaxRawScore, 2, RoundingMode.HALF_UP);
             return new ExternalReportData(
                     true,
-                    true,
                     countByDomain,
                     competencyCounts,
                     evidence,
@@ -464,7 +463,7 @@ public class ExternalReportDataProviderImpl implements ExternalReportDataProvide
         }
     }
 
-    private BigDecimal weightOf(ReportActivityLog log) {
+    private BigDecimal scoreWeightOf(ReportActivityLog log) {
         return switch (log.getRawActivityType()) {
             case GITHUB_COMMIT, GITHUB_PULL_REQUEST, FIGMA_FILE_VERSION, GOOGLE_DRIVE_REVISION ->
                     new BigDecimal("3");
@@ -475,6 +474,15 @@ public class ExternalReportDataProviderImpl implements ExternalReportDataProvide
             case NOTION_COMMENT, NOTION_BLOCK_SNAPSHOT, NOTION_PAGE_SNAPSHOT, NOTION_DATA_SOURCE_SNAPSHOT ->
                     BigDecimal.ZERO;
             default -> BigDecimal.ZERO;
+        };
+    }
+
+    private BigDecimal evidencePriorityOf(ReportActivityLog log) {
+        return switch (log.getRawActivityType()) {
+            case NOTION_PAGE_SNAPSHOT, NOTION_BLOCK_SNAPSHOT -> new BigDecimal("3");
+            case NOTION_DATA_SOURCE_SNAPSHOT -> new BigDecimal("2");
+            case NOTION_COMMENT -> BigDecimal.ONE;
+            default -> scoreWeightOf(log);
         };
     }
 
@@ -499,7 +507,8 @@ public class ExternalReportDataProviderImpl implements ExternalReportDataProvide
     }
 
     private boolean isNotionEvidenceOnlySnapshot(RawActivityType type) {
-        return type == RawActivityType.NOTION_PAGE_SNAPSHOT
+        return type == RawActivityType.NOTION_DATA_SOURCE_SNAPSHOT
+                || type == RawActivityType.NOTION_PAGE_SNAPSHOT
                 || type == RawActivityType.NOTION_BLOCK_SNAPSHOT;
     }
 
@@ -541,7 +550,7 @@ public class ExternalReportDataProviderImpl implements ExternalReportDataProvide
 
     private Comparator<EvidenceCandidate> evidencePriority() {
         return Comparator
-                .comparing(EvidenceCandidate::weight).reversed()
+                .comparing(EvidenceCandidate::priority).reversed()
                 .thenComparing(EvidenceCandidate::domain)
                 .thenComparing(EvidenceCandidate::type)
                 .thenComparing(EvidenceCandidate::occurredDate, Comparator.reverseOrder())
@@ -588,6 +597,7 @@ public class ExternalReportDataProviderImpl implements ExternalReportDataProvide
             case GOOGLE_DRIVE_REVISION -> "수정 이력";
             case GOOGLE_DRIVE_COMMENT -> "댓글";
             case NOTION_COMMENT -> "댓글";
+            case NOTION_DATA_SOURCE_SNAPSHOT -> "데이터소스 편집";
             case NOTION_PAGE_SNAPSHOT -> "페이지 편집";
             case NOTION_BLOCK_SNAPSHOT -> "블록 편집";
             default -> "활동";
@@ -613,6 +623,8 @@ public class ExternalReportDataProviderImpl implements ExternalReportDataProvide
             case NOTION_PAGE_SNAPSHOT -> "NOTION:page:" + firstNonBlank(scalarAt(root, "id"), resourceKey);
             case NOTION_BLOCK_SNAPSHOT -> "NOTION:page:" + notionBlockPageKey(
                     root, resourceKey, evidenceRelations.notion());
+            case NOTION_DATA_SOURCE_SNAPSHOT -> "NOTION:data-source:" + firstNonBlank(
+                    scalarAt(root, "id"), resourceKey);
             case NOTION_COMMENT -> "NOTION:page:" + notionCommentPageKey(
                     root, resourceKey, evidenceRelations.notion());
             default -> firstNonBlank(log.getSourceRefId(), linkType.name() + ":" + log.getRawActivityType());
@@ -816,7 +828,7 @@ public class ExternalReportDataProviderImpl implements ExternalReportDataProvide
             RawActivityType type,
             LinkType linkType,
             LocalDate occurredDate,
-            BigDecimal weight,
+            BigDecimal priority,
             String groupKey,
             String text
     ) {
