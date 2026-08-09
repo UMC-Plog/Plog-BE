@@ -4,6 +4,8 @@ import com.plog.domain.integration.entity.IntegrationActivity;
 import com.plog.domain.project.entity.ProjectMember;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -192,6 +194,34 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
             @Param("actorProviderId") String actorProviderId,
             @Param("actorLogin") String actorLogin,
             @Param("actorEmail") String actorEmail
+    );
+
+    @EntityGraph(attributePaths = {
+            "integrationResource",
+            "integrationResource.projectIntegration",
+            "integrationResource.projectIntegration.project",
+            "projectMember"
+    })
+    @Query("select activity from IntegrationActivity activity "
+            + "where activity.integrationResource.id = :resourceId "
+            + "and activity.providerEventKey = :providerEventKey")
+    Optional<IntegrationActivity> findReportProjectionTarget(
+            @Param("resourceId") Long resourceId,
+            @Param("providerEventKey") String providerEventKey
+    );
+
+    @EntityGraph(attributePaths = {
+            "integrationResource",
+            "integrationResource.projectIntegration",
+            "integrationResource.projectIntegration.project",
+            "projectMember"
+    })
+    @Query("select activity from IntegrationActivity activity "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "
+            + "and activity.projectMember.id = :projectMemberId")
+    List<IntegrationActivity> findReportProjectionTargetsByMember(
+            @Param("projectIntegrationId") Long projectIntegrationId,
+            @Param("projectMemberId") Long projectMemberId
     );
 
     void deleteAllByIntegrationResourceProjectIntegrationId(Long projectIntegrationId);
