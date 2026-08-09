@@ -98,7 +98,7 @@ public class ActivityClassificationService {
      */
     private void handleFailure(ReportActivityLog activity, RuntimeException e) {
         int attemptNumber = activity.getClassificationRetryCount() + 1;
-        if (attemptNumber >= MAX_RETRY_COUNT) {
+        if (attemptNumber > MAX_RETRY_COUNT) {
             activity.markClassificationFailed();
             log.error("activity_classification_row_permanently_failed id={} attempt={} — 더 이상 재시도하지 않습니다",
                     activity.getId(), attemptNumber, e);
