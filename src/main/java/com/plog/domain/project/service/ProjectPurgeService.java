@@ -22,6 +22,8 @@ public class ProjectPurgeService {
         // CONFIRMED 고아가 영구히 남지 않는다.
         uploadedFileService.release(collectFileIds(projectId));
 
+        deleteReportActivityLogs(projectId);
+
         delete("delete from ChatAttachment attachment where attachment.chatMessage.chatRoom.project.id = :projectId", projectId);
         delete("delete from ChatRoomReadCursor cursor where cursor.chatRoom.project.id = :projectId", projectId);
         delete("delete from ChatMessage message where message.chatRoom.project.id = :projectId", projectId);
@@ -134,6 +136,26 @@ public class ProjectPurgeService {
         }
     }
 
+    private void deleteReportActivityLogs(Long projectId) {
+        nativeDelete("""
+                delete from report_activity_log activity
+                where activity.source_ref_id like ?1
+                """, "integration:" + projectId + ":%");
+        nativeDelete("""
+                delete from report_activity_log activity
+                using tasks task, project_members member
+                where activity.linked_task_id = task.task_id
+                and task.project_member_id = member.project_member_id
+                and member.project_id = ?1
+                """, projectId);
+        nativeDelete("""
+                delete from report_activity_log activity
+                using project_members member
+                where activity.project_member_id = member.project_member_id
+                and member.project_id = ?1
+                """, projectId);
+    }
+
     private LegacyIntegrationTables legacyIntegrationTables() {
         Object[] result = (Object[]) entityManager.createNativeQuery("""
                         select to_regclass('activity_log') is not null,
@@ -151,6 +173,12 @@ public class ProjectPurgeService {
     private void nativeDelete(String query, Long projectId) {
         entityManager.createNativeQuery(query)
                 .setParameter(1, projectId)
+                .executeUpdate();
+    }
+
+    private void nativeDelete(String query, String prefixPattern) {
+        entityManager.createNativeQuery(query)
+                .setParameter(1, prefixPattern)
                 .executeUpdate();
     }
 

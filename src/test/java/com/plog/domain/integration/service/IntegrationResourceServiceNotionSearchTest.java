@@ -3,6 +3,7 @@ package com.plog.domain.integration.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
@@ -11,7 +12,12 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.plog.domain.integration.dto.NotionResourceType;
+import com.plog.domain.integration.dto.response.IntegrationResourceRemovalResponse;
 import com.plog.domain.integration.dto.response.IntegrationResourceCandidateResponse;
+import com.plog.domain.integration.entity.IntegrationCredentialType;
+import com.plog.domain.integration.entity.IntegrationResource;
+import com.plog.domain.integration.entity.IntegrationResourceStatus;
+import com.plog.domain.integration.entity.IntegrationResourceType;
 import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.IntegrationActivityRepository;
@@ -20,10 +26,12 @@ import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -47,6 +55,8 @@ class IntegrationResourceServiceNotionSearchTest {
             mock(IntegrationResourceRepository.class);
     private final IntegrationActivityRepository integrationActivityRepository =
             mock(IntegrationActivityRepository.class);
+    private final IntegrationActivityReportLogAdapter reportLogAdapter =
+            mock(IntegrationActivityReportLogAdapter.class);
     private final GithubAppClient githubAppClient = mock(GithubAppClient.class);
 
     @Test
@@ -60,6 +70,7 @@ class IntegrationResourceServiceNotionSearchTest {
                 .withBean(IntegrationVerificationService.class, () -> integrationVerificationService)
                 .withBean(IntegrationResourceRepository.class, () -> integrationResourceRepository)
                 .withBean(IntegrationActivityRepository.class, () -> integrationActivityRepository)
+                .withBean(IntegrationActivityReportLogAdapter.class, () -> reportLogAdapter)
                 .withBean(GithubAppClient.class, () -> githubAppClient)
                 .withUserConfiguration(IntegrationResourceService.class)
                 .run(context -> {
@@ -117,6 +128,42 @@ class IntegrationResourceServiceNotionSearchTest {
         );
     }
 
+    @Test
+    @DisplayName("리소스 삭제는 raw 행 삭제 전에 리포트 파생 로그를 먼저 삭제한다")
+    void removeResourceDeletesProjectionBeforeRawRows() {
+        IntegrationResourceService service = service(RestClient.builder().build());
+        ProjectIntegration integration = ProjectIntegration.builder()
+                .id(30L)
+                .linkType(LinkType.FIGMA)
+                .credentialType(IntegrationCredentialType.OAUTH)
+                .externalAccountId("figma-account")
+                .externalAccountName("Figma")
+                .providerConnectionId("figma-connection")
+                .build();
+        IntegrationResource resource = IntegrationResource.builder()
+                .id(40L)
+                .projectIntegration(integration)
+                .resourceType(IntegrationResourceType.FIGMA_FILE)
+                .providerResourceId("figma-file-key")
+                .resourceName("PLOG")
+                .resourceStatus(IntegrationResourceStatus.ACTIVE)
+                .build();
+        given(projectIntegrationRepository.findByProjectIdAndLinkType(PROJECT_ID, LinkType.FIGMA))
+                .willReturn(java.util.Optional.of(integration));
+        given(integrationResourceRepository.findByIdAndProjectIntegrationIdForUpdate(40L, 30L))
+                .willReturn(java.util.Optional.of(resource));
+
+        IntegrationResourceRemovalResponse response =
+                service.removeResource(PROJECT_ID, USER_ID, LinkType.FIGMA, 40L);
+
+        assertThat(response.resourceId()).isEqualTo(40L);
+        InOrder inOrder = inOrder(reportLogAdapter, integrationActivityRepository, integrationResourceRepository);
+        inOrder.verify(reportLogAdapter)
+                .deleteResourceProjection(PROJECT_ID, LinkType.FIGMA, "figma-file-key");
+        inOrder.verify(integrationActivityRepository).deleteAllByIntegrationResourceId(40L);
+        inOrder.verify(integrationResourceRepository).delete(resource);
+    }
+
     private IntegrationResourceService service(RestClient restClient) {
         ProjectMember member = mock(ProjectMember.class);
         ProjectIntegration integration = mock(ProjectIntegration.class);
@@ -133,6 +180,7 @@ class IntegrationResourceServiceNotionSearchTest {
                 integrationVerificationService,
                 integrationResourceRepository,
                 integrationActivityRepository,
+                reportLogAdapter,
                 githubAppClient,
                 restClient
         );

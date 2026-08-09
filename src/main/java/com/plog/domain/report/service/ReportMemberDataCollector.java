@@ -6,7 +6,6 @@ import com.plog.domain.report.entity.ReportMemberResult;
 import com.plog.domain.report.llm.MemberLlmInput;
 import com.plog.domain.report.port.EvaluationSummaryProvider;
 import com.plog.domain.report.port.ExternalReportData;
-import com.plog.domain.report.port.ExternalReportDataProvider;
 import com.plog.domain.report.port.TaskSummary;
 import com.plog.domain.report.port.InternalReportData;
 import com.plog.domain.report.port.InternalReportDataProvider;
@@ -30,7 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReportMemberDataCollector {
 
     private final InternalReportDataProvider internalProvider;
-    private final ExternalReportDataProvider externalProvider;
     private final EvaluationSummaryProvider evaluationProvider;
     private final ReportMemberScoreService memberScoreService;
     private final ReportRepository reportRepository;
@@ -48,13 +46,13 @@ public class ReportMemberDataCollector {
             Long projectId,
             ProjectType projectType,
             ProjectMember member,
+            ExternalReportData external,
             int teamSize
     ) {
         Report report = reportRepository.getReferenceById(reportId);
         Long memberId = member.getId();
 
         InternalReportData internal = internalProvider.provide(projectId, memberId);
-        ExternalReportData external = externalProvider.provide(projectId, memberId);
         PeerEvaluationSummary peer = evaluationProvider.peer(projectId, memberId);
         SelfFeedbackMatchSummary self = evaluationProvider.self(projectId, memberId);
 
@@ -67,6 +65,7 @@ public class ReportMemberDataCollector {
                         peer.normalizedScore(),
                         self.normalizedScore(),
                         external.externalToolConnected(),
+                        external.externalScore() != null,
                         external.reliabilityTier(),
                         external.cautionText()
                 )

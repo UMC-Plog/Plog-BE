@@ -16,6 +16,7 @@ import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.IntegrationActivityRepository;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +32,9 @@ class IntegrationActivityStoreServiceTest {
 
     @Mock
     private IntegrationActorMappingService integrationActorMappingService;
+
+    @Mock
+    private IntegrationActivityReportLogAdapter reportLogAdapter;
 
     @InjectMocks
     private IntegrationActivityStoreService integrationActivityStoreService;
@@ -66,6 +70,7 @@ class IntegrationActivityStoreServiceTest {
                 "https://github.com/UMC-Plog/Plog-BE/commit/abc123",
                 "{\"sha\":\"abc123\"}"
         );
+        verify(reportLogAdapter).synchronizeActivity(10L, "commit:abc123");
     }
 
     @Test
@@ -99,6 +104,7 @@ class IntegrationActivityStoreServiceTest {
                 "https://docs.google.com/document/d/google-file-1/edit",
                 "{\"id\":\"comment-1\",\"deleted\":true}"
         );
+        verify(reportLogAdapter).synchronizeActivity(10L, "comment:comment-1");
     }
 
     @Test
@@ -154,6 +160,7 @@ class IntegrationActivityStoreServiceTest {
         verify(integrationActivityRepository).updateProviderPayloadIfChanged(
                 10L, "comment:comment-1", "{}"
         );
+        verify(reportLogAdapter).synchronizeActivity(10L, "comment:comment-1");
         verify(integrationActivityRepository, never()).upsertProviderPayloadIfChanged(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
         );
@@ -182,6 +189,8 @@ class IntegrationActivityStoreServiceTest {
                 "https://docs.google.com/presentation/d/file-1/edit",
                 "{}"
         );
+        verify(reportLogAdapter).synchronizeActivity(
+                10L, "presentation-snapshot:file-1:version-1");
     }
 
     @Test
@@ -198,6 +207,8 @@ class IntegrationActivityStoreServiceTest {
         verify(integrationActivityRepository).backfillActorSnapshotByProviderId(
                 1L, "actor-1", "vana", "vana@plog.test"
         );
+        verify(reportLogAdapter).synchronizeProviderActorActivities(
+                1L, "actor-1", "vana", "vana@plog.test");
     }
 
     @Test

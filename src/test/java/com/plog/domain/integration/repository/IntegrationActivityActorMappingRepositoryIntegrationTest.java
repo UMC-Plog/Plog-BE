@@ -3,6 +3,7 @@ package com.plog.domain.integration.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plog.domain.integration.entity.IntegrationActivity;
 import com.plog.domain.integration.entity.IntegrationActivityType;
 import com.plog.domain.integration.entity.IntegrationAuthorizationState;
@@ -26,10 +27,18 @@ import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.service.ProjectPurgeService;
+import com.plog.domain.report.entity.SourceDomain;
+import com.plog.domain.report.repository.ReportActivityLogRepository;
+import com.plog.domain.report.service.ExternalActivityCompetencyMapper;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
+import com.plog.domain.task.entity.Task;
+import com.plog.domain.task.entity.TaskCategory;
+import com.plog.domain.task.entity.TaskStatus;
 import com.plog.domain.user.entity.User;
 import com.plog.infrastructure.s3.UploadedFileService;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -69,6 +78,9 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
 
     @Autowired
     private IntegrationActivityRepository activityRepository;
+
+    @Autowired
+    private ReportActivityLogRepository reportActivityLogRepository;
 
     @Autowired
     private ProjectPurgeService projectPurgeService;
@@ -303,6 +315,68 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
         assertThat(updated.getActorEmail()).isEqualTo("commenter@example.com");
     }
 
+    @Test
+    void deletedGoogleCommentRemovesItsPersistedReportProjection() {
+        Project project = entityManager.persist(project());
+        ProjectMember member = entityManager.persist(member(
+                project,
+                User.createLocal("google-projection@example.com", "encoded", "댓글 투영", "google-projection"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration integration = entityManager.persist(ProjectIntegration.builder()
+                .project(project)
+                .connectedByProjectMember(member)
+                .linkType(LinkType.GOOGLE_DOCS)
+                .credentialType(IntegrationCredentialType.OAUTH)
+                .externalAccountId("google-account")
+                .externalAccountName("google@example.com")
+                .providerConnectionId("google-connection")
+                .build());
+        IntegrationResource resource = entityManager.persist(IntegrationResource.builder()
+                .projectIntegration(integration)
+                .selectedByProjectMember(member)
+                .resourceType(IntegrationResourceType.GOOGLE_DOCUMENT)
+                .providerResourceId("google-document-1")
+                .resourceName("문서")
+                .resourceUrl("https://docs.google.com/document/d/google-document-1/edit")
+                .resourceStatus(IntegrationResourceStatus.ACTIVE)
+                .build());
+        entityManager.persist(IntegrationActivity.builder()
+                .integrationResource(resource)
+                .projectMember(member)
+                .activityType(IntegrationActivityType.GOOGLE_DRIVE_COMMENT)
+                .providerEventKey("comment:google-comment-1")
+                .actorProviderId("people/commenter-1")
+                .actorLogin("Commenter")
+                .actorEmail("commenter@example.com")
+                .occurredAt(project.getStartDay().atTime(12, 0).toInstant(ZoneOffset.UTC))
+                .providerPayload("{\"id\":\"google-comment-1\",\"deleted\":false}")
+                .build());
+        entityManager.flush();
+        entityManager.clear();
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        IntegrationActivityReportLogAdapter adapter = new IntegrationActivityReportLogAdapter(
+                activityRepository,
+                reportActivityLogRepository,
+                new ExternalActivityCompetencyMapper(objectMapper),
+                objectMapper
+        );
+        adapter.synchronizeActivity(resource.getId(), "comment:google-comment-1");
+        entityManager.flush();
+        assertThat(tableCount("report_activity_log")).isOne();
+
+        assertThat(activityRepository.updateProviderPayloadIfChanged(
+                resource.getId(),
+                "comment:google-comment-1",
+                "{\"id\":\"google-comment-1\",\"deleted\":true}"
+        )).isOne();
+        adapter.synchronizeActivity(resource.getId(), "comment:google-comment-1");
+        entityManager.flush();
+
+        assertThat(tableCount("report_activity_log")).isZero();
+    }
+
     @ParameterizedTest
     @CsvSource(nullValues = "NULL", textBlock = """
             provider-actor,NULL,NULL
@@ -436,6 +510,12 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
                 .build());
         entityManager.persist(Notification.create(
                 user, project, NotificationType.CHAT_MENTION, "프로젝트 알림", null));
+        Task task = entityManager.persist(Task.create(
+                member, "purge linked task", TaskCategory.DEVELOP, TaskStatus.IN_PROGRESS, LocalDate.now()));
+        insertReportActivityLog(null, null, "GITHUB", "GITHUB_COMMIT",
+                "integration:" + project.getId() + ":GITHUB:nullable-member");
+        insertReportActivityLog(member.getId(), null, "POST", "POST_CREATE", "post:purge");
+        insertReportActivityLog(null, task.getId(), "TASK", "TASK_STATUS_CHANGE", "task:purge");
         entityManager.flush();
 
         projectPurgeService.purge(project.getId());
@@ -452,6 +532,7 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
         assertThat(tableCount("integration_authorization_states")).isZero();
         assertThat(tableCount("integration_collection_runs")).isZero();
         assertThat(tableCount("project_integrations")).isZero();
+        assertThat(tableCount("report_activity_log")).isZero();
         assertThat(tableCount("notifications")).isZero();
         assertThat(tableCount("project_members")).isZero();
     }
@@ -518,6 +599,49 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
         assertThat(tableCount("external_connection")).isZero();
         assertThat(tableCount("project_members")).isZero();
         assertThat(tableCount("projects")).isZero();
+    }
+
+    @Test
+    void externalProjectionPrefixDeletesOnlyRequestedMemberOrProjectRows() {
+        Project project = entityManager.persist(project());
+        ProjectMember member = entityManager.persist(member(
+                project,
+                User.createLocal("projection-member@example.com", "encoded", "멤버", "projection-member"),
+                ProjectRole.OWNER
+        ));
+        ProjectMember anotherMember = entityManager.persist(member(
+                project,
+                User.createLocal("projection-other@example.com", "encoded", "다른", "projection-other"),
+                ProjectRole.MEMBER
+        ));
+        entityManager.flush();
+
+        String figmaPrefix = "integration:" + project.getId() + ":FIGMA:";
+        String githubPrefix = "integration:" + project.getId() + ":GITHUB:";
+        insertReportActivityLog(member.getId(), null, "FIGMA", "FIGMA_COMMENT", figmaPrefix + "resource:event-1");
+        insertReportActivityLog(anotherMember.getId(), null, "FIGMA", "FIGMA_COMMENT", figmaPrefix + "resource:event-2");
+        insertReportActivityLog(member.getId(), null, "FIGMA", "FIGMA_COMMENT", githubPrefix + "resource:event-3");
+        insertReportActivityLog(member.getId(), null, "GITHUB", "GITHUB_COMMIT", figmaPrefix + "resource:event-4");
+        entityManager.flush();
+
+        int memberDeleted = reportActivityLogRepository.deleteExternalActivityLogsByMemberAndSourcePrefix(
+                member.getId(), SourceDomain.FIGMA.name(), figmaPrefix);
+        entityManager.flush();
+
+        assertThat(memberDeleted).isOne();
+        assertThat(reportActivityCount("FIGMA", figmaPrefix + "resource:event-1")).isZero();
+        assertThat(reportActivityCount("FIGMA", figmaPrefix + "resource:event-2")).isOne();
+        assertThat(reportActivityCount("FIGMA", githubPrefix + "resource:event-3")).isOne();
+        assertThat(reportActivityCount("GITHUB", figmaPrefix + "resource:event-4")).isOne();
+
+        int projectDeleted = reportActivityLogRepository.deleteExternalActivityLogsBySourcePrefix(
+                SourceDomain.FIGMA.name(), figmaPrefix);
+        entityManager.flush();
+
+        assertThat(projectDeleted).isOne();
+        assertThat(reportActivityCount("FIGMA", figmaPrefix + "resource:event-2")).isZero();
+        assertThat(reportActivityCount("FIGMA", githubPrefix + "resource:event-3")).isOne();
+        assertThat(reportActivityCount("GITHUB", figmaPrefix + "resource:event-4")).isOne();
     }
 
     private Project project() {
@@ -608,6 +732,37 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
                 .getSingleResult()).longValue();
     }
 
+    private void insertReportActivityLog(
+            Long projectMemberId,
+            Long linkedTaskId,
+            String sourceDomain,
+            String rawActivityType,
+            String sourceRefId
+    ) {
+        entityManager.getEntityManager()
+                .createNativeQuery("""
+                        insert into report_activity_log (
+                            project_member_id,
+                            linked_task_id,
+                            source_domain,
+                            raw_activity_type,
+                            occurred_at,
+                            metadata,
+                            source_ref_id,
+                            created_at,
+                            updated_at
+                        )
+                        values (?1, ?2, ?3, ?4, current_timestamp, '{}'::jsonb, ?5,
+                                current_timestamp, current_timestamp)
+                        """)
+                .setParameter(1, projectMemberId)
+                .setParameter(2, linkedTaskId)
+                .setParameter(3, sourceDomain)
+                .setParameter(4, rawActivityType)
+                .setParameter(5, sourceRefId)
+                .executeUpdate();
+    }
+
     private Long activityId(Long resourceId, String eventKey) {
         return ((Number) entityManager.getEntityManager()
                 .createNativeQuery("""
@@ -631,6 +786,19 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
                         """)
                 .setParameter("resourceId", resourceId)
                 .setParameter("eventKey", eventKey)
+                .getSingleResult()).longValue();
+    }
+
+    private long reportActivityCount(String sourceDomain, String sourceRefId) {
+        return ((Number) entityManager.getEntityManager()
+                .createNativeQuery("""
+                        select count(*)
+                        from report_activity_log
+                        where source_domain = :sourceDomain
+                          and source_ref_id = :sourceRefId
+                        """)
+                .setParameter("sourceDomain", sourceDomain)
+                .setParameter("sourceRefId", sourceRefId)
                 .getSingleResult()).longValue();
     }
 

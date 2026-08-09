@@ -19,6 +19,19 @@ public interface ProjectMemberIntegrationIdentityRepository extends JpaRepositor
     @EntityGraph(attributePaths = {"projectMember", "projectMember.user"})
     List<ProjectMemberIntegrationIdentity> findAllByProjectIntegrationId(Long projectIntegrationId);
 
+    @EntityGraph(attributePaths = {"projectIntegration", "projectMember"})
+    @Query("""
+            select identity from ProjectMemberIntegrationIdentity identity
+            where identity.projectIntegration.id in :projectIntegrationIds
+              and identity.projectMember.id in :projectMemberIds
+              and identity.projectMember.status = :status
+            """)
+    List<ProjectMemberIntegrationIdentity> findActiveMappedIdentities(
+            @Param("projectIntegrationIds") List<Long> projectIntegrationIds,
+            @Param("projectMemberIds") List<Long> projectMemberIds,
+            @Param("status") MemberStatus status
+    );
+
     Optional<ProjectMemberIntegrationIdentity> findByProjectIntegrationIdAndProjectMemberId(
             Long projectIntegrationId,
             Long projectMemberId

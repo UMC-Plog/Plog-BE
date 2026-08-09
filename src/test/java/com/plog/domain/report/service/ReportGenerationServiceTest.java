@@ -24,6 +24,7 @@ import com.plog.domain.report.llm.ReportLlmGateway;
 import com.plog.domain.report.llm.TeamLlmInput;
 import com.plog.domain.report.llm.TeamReportText;
 import com.plog.domain.report.port.InternalReportData;
+import com.plog.domain.report.port.ExternalReportDataProvider;
 import com.plog.domain.report.repository.ReportRepository;
 import com.plog.global.api.error.ReportErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -32,6 +33,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,6 +56,8 @@ class ReportGenerationServiceTest {
     private ReportRepository reportRepository;
     @Mock
     private ProjectMemberRepository projectMemberRepository;
+    @Mock
+    private ExternalReportDataProvider externalDataProvider;
     @Mock
     private ReportMemberDataCollector dataCollector;
     @Mock
@@ -84,6 +88,7 @@ class ReportGenerationServiceTest {
         verify(textWriter).writeTeamInsight(eq(REPORT_ID), any(TeamReportText.class));
         verify(textWriter).publish(REPORT_ID);
         verify(eventPublisher).publishEvent(new ReportPublishedEvent(PROJECT_ID, REPORT_ID));
+        verify(externalDataProvider).provide(eq(PROJECT_ID), eq(List.of(1L, 2L)));
     }
 
     // 승인된 실패 정책 — 멤버 1명 LLM 실패는 그 멤버 텍스트만 비우고 리포트는 발행한다.
@@ -140,7 +145,7 @@ class ReportGenerationServiceTest {
     @Test
     void skipsMembersWhoseDataCollectionFails() {
         givenReportWithMembers(1L, 2L);
-        when(dataCollector.collect(anyLong(), anyLong(), any(), any(), anyInt()))
+        when(dataCollector.collect(anyLong(), anyLong(), any(), any(), any(), anyInt()))
                 .thenThrow(new IllegalStateException("포트 실패"))
                 .thenReturn(collected(2L));
         when(llmGateway.generateMemberText(any())).thenReturn(generatedText("두 번째"));
@@ -163,6 +168,37 @@ class ReportGenerationServiceTest {
         assertThat(result.memberCount()).isZero();
         verify(textWriter).markFailed(REPORT_ID);
         verify(llmGateway, never()).generateMemberText(any());
+    }
+
+    @Test
+    void failsTheReportWhenExternalBatchCollectionFails() {
+        givenReportWithMembers(1L, 2L);
+        when(externalDataProvider.provide(eq(PROJECT_ID), any()))
+                .thenThrow(new IllegalStateException("외부 집계 실패"));
+
+        ReportGenerationResult result = service.generate(REPORT_ID);
+
+        assertThat(result.published()).isFalse();
+        assertThat(result.memberCount()).isEqualTo(2);
+        verify(textWriter).markFailed(REPORT_ID);
+        verify(dataCollector, never()).collect(anyLong(), anyLong(), any(), any(), any(), anyInt());
+        verify(textWriter, never()).publish(anyLong());
+    }
+
+    @Test
+    void failsTheReportWhenExternalBatchOmitsRequestedMember() {
+        givenReportWithMembers(1L, 2L);
+        when(externalDataProvider.provide(eq(PROJECT_ID), any()))
+                .thenReturn(Map.of(1L, com.plog.domain.report.port.ExternalReportData.notConnected()));
+
+        ReportGenerationResult result = service.generate(REPORT_ID);
+
+        assertThat(result.published()).isFalse();
+        assertThat(result.memberCount()).isEqualTo(2);
+        verify(textWriter).markFailed(REPORT_ID);
+        verify(dataCollector, never()).collect(anyLong(), anyLong(), any(), any(), any(), anyInt());
+        verify(textWriter, never()).publish(anyLong());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     // 이미 발행된 리포트를 다시 생성하면 내려간 내용이 사후에 바뀐다.
@@ -212,10 +248,13 @@ class ReportGenerationServiceTest {
         when(reportRepository.findWithProjectById(REPORT_ID)).thenReturn(Optional.of(report()));
         when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(PROJECT_ID, MemberStatus.ACTIVE))
                 .thenReturn(java.util.Arrays.stream(memberIds).map(this::member).toList());
+        when(externalDataProvider.provide(eq(PROJECT_ID), any()))
+                .thenReturn(java.util.Arrays.stream(memberIds)
+                        .collect(java.util.stream.Collectors.toMap(id -> id, id -> com.plog.domain.report.port.ExternalReportData.notConnected())));
     }
 
     private void givenCollectionSucceeds() {
-        when(dataCollector.collect(anyLong(), anyLong(), any(), any(), anyInt()))
+        when(dataCollector.collect(anyLong(), anyLong(), any(), any(), any(), anyInt()))
                 .thenAnswer(invocation -> collected(
                         ((ProjectMember) invocation.getArgument(3)).getId()));
     }
