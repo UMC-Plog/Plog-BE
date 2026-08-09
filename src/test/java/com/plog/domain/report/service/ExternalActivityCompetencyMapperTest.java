@@ -50,7 +50,9 @@ class ExternalActivityCompetencyMapperTest {
     void unsupportedExternalSnapshotsDoNotMapToCompetency() {
         assertThat(mapper.map(RawActivityType.FIGMA_FILE_METADATA, "{}")).isEmpty();
         assertThat(mapper.map(RawActivityType.GOOGLE_PRESENTATION_SNAPSHOT, "{}")).isEmpty();
+        assertThat(mapper.map(RawActivityType.NOTION_DATA_SOURCE_SNAPSHOT, "{}")).isEmpty();
         assertThat(mapper.map(RawActivityType.NOTION_PAGE_SNAPSHOT, "{}")).isEmpty();
+        assertThat(mapper.map(RawActivityType.NOTION_BLOCK_SNAPSHOT, "{}")).isEmpty();
         assertThat(mapper.map(null, "{}")).isEmpty();
     }
 }

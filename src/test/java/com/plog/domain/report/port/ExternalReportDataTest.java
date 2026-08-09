@@ -16,21 +16,13 @@ import org.junit.jupiter.api.Test;
 class ExternalReportDataTest {
 
     @Test
-    void 점수_가능_상태는_연동과_점수를_함께_요구한다() {
+    void 외부_점수는_프로젝트_연동과_0_100_범위를_요구한다() {
         assertThatThrownBy(() -> new ExternalReportData(
-                false, true, Map.of(), Map.of(), Map.of(),
+                false, Map.of(), Map.of(), Map.of(),
                 BigDecimal.TEN, ReliabilityTier.P0, null))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new ExternalReportData(
-                true, true, Map.of(), Map.of(), Map.of(),
-                null, ReliabilityTier.P0, null))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new ExternalReportData(
-                true, false, Map.of(), Map.of(), Map.of(),
-                BigDecimal.TEN, ReliabilityTier.P0, null))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new ExternalReportData(
-                true, true, Map.of(), Map.of(), Map.of(),
+                true, Map.of(), Map.of(), Map.of(),
                 new BigDecimal("101"), ReliabilityTier.P0, null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
@@ -46,7 +38,6 @@ class ExternalReportDataTest {
         );
 
         assertThat(data.externalToolConnected()).isTrue();
-        assertThat(data.externalScoreAvailable()).isFalse();
         assertThat(data.externalScore()).isNull();
         assertThat(data.competencyActivityCount())
                 .containsEntry(CompetencyCategory.OUTPUT, 2L)
@@ -56,13 +47,30 @@ class ExternalReportDataTest {
     }
 
     @Test
+    void 미매핑_멤버도_프로젝트에_외부_도구가_연동됐으면_연결_상태로_표현한다() {
+        ExternalReportData data = ExternalReportData.notMapped();
+
+        assertThat(data.externalToolConnected()).isTrue();
+        assertThat(data.externalScore()).isNull();
+        assertThat(data.cautionText()).contains("외부 계정 매핑이 없어");
+    }
+
+    @Test
+    void 외부_미연동은_연결_상태를_false로_표현한다() {
+        ExternalReportData data = ExternalReportData.notConnected();
+
+        assertThat(data.externalToolConnected()).isFalse();
+        assertThat(data.externalScore()).isNull();
+        assertThat(data.cautionText()).contains("외부 도구가 연동되지 않아");
+    }
+
+    @Test
     void 근거_목록은_깊은_복사로_보호한다() {
         List<String> outputEvidence = new ArrayList<>(List.of("GitHub: PR 병합"));
         Map<CompetencyCategory, List<String>> evidence = new EnumMap<>(CompetencyCategory.class);
         evidence.put(CompetencyCategory.OUTPUT, outputEvidence);
 
         ExternalReportData data = new ExternalReportData(
-                true,
                 true,
                 Map.of(SourceDomain.GITHUB, 1L),
                 Map.of(CompetencyCategory.OUTPUT, 1L),

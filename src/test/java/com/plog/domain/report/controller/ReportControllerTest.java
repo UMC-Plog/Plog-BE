@@ -319,9 +319,9 @@ class ReportControllerTest {
                 new BigDecimal("80.00"),
                 new BigDecimal("70.00"),
                 new BigDecimal("82.50"),
-                false,
+                true,
                 ReliabilityTier.P2,
-                "Notion이 연동되지 않아 일부 작업 과정은 반영되지 않았을 수 있습니다.",
+                "외부 도구는 연동됐지만 이 멤버의 점수화 가능한 활동이 부족합니다.",
                 13,
                 12,
                 11,
@@ -338,9 +338,9 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$.result.projectMemberId").value(7L))
                 .andExpect(jsonPath("$.result.memberName").value("창훈"))
                 .andExpect(jsonPath("$.result.finalScore").value(82.50))
-                .andExpect(jsonPath("$.result.externalToolConnected").value(false))
+                .andExpect(jsonPath("$.result.externalToolConnected").value(true))
                 .andExpect(jsonPath("$.result.reliabilityTier").value("P2"))
-                // 미연동이면 externalScore 는 아예 내려가지 않는다 (0점으로 오해되면 안 된다)
+                // 프로젝트 연동 여부와 멤버 점수 가용성은 별개다 — 점수가 없으면 null(응답에서는 생략)이다.
                 .andExpect(jsonPath("$.result.externalScore").doesNotExist())
                 .andExpect(jsonPath("$.result.totalTaskCount").value(13))
                 .andExpect(jsonPath("$.result.completedTaskCount").value(12))
