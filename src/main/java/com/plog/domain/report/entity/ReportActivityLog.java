@@ -59,7 +59,7 @@ public class ReportActivityLog extends BaseEntity {
     @Column(name = "report_activity_log_id")
     private Long id;
 
-    // 활동 주체. 리포트용 외부 파생 로그는 매핑된 멤버만 저장하지만, 레거시/내부 로그 호환을 위해 nullable로 둔다.
+    // 활동 주체. 외부 계정 매핑이 안 된 시점에 수집될 수도 있어 nullable로 둔다.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_member_id")
     private ProjectMember projectMember;
@@ -133,6 +133,30 @@ public class ReportActivityLog extends BaseEntity {
     @Column(name = "embedding_lease_token", length = 36)
     private String embeddingLeaseToken;
 
+    /**
+     * 2단계 분류 실패 횟수. 분류 자체는 실패해도 배치를 죽이면 안 되므로, 실패한 행은
+     * classifiedType=null로 남되 이 카운트를 올려서 몇 번째 재시도인지 추적한다. 성공하면
+     * {@link #classify}에서 0으로 되돌린다.
+     */
+    @Column(name = "classification_retry_count", nullable = false, columnDefinition = "integer default 0")
+    private int classificationRetryCount;
+
+    /**
+     * 다음 분류 재시도 가능 시각(backoff). 이 값이 미래면 배치 조회 대상에서 제외된다 —
+     * 오래된 실패 행 하나가 정렬(occurredAt ASC)상 계속 맨 앞에 걸려 매 배치의 Limit을
+     * 정상 행 대신 소모하는 것을 막기 위함이다. null이면 즉시 재시도 가능.
+     */
+    @Column(name = "classification_next_retry_at")
+    private LocalDateTime classificationNextRetryAt;
+
+    /**
+     * 최대 재시도 횟수를 넘겨 더 이상 자동 재시도하지 않는 상태. true인 행은 배치 조회 대상에서
+     * 영구히 제외된다 — classifiedType은 null로 남으므로 activityTypeSummary/competencyEvidence
+     * 집계에서는 자동으로 빠지고, 별도 모니터링/수동 개입으로만 복구 가능하다.
+     */
+    @Column(name = "classification_failed", nullable = false, columnDefinition = "boolean default false")
+    private boolean classificationFailed;
+
     public static ReportActivityLog create(
             ProjectMember projectMember,
             SourceDomain sourceDomain,
@@ -174,10 +198,17 @@ public class ReportActivityLog extends BaseEntity {
         this.noiseFiltered = noiseFiltered;
     }
 
-    /** 2단계 분류 결과 기록. 정제를 거쳐 noiseFiltered=false로 확정된 행에만 호출 가능. */
+    /**
+     * 2단계 분류 결과 기록. 정제를 거쳐 noiseFiltered=false로 확정된 행에만 호출 가능.
+     * 이전에 실패해서 쌓인 재시도 카운트/backoff/영구실패 표시가 있었다면 성공한 이상 의미가
+     * 없으므로 함께 초기화한다.
+     */
     public void classify(ActivityCategory classifiedType) {
         requireRefined();
         this.classifiedType = classifiedType;
+        this.classificationRetryCount = 0;
+        this.classificationNextRetryAt = null;
+        this.classificationFailed = false;
     }
 
     /**
@@ -243,5 +274,27 @@ public class ReportActivityLog extends BaseEntity {
     /** 실제 임베딩 벡터가 채워져 있는지. markEmbeddingNotApplicable만 호출된 행은 false. */
     public boolean hasEmbedding() {
         return embedding != null;
+    }
+
+    /**
+     * 2단계 분류가 실패해서 다음 backoff 시각까지 재시도를 미룬다. 재시도 횟수를 올리고
+     * nextRetryAt을 찍는다 — 몇 번째 실패인지는 {@link #getClassificationRetryCount()}로 호출부가
+     * 읽어서 최대 재시도 초과 여부(→ {@link #markClassificationFailed()} 호출 여부)를 판단한다.
+     */
+    public void scheduleClassificationRetry(LocalDateTime nextRetryAt) {
+        requireRefined();
+        this.classificationRetryCount++;
+        this.classificationNextRetryAt = nextRetryAt;
+    }
+
+    /**
+     * 최대 재시도 횟수를 넘겨 더 이상 자동 재시도하지 않기로 확정한다. 이 행은 배치 조회
+     * 대상에서 영구히 빠지므로 이후 별도 모니터링/수동 개입으로만 복구할 수 있다.
+     */
+    public void markClassificationFailed() {
+        requireRefined();
+        this.classificationRetryCount++;
+        this.classificationFailed = true;
+        this.classificationNextRetryAt = null;
     }
 }

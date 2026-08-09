@@ -230,6 +230,12 @@ plog:
     embedding:
       enabled: ${REPORT_EMBEDDING_SCHEDULER_ENABLED:false}
       poll-delay-ms: ${REPORT_EMBEDDING_POLL_DELAY_MS:60000}
+    # 리포트 파이프라인 2단계(활동 유형 분류) 배치. 3단계(임베딩) 뒤에 실행되지만, 조회 조건이
+    # embedding_model IS NOT NULL이라 순서가 뒤바뀌어 돌아도 안전하다(정제/임베딩과 동일한 이유).
+    # anchor 임계값(0.5)이 실측 데이터로 검증되지 않아 refinement/embedding과 같이 기본값은 꺼짐.
+    classification:
+      enabled: ${REPORT_CLASSIFICATION_SCHEDULER_ENABLED:false}
+      poll-delay-ms: ${REPORT_CLASSIFICATION_POLL_DELAY_MS:30000}
 
   notification:
     peer-evaluation:

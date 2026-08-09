@@ -196,6 +196,31 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
             @Param("leaseToken") String leaseToken,
             @Param("leaseUntil") LocalDateTime leaseUntil);
 
+    // 2단계 분류 대상 조회용 — 3단계(임베딩)가 끝났고(embeddingModel이 채워짐, 실제 모델명이든
+    // N/A sentinel이든) 아직 분류되지 않은(classifiedType IS NULL) 내부 도메인 행.
+    // classificationFailed=true(최대 재시도 초과로 영구 실패 확정)인 행과, classificationNextRetryAt이
+    // 아직 미래인(backoff 대기 중인) 행은 제외한다 — 이 두 조건이 없으면 오래된 실패 행 하나가
+    // occurredAt ASC 정렬상 계속 맨 앞을 차지해서 Limit을 그 행 재시도로만 소모하고, 뒤에 쌓인
+    // 정상 행은 영영 배치에 못 들어오는 문제가 생긴다.
+    // "IS NULL OR <= :now" 같은 OR-with-AND 조합은 메서드 이름 파생 쿼리로는 괄호 우선순위를
+    // 보장할 수 없어(다른 AND 조건과 뒤섞여 잘못 묶일 위험) 명시적 JPQL로 뺐다.
+    // 정렬 관례는 1단계 정제 조회와 동일: occurredAt만으로는 동시각 행 사이의 순서가 불안정해
+    // id를 안정적인 tie-breaker로 더한다.
+    @Query("""
+            select a from ReportActivityLog a
+            where a.sourceDomain in :sourceDomains
+              and a.noiseFiltered = false
+              and a.embeddingModel is not null
+              and a.classifiedType is null
+              and a.classificationFailed = false
+              and (a.classificationNextRetryAt is null or a.classificationNextRetryAt <= :now)
+            order by a.occurredAt asc, a.id asc
+            """)
+    List<ReportActivityLog> findClassificationTargets(
+            @Param("sourceDomains") List<SourceDomain> sourceDomains,
+            @Param("now") LocalDateTime now,
+            Limit limit);
+
     @Query("""
             select log from ReportActivityLog log
               join fetch log.projectMember member

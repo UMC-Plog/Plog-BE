@@ -7,5 +7,20 @@ public enum ActivityCategory {
     FEEDBACK,                // 피드백
     DELIVERABLE_SUBMIT,     // 산출물제출
     SCHEDULE_COORDINATION,  // 일정조율
-    SIMPLE_RESPONSE          // 단순응답
+    SIMPLE_RESPONSE;          // 단순응답
+
+    /**
+     * 이 활동 유형이 어느 역량 축({@link CompetencyCategory})의 기여 근거로 잡히는지.
+     * {@link #SIMPLE_RESPONSE}는 "성의 없는 확인 응답"이라 어떤 역량에도 기여로 반영하지 않는다(null).
+     */
+    public CompetencyCategory competencyCategory() {
+        return switch (this) {
+            case DECISION -> CompetencyCategory.LEADERSHIP;
+            case PROBLEM_SOLVING -> CompetencyCategory.OUTPUT;
+            case FEEDBACK -> CompetencyCategory.COMMUNICATION;
+            case DELIVERABLE_SUBMIT -> CompetencyCategory.OUTPUT;
+            case SCHEDULE_COORDINATION -> CompetencyCategory.COLLABORATION;
+            case SIMPLE_RESPONSE -> null;
+        };
+    }
 }
