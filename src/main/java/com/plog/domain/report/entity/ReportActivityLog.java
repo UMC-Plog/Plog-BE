@@ -59,7 +59,7 @@ public class ReportActivityLog extends BaseEntity {
     @Column(name = "report_activity_log_id")
     private Long id;
 
-    // 활동 주체. 외부 계정 매핑이 안 된 시점에 수집될 수도 있어 nullable로 둔다.
+    // 활동 주체. 리포트용 외부 파생 로그는 매핑된 멤버만 저장하지만, 레거시/내부 로그 호환을 위해 nullable로 둔다.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_member_id")
     private ProjectMember projectMember;

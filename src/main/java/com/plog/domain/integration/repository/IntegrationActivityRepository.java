@@ -4,6 +4,8 @@ import com.plog.domain.integration.entity.IntegrationActivity;
 import com.plog.domain.project.entity.ProjectMember;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -37,7 +39,7 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
 
     /** Stable provider identity를 유지하면서 mutable payload만 최신 상태로 교체한다. */
     @Transactional
-    @Modifying(flushAutomatically = true)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = "insert into integration_activities "
             + "(integration_resource_id, project_member_id, activity_type, provider_event_key, "
             + "actor_provider_id, actor_login, actor_email, occurred_at, source_url, provider_payload, "
@@ -64,7 +66,7 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
 
     /** 표시 가능한 actor가 사라진 mutable event는 새 행을 만들지 않고 기존 payload만 갱신한다. */
     @Transactional
-    @Modifying(flushAutomatically = true)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = "update integration_activities "
             + "set provider_payload = :providerPayload, updated_at = current_timestamp "
             + "where integration_resource_id = :resourceId "
@@ -192,6 +194,66 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
             @Param("actorProviderId") String actorProviderId,
             @Param("actorLogin") String actorLogin,
             @Param("actorEmail") String actorEmail
+    );
+
+    @EntityGraph(attributePaths = {
+            "integrationResource",
+            "integrationResource.projectIntegration",
+            "integrationResource.projectIntegration.project",
+            "projectMember"
+    })
+    @Query("select activity from IntegrationActivity activity "
+            + "where activity.integrationResource.id = :resourceId "
+            + "and activity.providerEventKey = :providerEventKey")
+    Optional<IntegrationActivity> findReportProjectionTarget(
+            @Param("resourceId") Long resourceId,
+            @Param("providerEventKey") String providerEventKey
+    );
+
+    @EntityGraph(attributePaths = {
+            "integrationResource",
+            "integrationResource.projectIntegration",
+            "integrationResource.projectIntegration.project",
+            "projectMember"
+    })
+    @Query("select activity from IntegrationActivity activity "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "
+            + "and activity.projectMember.id = :projectMemberId")
+    List<IntegrationActivity> findReportProjectionTargetsByMember(
+            @Param("projectIntegrationId") Long projectIntegrationId,
+            @Param("projectMemberId") Long projectMemberId
+    );
+
+    @EntityGraph(attributePaths = {
+            "integrationResource",
+            "integrationResource.projectIntegration",
+            "integrationResource.projectIntegration.project",
+            "projectMember"
+    })
+    @Query("select activity from IntegrationActivity activity "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "
+            + "and ((:actorProviderId is not null and activity.actorProviderId = :actorProviderId) "
+            + "or (activity.actorProviderId is null and :actorEmail is not null "
+            + "and lower(activity.actorEmail) = :actorEmail) "
+            + "or (activity.actorProviderId is null and :actorLogin is not null "
+            + "and lower(activity.actorLogin) = :actorLogin))")
+    List<IntegrationActivity> findReportProjectionTargetsByProviderActor(
+            @Param("projectIntegrationId") Long projectIntegrationId,
+            @Param("actorProviderId") String actorProviderId,
+            @Param("actorLogin") String actorLogin,
+            @Param("actorEmail") String actorEmail
+    );
+
+    @EntityGraph(attributePaths = {
+            "integrationResource",
+            "integrationResource.projectIntegration",
+            "integrationResource.projectIntegration.project",
+            "projectMember"
+    })
+    @Query("select activity from IntegrationActivity activity "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId")
+    List<IntegrationActivity> findReportProjectionTargetsByProjectIntegration(
+            @Param("projectIntegrationId") Long projectIntegrationId
     );
 
     void deleteAllByIntegrationResourceProjectIntegrationId(Long projectIntegrationId);

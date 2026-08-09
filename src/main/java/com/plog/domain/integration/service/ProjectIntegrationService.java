@@ -8,6 +8,7 @@ import com.plog.domain.integration.repository.*;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -28,6 +29,7 @@ public class ProjectIntegrationService {
     private final IntegrationResourceRepository integrationResourceRepository;
     private final IntegrationCredentialCipher credentialCipher;
     private final ProjectRepository projectRepository;
+    private final IntegrationActivityReportLogAdapter reportLogAdapter;
 
     @Transactional(readOnly = true)
     public void requireNotConnected(Long projectId, LinkType linkType) {
@@ -111,6 +113,7 @@ public class ProjectIntegrationService {
             notionWebhookEventRepository.deleteAllByNotionIntegrationId(integration.getProviderConnectionId());
         }
 
+        reportLogAdapter.deleteProjectProjection(projectId, linkType);
         integrationActivityRepository.deleteAllByIntegrationResourceProjectIntegrationId(integrationId);
 
         integrationResourceRepository.deleteAllByProjectIntegrationId(integrationId);
