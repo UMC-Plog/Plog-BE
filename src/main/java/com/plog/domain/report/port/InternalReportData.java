@@ -17,7 +17,10 @@ import java.util.Map;
  * @param deliverableAttachmentInfo  산출물 첨부 요약 문자열. 파일명 등 식별정보는 제외할 것
  * @param activityTypeSummary        2단계 분류 유형별 건수. 분류되지 않은 유형은 키를 생략해도 된다
  * @param competencyEvidence         역량축 근거. 상완 쪽 외부 활동 근거와 병합되어 LLM 에 전달된다
- * @param internalScore              4-내부 점수 0~100. 미계산이면 null
+ * @param internalScore              4-내부 점수 0~100, scale 2. {@link InternalReportDataProvider}
+ *                                   구현체는 항상 값을 채워야 한다 — null이면
+ *                                   {@code ReportMemberScoreService}에서 예외가 난다. 활동이 전혀
+ *                                   없는 멤버는 {@link #empty()}를 통해 0으로 채워진다
  */
 public record InternalReportData(
         List<TaskSummary> taskCardSummary,
@@ -38,8 +41,13 @@ public record InternalReportData(
         competencyEvidence = competencyEvidence == null ? Map.of() : Map.copyOf(competencyEvidence);
     }
 
-    /** 데이터가 아직 없는 멤버(참여 활동 0건 등)를 표현하는 빈 값. */
+    /**
+     * 데이터가 아직 없는 멤버(업무카드·활동 로그 모두 0건)를 표현하는 빈 값.
+     * internalScore는 null이 아니라 0.00 — {@code ReportMemberScoreService}가 internalScore를
+     * 필수값으로 요구하므로, "계산할 데이터가 없다"는 곧 "내부 점수 0"으로 취급한다.
+     */
     public static InternalReportData empty() {
-        return new InternalReportData(List.of(), 0, 0, 0.0, 0.0, List.of(), Map.of(), Map.of(), null);
+        return new InternalReportData(
+                List.of(), 0, 0, 0.0, 0.0, List.of(), Map.of(), Map.of(), new BigDecimal("0.00"));
     }
 }

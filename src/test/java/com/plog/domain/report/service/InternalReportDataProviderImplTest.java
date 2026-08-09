@@ -119,7 +119,9 @@ class InternalReportDataProviderImplTest {
                 .isEqualTo(1);
         assertThat(result.completionRate()).isEqualTo(3 / 4.0);
         assertThat(result.deadlineComplianceRate()).isEqualTo(1 / 4.0);
-        assertThat(result.internalScore()).isNull();
+        // taskComponent = 100*(0.6*0.75 + 0.4*0.25) = 55.00, activityComponent = 0 (활동 없음)
+        // internalScore = 55.00*0.6 + 0*0.4 = 33.00
+        assertThat(result.internalScore()).isEqualByComparingTo("33.00");
         assertThat(result.activityTypeSummary()).isEmpty();
         assertThat(result.competencyEvidence()).isEmpty();
     }
@@ -140,6 +142,20 @@ class InternalReportDataProviderImplTest {
         assertThat(result.completionRate()).isZero();
         assertThat(result.deadlineComplianceRate()).isZero();
         assertThat(result.activityTypeSummary()).containsEntry(ActivityCategory.SCHEDULE_COORDINATION, 1);
+        // totalTaskCount=0 → taskComponent 제외, activityComponent 100%로 계산.
+        // SCHEDULE_COORDINATION 가중치 3, weightedSum=3 → 100*3/(3+30) = 9.0909... → 9.09
+        assertThat(result.internalScore()).isEqualByComparingTo("9.09");
+    }
+
+    @Test
+    void 업무_활동_모두_없으면_empty의_internalScore는_0이다() {
+        provider = newProvider();
+        stubNoTasks();
+        when(activityLogRepository.findByProjectMember_Id(PROJECT_MEMBER_ID)).thenReturn(List.of());
+
+        InternalReportData result = provider.provide(PROJECT_ID, PROJECT_MEMBER_ID);
+
+        assertThat(result.internalScore()).isEqualByComparingTo("0");
     }
 
     @Test
