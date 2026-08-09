@@ -17,7 +17,9 @@ import java.util.Map;
  * @param evaluatorCount  이 멤버를 평가한 사람 수. 0 이면 Peer 근거가 없다는 뜻이므로
  *                        LLM 은 동료 평가 관련 서술을 하지 않는다
  * @param keywords        평가자들이 고른 키워드(예: "리더십", "책임감"). 화면의 태그 칩에 대응한다
- * @param normalizedScore Z-score 보정을 거친 0~100 점수. 미계산이면 null
+ * @param normalizedScore Z-score 보정을 거친 0~100 점수. {@code EvaluationSummaryProvider} 구현체는
+ *                        항상 값을 채워야 한다 — null이면 {@code ReportMemberScoreService}에서
+ *                        예외가 난다. 평가를 하나도 못 받은 멤버는 {@link #none()}을 통해 0으로 채워진다
  */
 public record PeerEvaluationSummary(
         BigDecimal average,
@@ -31,9 +33,12 @@ public record PeerEvaluationSummary(
         keywords = keywords == null ? List.of() : List.copyOf(keywords);
     }
 
-    /** 아직 아무에게도 평가받지 못한 멤버. */
+    /**
+     * 아직 아무에게도 평가받지 못한 멤버. normalizedScore는 null이 아니라 0.00 —
+     * {@code ReportMemberScoreService}가 필수값으로 요구하므로, "평가 없음"은 곧 "점수 0"으로 취급한다.
+     */
     public static PeerEvaluationSummary none() {
-        return new PeerEvaluationSummary(null, Map.of(), 0, List.of(), null);
+        return new PeerEvaluationSummary(null, Map.of(), 0, List.of(), new BigDecimal("0.00"));
     }
 
     public boolean hasEvaluation() {

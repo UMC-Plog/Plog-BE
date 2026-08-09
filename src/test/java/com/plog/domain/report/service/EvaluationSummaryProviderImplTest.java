@@ -42,7 +42,7 @@ class EvaluationSummaryProviderImplTest {
 
         assertThat(summary.hasEvaluation()).isFalse();
         assertThat(summary.average()).isNull();
-        assertThat(summary.normalizedScore()).isNull();
+        assertThat(summary.normalizedScore()).isEqualByComparingTo("0.00");
         assertThat(summary.categoryScores()).isEmpty();
         assertThat(summary.keywords()).isEmpty();
     }
@@ -85,7 +85,7 @@ class EvaluationSummaryProviderImplTest {
 
         assertThat(summary.submitted()).isFalse();
         assertThat(summary.matchRatio()).isNull();
-        assertThat(summary.normalizedScore()).isNull();
+        assertThat(summary.normalizedScore()).isEqualByComparingTo("0.00");
     }
 
     @Test

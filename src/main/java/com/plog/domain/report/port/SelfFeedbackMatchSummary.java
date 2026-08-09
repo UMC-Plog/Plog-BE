@@ -12,7 +12,9 @@ import java.math.BigDecimal;
  * @param unmatchedCount  로그와 어긋나는 서술 수
  * @param uncertainCount  판정 불가한 서술 수
  * @param matchRatio      일치 비율 0.0~1.0. 판정 대상이 없으면 null
- * @param normalizedScore 점수 조립에 쓰는 0~100 점수. 미계산이면 null
+ * @param normalizedScore 점수 조립에 쓰는 0~100 점수. {@code EvaluationSummaryProvider} 구현체는
+ *                        항상 값을 채워야 한다 — null이면 {@code ReportMemberScoreService}에서
+ *                        예외가 난다. 미제출 멤버는 {@link #notSubmitted()}를 통해 0으로 채워진다
  */
 public record SelfFeedbackMatchSummary(
         boolean submitted,
@@ -22,8 +24,11 @@ public record SelfFeedbackMatchSummary(
         BigDecimal matchRatio,
         BigDecimal normalizedScore
 ) {
-    /** 자기 피드백을 제출하지 않은 멤버. */
+    /**
+     * 자기 피드백을 제출하지 않은 멤버. normalizedScore는 null이 아니라 0.00 —
+     * {@code ReportMemberScoreService}가 필수값으로 요구하므로, "미제출"은 곧 "점수 0"으로 취급한다.
+     */
     public static SelfFeedbackMatchSummary notSubmitted() {
-        return new SelfFeedbackMatchSummary(false, 0, 0, 0, null, null);
+        return new SelfFeedbackMatchSummary(false, 0, 0, 0, null, new BigDecimal("0.00"));
     }
 }
