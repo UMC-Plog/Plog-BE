@@ -87,6 +87,37 @@ class IntegrationActivityReportLogAdapterTest {
     }
 
     @Test
+    void synchronizeActivityUsesSameSourceRefIdForRepeatedActivity() {
+        when(integrationActivityRepository.findReportProjectionTarget(10L, "commit:abc123"))
+                .thenReturn(Optional.of(activity(
+                        LinkType.GITHUB,
+                        IntegrationActivityType.GITHUB_COMMIT,
+                        ProjectMember.builder().id(63L).build(),
+                        "commit:abc123",
+                        "wantkdd",
+                        "wantkdd@example.com",
+                        "{\"sha\":\"abc123\"}"
+                )));
+
+        adapter.synchronizeActivity(10L, "commit:abc123");
+        adapter.synchronizeActivity(10L, "commit:abc123");
+
+        ArgumentCaptor<String> sourceRefId = ArgumentCaptor.forClass(String.class);
+        verify(reportActivityLogRepository, times(2)).upsertExternalActivityLog(
+                eq(63L),
+                eq("GITHUB"),
+                eq("GITHUB_COMMIT"),
+                eq(null),
+                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
+                eq("{\"sha\":\"abc123\"}"),
+                sourceRefId.capture()
+        );
+        assertThat(sourceRefId.getAllValues())
+                .hasSize(2)
+                .containsOnly(sourceRefId.getAllValues().get(0));
+    }
+
+    @Test
     void synchronizeActivityDeletesStaleProjectionWhenActivityIsUnmapped() {
         when(integrationActivityRepository.findReportProjectionTarget(10L, "comment:comment-1"))
                 .thenReturn(Optional.of(activity(

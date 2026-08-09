@@ -137,6 +137,30 @@ class ExternalReportDataProviderImplTest {
 
         assertThat(result.get(MEMBER_1).externalScore()).isEqualByComparingTo("100.00");
         assertThat(result.get(MEMBER_2).externalScore()).isEqualByComparingTo("100.00");
+        assertGithubMergeAggregation(result);
+    }
+
+    @Test
+    void deduplicatesMergeCommitWhenPullRequestComesBeforeCommit() {
+        ProjectIntegration github = integration(10L, LinkType.GITHUB);
+        ProjectMember member1 = member(MEMBER_1);
+        ProjectMember member2 = member(MEMBER_2);
+        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(PROJECT_ID)).thenReturn(List.of(github));
+        when(identityRepository.findActiveMappedIdentities(List.of(10L), List.of(MEMBER_1, MEMBER_2), MemberStatus.ACTIVE))
+                .thenReturn(List.of(identity(github, member1), identity(github, member2)));
+        when(reportActivityLogRepository.findExternalLogsForActiveProjectMembers(List.of(MEMBER_1, MEMBER_2), externalDomains()))
+                .thenReturn(List.of(
+                        log(member1, LinkType.GITHUB, RawActivityType.GITHUB_PULL_REQUEST,
+                                "{\"title\":\"기능 PR\",\"merge_commit_sha\":\"merge-sha\"}"),
+                        log(member1, LinkType.GITHUB, RawActivityType.GITHUB_COMMIT, "{\"sha\":\"merge-sha\",\"message\":\"merge\"}"),
+                        log(member2, LinkType.GITHUB, RawActivityType.GITHUB_COMMIT, "{\"sha\":\"feature\",\"message\":\"작업\"}")
+                ));
+
+        Map<Long, ExternalReportData> result = provider.provide(PROJECT_ID, List.of(MEMBER_1, MEMBER_2));
+
+        assertThat(result.get(MEMBER_1).externalScore()).isEqualByComparingTo("100.00");
+        assertThat(result.get(MEMBER_2).externalScore()).isEqualByComparingTo("100.00");
+        assertGithubMergeAggregation(result);
     }
 
     @Test
@@ -162,6 +186,31 @@ class ExternalReportDataProviderImplTest {
                 .containsEntry(CompetencyCategory.COLLABORATION, 2L);
         assertThat(result.get(MEMBER_2).competencyActivityCount())
                 .containsEntry(CompetencyCategory.COLLABORATION, 1L);
+    }
+
+    @Test
+    void appliesFigmaReactionScoreCapAgainOnNextDay() {
+        ProjectIntegration figma = integration(10L, LinkType.FIGMA);
+        ProjectMember member1 = member(MEMBER_1);
+        ProjectMember member2 = member(MEMBER_2);
+        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(PROJECT_ID)).thenReturn(List.of(figma));
+        when(identityRepository.findActiveMappedIdentities(List.of(10L), List.of(MEMBER_1, MEMBER_2), MemberStatus.ACTIVE))
+                .thenReturn(List.of(identity(figma, member1), identity(figma, member2)));
+        when(reportActivityLogRepository.findExternalLogsForActiveProjectMembers(List.of(MEMBER_1, MEMBER_2), externalDomains()))
+                .thenReturn(List.of(
+                        log(member1, LinkType.FIGMA, RawActivityType.FIGMA_COMMENT_REACTION, "{\"emoji\":\"+1\"}",
+                                LocalDateTime.of(2026, 8, 7, 10, 0)),
+                        log(member1, LinkType.FIGMA, RawActivityType.FIGMA_COMMENT_REACTION, "{\"emoji\":\"heart\"}",
+                                LocalDateTime.of(2026, 8, 7, 11, 0)),
+                        log(member1, LinkType.FIGMA, RawActivityType.FIGMA_COMMENT_REACTION, "{\"emoji\":\"eyes\"}",
+                                LocalDateTime.of(2026, 8, 8, 10, 0)),
+                        log(member2, LinkType.FIGMA, RawActivityType.FIGMA_COMMENT, "{\"message\":\"레이아웃 확인\"}")
+                ));
+
+        Map<Long, ExternalReportData> result = provider.provide(PROJECT_ID, List.of(MEMBER_1, MEMBER_2));
+
+        assertThat(result.get(MEMBER_1).externalScore()).isEqualByComparingTo("100.00");
+        assertThat(result.get(MEMBER_2).externalScore()).isEqualByComparingTo("100.00");
     }
 
     @Test
@@ -266,12 +315,32 @@ class ExternalReportDataProviderImplTest {
     }
 
     private ReportActivityLog log(ProjectMember member, LinkType linkType, RawActivityType type, String metadata) {
+        return log(member, linkType, type, metadata, LocalDateTime.of(2026, 8, 7, 10, 0));
+    }
+
+    private void assertGithubMergeAggregation(Map<Long, ExternalReportData> result) {
+        assertThat(result.get(MEMBER_1).activityCountByDomain()).containsEntry(SourceDomain.GITHUB, 2L);
+        assertThat(result.get(MEMBER_1).competencyActivityCount())
+                .containsEntry(CompetencyCategory.OUTPUT, 2L)
+                .containsEntry(CompetencyCategory.LEADERSHIP, 1L);
+        assertThat(result.get(MEMBER_2).activityCountByDomain()).containsEntry(SourceDomain.GITHUB, 1L);
+        assertThat(result.get(MEMBER_2).competencyActivityCount())
+                .containsEntry(CompetencyCategory.OUTPUT, 1L);
+    }
+
+    private ReportActivityLog log(
+            ProjectMember member,
+            LinkType linkType,
+            RawActivityType type,
+            String metadata,
+            LocalDateTime occurredAt
+    ) {
         return ReportActivityLog.create(
                 member,
                 type.owningDomain(),
                 type,
                 "content",
-                LocalDateTime.of(2026, 8, 7, 10, 0),
+                occurredAt,
                 metadata,
                 "integration:%s:%s:resource:event:%s".formatted(PROJECT_ID, linkType.name(), ++sourceRefSequence)
         );

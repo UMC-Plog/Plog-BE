@@ -210,6 +210,9 @@ public class ExternalReportDataProviderImpl implements ExternalReportDataProvide
             rawScore = rawScore.add(weight);
 
             Set<CompetencyCategory> categories = competencyMapper.map(type, log.getMetadata());
+            String evidenceText = type == RawActivityType.FIGMA_COMMENT_REACTION || categories.isEmpty()
+                    ? null
+                    : evidenceText(log, linkType);
             for (CompetencyCategory category : categories) {
                 competencyCounts.merge(category, 1L, Long::sum);
                 if (type != RawActivityType.FIGMA_COMMENT_REACTION) {
@@ -217,7 +220,7 @@ public class ExternalReportDataProviderImpl implements ExternalReportDataProvide
                             .computeIfAbsent(category, ignored -> new ArrayList<>())
                             .add(new EvidenceCandidate(
                                     log.getSourceDomain(), type, linkType,
-                                    log.getOccurredAt().toLocalDate(), weight, evidenceText(log, linkType)));
+                                    log.getOccurredAt().toLocalDate(), weight, evidenceText));
                 }
             }
         }
