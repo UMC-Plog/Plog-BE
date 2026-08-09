@@ -1,6 +1,7 @@
 package com.plog.domain.report.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plog.domain.integration.entity.IntegrationActivity;
 import com.plog.domain.integration.entity.IntegrationActivityType;
@@ -20,6 +21,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.Locale;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,7 +33,6 @@ public class IntegrationActivityReportLogAdapter {
 
     private final IntegrationActivityRepository integrationActivityRepository;
     private final ReportActivityLogRepository reportActivityLogRepository;
-    private final ExternalActivityCompetencyMapper competencyMapper;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -49,6 +50,38 @@ public class IntegrationActivityReportLogAdapter {
             return;
         }
         integrationActivityRepository.findReportProjectionTargetsByMember(projectIntegrationId, projectMemberId)
+                .forEach(this::synchronize);
+    }
+
+    @Transactional
+    public void synchronizeProviderActorActivities(
+            Long projectIntegrationId,
+            String actorProviderId,
+            String actorLogin,
+            String actorEmail
+    ) {
+        String normalizedProviderId = blankToNull(actorProviderId);
+        String normalizedLogin = normalizeAlias(actorLogin);
+        String normalizedEmail = normalizeAlias(actorEmail);
+        if (projectIntegrationId == null
+                || (normalizedProviderId == null && normalizedLogin == null && normalizedEmail == null)) {
+            return;
+        }
+        integrationActivityRepository.findReportProjectionTargetsByProviderActor(
+                        projectIntegrationId,
+                        normalizedProviderId,
+                        normalizedLogin,
+                        normalizedEmail
+                )
+                .forEach(this::synchronize);
+    }
+
+    @Transactional
+    public void synchronizeProjectIntegrationActivities(Long projectIntegrationId) {
+        if (projectIntegrationId == null) {
+            return;
+        }
+        integrationActivityRepository.findReportProjectionTargetsByProjectIntegration(projectIntegrationId)
                 .forEach(this::synchronize);
     }
 
@@ -142,7 +175,7 @@ public class IntegrationActivityReportLogAdapter {
                 activity.getActivityType(),
                 activity.getActorLogin(),
                 activity.getActorEmail(),
-                activity.getOccurredAt(),
+                effectiveOccurredAt(activity),
                 activity.getProviderPayload(),
                 source
         ).orElse(null);
@@ -186,10 +219,6 @@ public class IntegrationActivityReportLogAdapter {
         if (isBot(source.sourceDomain(), actorLogin, actorEmail)) {
             return Optional.empty();
         }
-        if (competencyMapper.map(activityType, providerPayload).isEmpty()) {
-            return Optional.empty();
-        }
-
         RawActivityType rawActivityType = rawActivityType(activityType).orElse(null);
         if (rawActivityType == null) {
             return Optional.empty();
@@ -236,11 +265,29 @@ public class IntegrationActivityReportLogAdapter {
     }
 
     private Optional<RawActivityType> rawActivityType(IntegrationActivityType activityType) {
-        try {
-            return Optional.of(RawActivityType.valueOf(activityType.name()));
-        } catch (IllegalArgumentException exception) {
-            return Optional.empty();
-        }
+        return switch (activityType) {
+            case GITHUB_COMMIT -> Optional.of(RawActivityType.GITHUB_COMMIT);
+            case GITHUB_PULL_REQUEST -> Optional.of(RawActivityType.GITHUB_PULL_REQUEST);
+            case GITHUB_PULL_REQUEST_REVIEW -> Optional.of(RawActivityType.GITHUB_PULL_REQUEST_REVIEW);
+            case GITHUB_ISSUE -> Optional.of(RawActivityType.GITHUB_ISSUE);
+            case GITHUB_ISSUE_COMMENT -> Optional.of(RawActivityType.GITHUB_ISSUE_COMMENT);
+            case GITHUB_ISSUE_EVENT -> Optional.of(RawActivityType.GITHUB_ISSUE_EVENT);
+            case NOTION_DATA_SOURCE_SNAPSHOT -> Optional.of(RawActivityType.NOTION_DATA_SOURCE_SNAPSHOT);
+            case NOTION_PAGE_SNAPSHOT -> Optional.of(RawActivityType.NOTION_PAGE_SNAPSHOT);
+            case NOTION_BLOCK_SNAPSHOT -> Optional.of(RawActivityType.NOTION_BLOCK_SNAPSHOT);
+            case NOTION_COMMENT -> Optional.of(RawActivityType.NOTION_COMMENT);
+            case NOTION_WEBHOOK_EVENT -> Optional.empty();
+            case GOOGLE_DRIVE_FILE_SNAPSHOT -> Optional.of(RawActivityType.GOOGLE_DRIVE_FILE_SNAPSHOT);
+            case GOOGLE_DRIVE_ACTIVITY -> Optional.of(RawActivityType.GOOGLE_DRIVE_ACTIVITY);
+            case GOOGLE_DRIVE_COMMENT -> Optional.of(RawActivityType.GOOGLE_DRIVE_COMMENT);
+            case GOOGLE_DRIVE_REVISION -> Optional.of(RawActivityType.GOOGLE_DRIVE_REVISION);
+            case GOOGLE_DOCUMENT_SUGGESTION -> Optional.of(RawActivityType.GOOGLE_DOCUMENT_SUGGESTION);
+            case GOOGLE_PRESENTATION_SNAPSHOT -> Optional.of(RawActivityType.GOOGLE_PRESENTATION_SNAPSHOT);
+            case FIGMA_FILE_VERSION -> Optional.of(RawActivityType.FIGMA_FILE_VERSION);
+            case FIGMA_FILE_METADATA -> Optional.of(RawActivityType.FIGMA_FILE_METADATA);
+            case FIGMA_COMMENT -> Optional.of(RawActivityType.FIGMA_COMMENT);
+            case FIGMA_COMMENT_REACTION -> Optional.of(RawActivityType.FIGMA_COMMENT_REACTION);
+        };
     }
 
     private Optional<SourceDomain> sourceDomain(LinkType linkType) {
@@ -286,14 +333,23 @@ public class IntegrationActivityReportLogAdapter {
             return "{}";
         }
         try {
-            return objectMapper.writeValueAsString(objectMapper.readTree(payload));
+            JsonNode parsed = objectMapper.readTree(payload);
+            return parsed != null && parsed.isObject() ? parsed.toString() : rawPayload(payload);
         } catch (JsonProcessingException exception) {
-            try {
-                return objectMapper.writeValueAsString(new RawPayload(payload));
-            } catch (JsonProcessingException nestedException) {
-                return "{}";
-            }
+            return rawPayload(payload);
         }
+    }
+
+    private String rawPayload(String payload) {
+        return objectMapper.createObjectNode().put("raw", payload).toString();
+    }
+
+    private Instant effectiveOccurredAt(IntegrationActivity activity) {
+        if (activity.getOccurredAt() != null) {
+            return activity.getOccurredAt();
+        }
+        LocalDateTime createdAt = activity.getCreatedAt();
+        return createdAt == null ? null : createdAt.atZone(TimeUtil.STORAGE_ZONE).toInstant();
     }
 
     private String sha256(String value) {
@@ -314,7 +370,7 @@ public class IntegrationActivityReportLogAdapter {
         if (value == null || value.isBlank()) {
             return false;
         }
-        String normalized = value.trim().toLowerCase();
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
         return normalized.contains("[bot]")
                 || normalized.equals("github-actions")
                 || normalized.startsWith("github-actions@");
@@ -322,6 +378,14 @@ public class IntegrationActivityReportLogAdapter {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private String blankToNull(String value) {
+        return isBlank(value) ? null : value;
+    }
+
+    private String normalizeAlias(String value) {
+        return isBlank(value) ? null : value.toLowerCase(Locale.ROOT);
     }
 
     private record ProjectionCommand(
@@ -337,6 +401,4 @@ public class IntegrationActivityReportLogAdapter {
     private record ProjectionSource(SourceDomain sourceDomain, String sourceRefId) {
     }
 
-    private record RawPayload(String raw) {
-    }
 }

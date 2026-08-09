@@ -158,9 +158,11 @@ public class IntegrationActorMappingManagementService {
                 providerActor.providerEmail()
         );
         if (oldActor != null) {
-            clearActivities(integration.getId(), currentMember, linkType, oldActor);
+            List<ProviderActorKey> clearedActorKeys = clearActivities(
+                    integration.getId(), currentMember, linkType, oldActor);
             if (!oldActor.equals(selectedActor)) {
                 reportLogAdapter.deleteProjectMemberProjection(projectId, linkType, currentMember.getId());
+                synchronizeProviderActorActivities(integration.getId(), clearedActorKeys);
             }
         }
         assignActivities(integration.getId(), currentMember, linkType, providerActor);
@@ -182,8 +184,10 @@ public class IntegrationActorMappingManagementService {
         aliasRepository.deleteAllByIdentityId(identity.getId());
         identityRepository.delete(identity);
         identityRepository.flush();
-        clearActivities(integration.getId(), currentMember, linkType, actor);
+        List<ProviderActorKey> clearedActorKeys = clearActivities(
+                integration.getId(), currentMember, linkType, actor);
         reportLogAdapter.deleteProjectMemberProjection(projectId, linkType, currentMember.getId());
+        synchronizeProviderActorActivities(integration.getId(), clearedActorKeys);
         return response;
     }
 
@@ -358,7 +362,7 @@ public class IntegrationActorMappingManagementService {
         }
     }
 
-    private void clearActivities(
+    private List<ProviderActorKey> clearActivities(
             Long integrationId,
             ProjectMember expectedMember,
             LinkType linkType,
@@ -368,12 +372,13 @@ public class IntegrationActorMappingManagementService {
         ProviderActorKey providerId = storedKey != null && storedKey.type() == ProviderActorKey.Type.PROVIDER_ID
                 ? storedKey
                 : null;
-        for (ProviderActorKey key : matchKeys(
+        List<ProviderActorKey> keys = matchKeys(
                 linkType,
                 providerId,
                 actor.providerLogin(),
                 actor.providerEmail()
-        )) {
+        );
+        for (ProviderActorKey key : keys) {
             switch (key.type()) {
                 case PROVIDER_ID -> activityRepository.clearProjectMemberByProviderId(
                         integrationId, expectedMember, key.value());
@@ -383,6 +388,24 @@ public class IntegrationActorMappingManagementService {
                         integrationId, expectedMember, key.value());
             }
         }
+        return keys;
+    }
+
+    private void synchronizeProviderActorActivities(Long integrationId, List<ProviderActorKey> keys) {
+        reportLogAdapter.synchronizeProviderActorActivities(
+                integrationId,
+                keyValue(keys, ProviderActorKey.Type.PROVIDER_ID),
+                keyValue(keys, ProviderActorKey.Type.LOGIN),
+                keyValue(keys, ProviderActorKey.Type.EMAIL)
+        );
+    }
+
+    private String keyValue(List<ProviderActorKey> keys, ProviderActorKey.Type type) {
+        return keys.stream()
+                .filter(key -> key.type() == type)
+                .map(ProviderActorKey::value)
+                .findFirst()
+                .orElse(null);
     }
 
     private List<ProviderActorKey> matchKeys(

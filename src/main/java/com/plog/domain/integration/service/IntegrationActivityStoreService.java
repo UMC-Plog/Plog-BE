@@ -50,7 +50,7 @@ public class IntegrationActivityStoreService {
         com.plog.domain.project.entity.ProjectMember projectMember =
                 resolveActor(resource, actorProviderId, actorLogin, actorEmail);
         String payload = providerPayload == null ? "{}" : providerPayload;
-        integrationActivityRepository.insertIfAbsent(
+        int inserted = integrationActivityRepository.insertIfAbsent(
                 resource.getId(),
                 projectMember == null ? null : projectMember.getId(),
                 activityType.name(),
@@ -62,16 +62,20 @@ public class IntegrationActivityStoreService {
                 sourceUrl,
                 payload
         );
-        reportLogAdapter.upsert(
-                resource,
-                projectMember,
-                activityType,
-                providerEventKey,
-                actorLogin,
-                actorEmail,
-                occurredAt,
-                payload
-        );
+        if (inserted == 1 && occurredAt != null) {
+            reportLogAdapter.upsert(
+                    resource,
+                    projectMember,
+                    activityType,
+                    providerEventKey,
+                    actorLogin,
+                    actorEmail,
+                    occurredAt,
+                    payload
+            );
+            return;
+        }
+        reportLogAdapter.synchronizeActivity(resource.getId(), providerEventKey);
     }
 
     /** 댓글 삭제처럼 같은 provider event key의 payload 상태가 바뀌는 항목에만 사용한다. */
@@ -112,16 +116,7 @@ public class IntegrationActivityStoreService {
                 sourceUrl,
                 payload
         );
-        reportLogAdapter.upsert(
-                resource,
-                projectMember,
-                activityType,
-                providerEventKey,
-                actorLogin,
-                actorEmail,
-                occurredAt,
-                payload
-        );
+        reportLogAdapter.synchronizeActivity(resource.getId(), providerEventKey);
     }
 
     @Transactional
@@ -135,9 +130,14 @@ public class IntegrationActivityStoreService {
                 || (isBlank(actorLogin) && isBlank(actorEmail))) {
             return 0;
         }
-        return integrationActivityRepository.backfillActorSnapshotByProviderId(
+        int updated = integrationActivityRepository.backfillActorSnapshotByProviderId(
                 projectIntegrationId, actorProviderId, actorLogin, actorEmail
         );
+        if (updated > 0) {
+            reportLogAdapter.synchronizeProviderActorActivities(
+                    projectIntegrationId, actorProviderId, null, null);
+        }
+        return updated;
     }
 
     private boolean isBlank(String value) {

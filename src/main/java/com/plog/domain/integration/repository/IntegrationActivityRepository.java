@@ -224,6 +224,38 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
             @Param("projectMemberId") Long projectMemberId
     );
 
+    @EntityGraph(attributePaths = {
+            "integrationResource",
+            "integrationResource.projectIntegration",
+            "integrationResource.projectIntegration.project",
+            "projectMember"
+    })
+    @Query("select activity from IntegrationActivity activity "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId "
+            + "and ((:actorProviderId is not null and activity.actorProviderId = :actorProviderId) "
+            + "or (activity.actorProviderId is null and :actorEmail is not null "
+            + "and lower(activity.actorEmail) = :actorEmail) "
+            + "or (activity.actorProviderId is null and :actorLogin is not null "
+            + "and lower(activity.actorLogin) = :actorLogin))")
+    List<IntegrationActivity> findReportProjectionTargetsByProviderActor(
+            @Param("projectIntegrationId") Long projectIntegrationId,
+            @Param("actorProviderId") String actorProviderId,
+            @Param("actorLogin") String actorLogin,
+            @Param("actorEmail") String actorEmail
+    );
+
+    @EntityGraph(attributePaths = {
+            "integrationResource",
+            "integrationResource.projectIntegration",
+            "integrationResource.projectIntegration.project",
+            "projectMember"
+    })
+    @Query("select activity from IntegrationActivity activity "
+            + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId")
+    List<IntegrationActivity> findReportProjectionTargetsByProjectIntegration(
+            @Param("projectIntegrationId") Long projectIntegrationId
+    );
+
     void deleteAllByIntegrationResourceProjectIntegrationId(Long projectIntegrationId);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)

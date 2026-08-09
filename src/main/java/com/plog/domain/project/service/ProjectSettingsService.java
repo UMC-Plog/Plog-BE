@@ -10,9 +10,12 @@ import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.exception.ProjectApiErrorCode;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -27,6 +30,7 @@ public class ProjectSettingsService {
     private final ProjectIntegrationRepository projectIntegrationRepository;
     private final InviteTokenCipher inviteTokenCipher;
     private final ProjectSettingsValidator settingsValidator;
+    private final IntegrationActivityReportLogAdapter reportLogAdapter;
 
     @Value("${plog.invite.base-url}")
     private String inviteBaseUrl;
@@ -56,9 +60,15 @@ public class ProjectSettingsService {
         Project project = requireProject(projectId);
         requireActiveMember(projectId, userId);
         settingsValidator.validate(project, request);
+        LocalDate previousEndDay = project.getEndDay();
         String projectName = request.projectName() == null ? null : request.projectName().trim();
         project.updateSettings(projectName, request.endDay(), request.projectType());
         projectRepository.saveAndFlush(project);
+        if (!Objects.equals(previousEndDay, project.getEndDay())) {
+            projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId)
+                    .forEach(integration -> reportLogAdapter.synchronizeProjectIntegrationActivities(
+                            integration.getId()));
+        }
         return new ProjectSettingsDto.UpdateResponse(
                 project.getId(), project.getProjectName(), project.getProjectType(), project.getEndDay(),
                 TimeUtil.toInstant(project.getUpdatedAt()));

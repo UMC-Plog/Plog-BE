@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plog.domain.integration.entity.IntegrationActivityType;
 import com.plog.domain.report.entity.CompetencyCategory;
+import java.util.Iterator;
+import java.util.Locale;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 
@@ -64,12 +66,17 @@ public class ExternalActivityCompetencyMapper {
             if (!root.isObject()) {
                 return "";
             }
-            for (String action : OUTPUT_GOOGLE_DRIVE_ACTIONS) {
-                if (root.path("primaryActionDetail").has(action)) {
-                    return action;
+            JsonNode primaryActionDetail = root.path("primaryActionDetail");
+            if (primaryActionDetail.isObject()) {
+                Iterator<String> fieldNames = primaryActionDetail.fieldNames();
+                while (fieldNames.hasNext()) {
+                    String action = fieldNames.next().trim().toLowerCase(Locale.ROOT);
+                    if (OUTPUT_GOOGLE_DRIVE_ACTIONS.contains(action)) {
+                        return action;
+                    }
                 }
             }
-            return root.path("action").asText("").trim().toLowerCase();
+            return root.path("action").asText("").trim().toLowerCase(Locale.ROOT);
         } catch (JsonProcessingException e) {
             return "";
         }
