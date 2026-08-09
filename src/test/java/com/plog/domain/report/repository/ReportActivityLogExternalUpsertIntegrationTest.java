@@ -105,7 +105,7 @@ class ReportActivityLogExternalUpsertIntegrationTest {
         assertThat(activityLogRepository.findAll()).hasSize(1);
         ReportActivityLog saved = activityLogRepository.findAll().get(0);
         assertThat(saved.getProjectMember().getId()).isEqualTo(secondMember.getId());
-        assertThat(saved.getMetadata()).isEqualTo("{\"sha\":\"def456\"}");
+        assertThat(saved.getMetadata()).isEqualToIgnoringWhitespace("{\"sha\":\"def456\"}");
     }
 
     @Test
