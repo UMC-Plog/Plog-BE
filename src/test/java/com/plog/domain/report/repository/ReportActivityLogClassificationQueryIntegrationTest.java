@@ -122,12 +122,74 @@ class ReportActivityLogClassificationQueryIntegrationTest {
         assertThat(result).extracting(ReportActivityLog::getId).containsExactly(statusChange.getId());
     }
 
+    @Test
+    void occurredAt_오름차순으로_정렬하고_동시각이면_id_오름차순으로_정렬한다() {
+        Project project = saveProject();
+        ProjectMember member = saveMember(project);
+        LocalDateTime baseTime = LocalDateTime.of(2026, 8, 1, 9, 0);
+
+        // 서로 다른 occurredAt: 가장 늦은 시각을 먼저 저장해서 저장 순서와 occurredAt 순서가
+        // 다르다는 것을 명확히 한다 — occurredAt 기준으로 정렬되는지가 핵심.
+        ReportActivityLog latest = save(member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE,
+                "가장 늦은 시각", "gemini-embedding-001", "[0.1,0.2]", false, null, baseTime.plusMinutes(20));
+        ReportActivityLog earliest = save(member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE,
+                "가장 이른 시각", "gemini-embedding-001", "[0.1,0.2]", false, null, baseTime);
+
+        // 같은 occurredAt(baseTime + 10분)을 가진 두 행 — id가 tie-breaker가 되는지 확인.
+        // save()가 activityLogRepository.save()를 먼저 호출하므로 아래 호출 순서가 곧 id 순서다.
+        ReportActivityLog sameTimeFirstSaved = save(member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE,
+                "동시각 먼저 저장", "gemini-embedding-001", "[0.1,0.2]", false, null, baseTime.plusMinutes(10));
+        ReportActivityLog sameTimeSecondSaved = save(member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE,
+                "동시각 나중 저장", "gemini-embedding-001", "[0.1,0.2]", false, null, baseTime.plusMinutes(10));
+
+        List<ReportActivityLog> result = activityLogRepository
+                .findBySourceDomainInAndNoiseFilteredFalseAndEmbeddingModelIsNotNullAndClassifiedTypeIsNullOrderByOccurredAtAscIdAsc(
+                        CLASSIFIABLE_DOMAINS, Limit.of(500));
+
+        assertThat(result).extracting(ReportActivityLog::getId).containsExactly(
+                earliest.getId(),
+                sameTimeFirstSaved.getId(),
+                sameTimeSecondSaved.getId(),
+                latest.getId()
+        );
+    }
+
+    @Test
+    void Limit을_넘는_행이_있어도_지정한_개수만큼만_정렬된_앞부분을_반환한다() {
+        Project project = saveProject();
+        ProjectMember member = saveMember(project);
+        LocalDateTime baseTime = LocalDateTime.of(2026, 8, 1, 9, 0);
+
+        ReportActivityLog first = save(member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE,
+                "첫번째", "gemini-embedding-001", "[0.1,0.2]", false, null, baseTime);
+        ReportActivityLog second = save(member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE,
+                "두번째", "gemini-embedding-001", "[0.1,0.2]", false, null, baseTime.plusMinutes(1));
+        // 세 번째 행은 대상이지만 Limit(2)에 걸려 결과에 포함되면 안 된다.
+        save(member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE,
+                "세번째(제한에 걸려 제외)", "gemini-embedding-001", "[0.1,0.2]", false, null, baseTime.plusMinutes(2));
+
+        List<ReportActivityLog> result = activityLogRepository
+                .findBySourceDomainInAndNoiseFilteredFalseAndEmbeddingModelIsNotNullAndClassifiedTypeIsNullOrderByOccurredAtAscIdAsc(
+                        CLASSIFIABLE_DOMAINS, Limit.of(2));
+
+        assertThat(result).extracting(ReportActivityLog::getId).containsExactly(first.getId(), second.getId());
+    }
+
     private ReportActivityLog save(
             ProjectMember member, SourceDomain domain, RawActivityType rawType, String content,
             String embeddingModel, String embeddingJson, boolean noiseFiltered, ActivityCategory classifiedType
     ) {
+        return save(member, domain, rawType, content, embeddingModel, embeddingJson, noiseFiltered,
+                classifiedType, LocalDateTime.now(ZoneOffset.UTC));
+    }
+
+    private ReportActivityLog save(
+            ProjectMember member, SourceDomain domain, RawActivityType rawType, String content,
+            String embeddingModel, String embeddingJson, boolean noiseFiltered, ActivityCategory classifiedType,
+            LocalDateTime occurredAt
+    ) {
         ReportActivityLog log = ReportActivityLog.create(
-                member, domain, rawType, content, LocalDateTime.now(ZoneOffset.UTC), null, null);
+                member, domain, rawType, content, occurredAt, null, null);
         activityLogRepository.save(log);
         log.applyNoiseFilter(noiseFiltered);
         if (embeddingModel != null) {

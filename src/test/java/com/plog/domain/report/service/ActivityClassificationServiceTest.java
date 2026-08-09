@@ -75,6 +75,17 @@ class ActivityClassificationServiceTest {
         return log;
     }
 
+    private ReportActivityLog embeddedLogWithRawJson(
+            RawActivityType rawType, SourceDomain domain, String content, String embeddingJson, Long id
+    ) {
+        ReportActivityLog log = ReportActivityLog.create(
+                member(), domain, rawType, content, LocalDateTime.of(2026, 8, 7, 10, 0), null, null);
+        assignId(log, id);
+        log.applyNoiseFilter(false);
+        log.applyEmbedding("gemini-embedding-001", embeddingJson);
+        return log;
+    }
+
     private String writeJson(List<Float> vector) {
         try {
             return objectMapper.writeValueAsString(vector);
@@ -90,8 +101,9 @@ class ActivityClassificationServiceTest {
                 .thenReturn(logs);
     }
 
-    /** anchorCache가 FEEDBACK=[1,0], SIMPLE_RESPONSE=[0,1] centroid를 갖는다고 가정. */
+    /** anchorCache가 모델 "gemini-embedding-001", FEEDBACK=[1,0], SIMPLE_RESPONSE=[0,1] centroid를 갖는다고 가정. */
     private void stubTwoCategoryAnchors() {
+        when(anchorCache.modelName()).thenReturn("gemini-embedding-001");
         when(anchorCache.cachedCategories())
                 .thenReturn(Set.of(ActivityCategory.FEEDBACK, ActivityCategory.SIMPLE_RESPONSE));
         when(anchorCache.centroidOf(ActivityCategory.FEEDBACK)).thenReturn(List.of(1.0f, 0.0f));
@@ -196,5 +208,95 @@ class ActivityClassificationServiceTest {
         int classified = service.classifyBatch();
 
         assertThat(classified).isEqualTo(2);
+    }
+
+    @Test
+    void 활동_임베딩_모델이_anchor_모델과_다르면_규칙_폴백으로_처리한다() {
+        when(anchorCache.modelName()).thenReturn("gemini-embedding-001");
+        ReportActivityLog log = ReportActivityLog.create(
+                member(), SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE, "예전 모델로 만든 벡터",
+                LocalDateTime.of(2026, 8, 7, 10, 0), null, null);
+        assignId(log, 10L);
+        log.applyNoiseFilter(false);
+        log.applyEmbedding("old-embedding-model-v1", writeJson(List.of(1.0f, 0.0f))); // anchor와 다른 모델
+        stubFetch(List.of(log));
+
+        service.classifyBatch();
+
+        // 벡터 비교 자체를 건너뛰고 CHAT_MESSAGE의 rawActivityType 기본값으로 폴백된다.
+        assertThat(log.getClassifiedType()).isEqualTo(ActivityCategory.SIMPLE_RESPONSE);
+    }
+
+    @Test
+    void 빈_벡터_배열은_규칙_폴백으로_처리한다() {
+        ReportActivityLog log = embeddedLogWithRawJson(
+                RawActivityType.POST_CREATE, SourceDomain.POST, "게시글", "[]", 11L);
+        stubFetch(List.of(log));
+
+        service.classifyBatch();
+
+        assertThat(log.getClassifiedType()).isEqualTo(ActivityCategory.DELIVERABLE_SUBMIT);
+    }
+
+    @Test
+    void 벡터에_null_원소가_있으면_규칙_폴백으로_처리한다() {
+        ReportActivityLog log = embeddedLogWithRawJson(
+                RawActivityType.COMMENT_CREATE, SourceDomain.POST, "댓글", "[1.0, null, 0.5]", 12L);
+        stubFetch(List.of(log));
+
+        service.classifyBatch();
+
+        assertThat(log.getClassifiedType()).isEqualTo(ActivityCategory.FEEDBACK);
+    }
+
+    @Test
+    void 영벡터는_규칙_폴백으로_처리한다() {
+        ReportActivityLog log = embeddedLogWithRawJson(
+                RawActivityType.CHAT_MESSAGE, SourceDomain.CHAT, "메시지", "[0.0, 0.0]", 13L);
+        stubFetch(List.of(log));
+
+        service.classifyBatch();
+
+        assertThat(log.getClassifiedType()).isEqualTo(ActivityCategory.SIMPLE_RESPONSE);
+    }
+
+    @Test
+    void anchor와_차원이_다른_벡터는_예외_없이_규칙_폴백으로_처리하고_배치는_계속된다() {
+        when(anchorCache.modelName()).thenReturn("gemini-embedding-001");
+        when(anchorCache.cachedCategories()).thenReturn(Set.of(ActivityCategory.FEEDBACK));
+        when(anchorCache.centroidOf(ActivityCategory.FEEDBACK)).thenReturn(List.of(1.0f, 0.0f)); // 2차원
+        ReportActivityLog log = embeddedLog(
+                RawActivityType.CHAT_MESSAGE, SourceDomain.CHAT, "메시지",
+                List.of(1.0f, 0.0f, 0.0f), 14L); // 3차원 — anchor와 차원 불일치
+        stubFetch(List.of(log));
+
+        int classified = service.classifyBatch();
+
+        assertThat(log.getClassifiedType()).isEqualTo(ActivityCategory.SIMPLE_RESPONSE); // CHAT_MESSAGE 폴백
+        assertThat(classified).isEqualTo(1); // 배치 자체는 롤백 없이 정상 완료
+    }
+
+    @Test
+    void 예상치_못한_예외가_발생한_행은_건너뛰고_이후_행은_계속_분류된다() {
+        when(anchorCache.modelName()).thenReturn("gemini-embedding-001");
+        when(anchorCache.centroidOf(ActivityCategory.FEEDBACK)).thenReturn(List.of(1.0f, 0.0f));
+        when(anchorCache.centroidOf(ActivityCategory.SIMPLE_RESPONSE)).thenReturn(List.of(0.0f, 1.0f));
+        // 조회 결과 첫 번째 행(정렬상 더 오래된 행) 처리 중에만 예상치 못한 예외가 나는 상황을 흉내낸다.
+        when(anchorCache.cachedCategories())
+                .thenThrow(new RuntimeException("예상치 못한 장애"))
+                .thenReturn(Set.of(ActivityCategory.FEEDBACK, ActivityCategory.SIMPLE_RESPONSE));
+        ReportActivityLog broken = embeddedLog(
+                RawActivityType.CHAT_MESSAGE, SourceDomain.CHAT, "먼저 온 문제 있는 행",
+                List.of(1.0f, 0.0f), 15L);
+        ReportActivityLog healthy = embeddedLog(
+                RawActivityType.CHAT_MESSAGE, SourceDomain.CHAT, "뒤에 온 정상 행",
+                List.of(1.0f, 0.0f), 16L);
+        stubFetch(List.of(broken, healthy)); // 정렬 계약대로 broken이 먼저 온다고 가정
+
+        int classified = service.classifyBatch();
+
+        assertThat(broken.getClassifiedType()).isNull(); // classify()가 호출되지 않아 재처리 대상으로 남음
+        assertThat(healthy.getClassifiedType()).isEqualTo(ActivityCategory.FEEDBACK); // 뒤의 행은 정상 분류
+        assertThat(classified).isEqualTo(1);
     }
 }

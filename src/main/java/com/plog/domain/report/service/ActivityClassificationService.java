@@ -8,6 +8,7 @@ import com.plog.domain.report.entity.ReportActivityLog;
 import com.plog.domain.report.entity.SourceDomain;
 import com.plog.domain.report.repository.ReportActivityLogRepository;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,14 @@ import org.springframework.transaction.annotation.Transactional;
  * 찍힘) 벡터 비교 없이 {@link ActivityClassificationRules#classifyContentless}로 바로 분류한다.
  * 나머지는 저장된 벡터와 anchor centroid의 코사인 유사도를 비교해서, 임계값 미만이면
  * {@link ActivityClassificationRules#fallback}으로 넘어간다.
+ * <p>
+ * <b>행 단위 실패 격리</b>: 배치 전체가 하나의 트랜잭션이라, 한 행에서 던진 예외를 그대로 두면
+ * 배치 전체가 롤백돼 정렬상 앞에 있는 잘못된 행 하나가 뒤의 정상 행까지 전부 막아버린다.
+ * 그래서 (1) 벡터 자체의 결함(빈 배열/null 원소/영벡터)은 {@link #parseVector}가 미리 걸러 규칙
+ * 폴백으로 돌리고, (2) anchor와 차원이 달라 {@link CosineSimilarity#compute}가 던지는 예외는
+ * {@link #classifyByEmbedding}이 잡아 역시 규칙 폴백으로 돌리며, (3) 그래도 예상 못한 예외가
+ * 나면 {@link #classifyBatch}의 행 단위 try-catch가 해당 행의 classify() 호출 자체를 건너뛴다
+ * (classifiedType이 null로 남아 다음 배치 조회 조건에 다시 걸려 재처리 대상이 된다).
  */
 @Slf4j
 @Service
@@ -56,13 +65,24 @@ public class ActivityClassificationService {
             return 0;
         }
 
+        int classifiedCount = 0;
         for (ReportActivityLog activity : targets) {
-            ActivityCategory category = classifyOne(activity);
-            activity.classify(category);
+            try {
+                ActivityCategory category = classifyOne(activity);
+                activity.classify(category);
+                classifiedCount++;
+            } catch (RuntimeException e) {
+                // 이 행 하나의 실패가 배치 전체(트랜잭션)를 롤백시키면 안 된다. classify()를
+                // 호출하지 않아 classifiedType=null로 남기면 다음 배치 조회 조건
+                // (classifiedType IS NULL)에 다시 걸려 재처리 대상이 된다 — 단, 같은 행이 계속
+                // 실패하면 매 배치마다 이 로그가 반복 남는다(알려진 한계, 별도 알림 이슈로 남김).
+                log.error("activity_classification_row_failed id={} — 재처리 대상으로 남겨둡니다",
+                        activity.getId(), e);
+            }
         }
 
-        log.info("activity_classification_batch_applied count={}", targets.size());
-        return targets.size();
+        log.info("activity_classification_batch_applied classified={} total={}", classifiedCount, targets.size());
+        return classifiedCount;
     }
 
     private ActivityCategory classifyOne(ReportActivityLog activity) {
@@ -76,38 +96,79 @@ public class ActivityClassificationService {
     private ActivityCategory classifyByEmbedding(ReportActivityLog activity, RawActivityType rawType) {
         List<Float> activityVector = parseVector(activity.getEmbedding(), activity.getId());
         if (activityVector == null) {
-            // embeddingModel은 채워졌지만(N/A가 아닌 실제 모델) 벡터가 비어있는 비정상 상태 — 규칙 폴백.
-            log.warn("activity_classification_missing_vector id={} embeddingModel={}",
+            // embeddingModel은 채워졌지만(N/A가 아닌 실제 모델) 벡터가 없거나 결함이 있는
+            // 비정상 상태 — 규칙 폴백.
+            log.warn("activity_classification_invalid_vector id={} embeddingModel={}",
                     activity.getId(), activity.getEmbeddingModel());
             return ActivityClassificationRules.fallback(rawType);
         }
 
-        ActivityCategory best = null;
-        double bestSimilarity = Double.NEGATIVE_INFINITY;
-        for (ActivityCategory category : anchorCache.cachedCategories()) {
-            double similarity = CosineSimilarity.compute(activityVector, anchorCache.centroidOf(category));
-            if (similarity > bestSimilarity) {
-                bestSimilarity = similarity;
-                best = category;
-            }
-        }
-
-        if (best == null || bestSimilarity < SIMILARITY_THRESHOLD) {
+        String activityModel = activity.getEmbeddingModel();
+        String anchorModel = anchorCache.modelName();
+        if (!anchorModel.equals(activityModel)) {
+            // 활동이 예전 임베딩 모델(또는 다른 프로바이더)로 만든 벡터를 갖고 있는 경우 — 차원이
+            // 같아도 벡터 공간 자체가 달라 비교가 무의미하다. 재임베딩되기 전까지는 규칙 폴백으로
+            // 처리한다(잘못된 카테고리로 확정되는 것보다 안전).
+            log.warn("activity_classification_embedding_model_mismatch id={} activityModel={} anchorModel={}",
+                    activity.getId(), activityModel, anchorModel);
             return ActivityClassificationRules.fallback(rawType);
         }
-        return best;
+
+        try {
+            ActivityCategory best = null;
+            double bestSimilarity = Double.NEGATIVE_INFINITY;
+            for (ActivityCategory category : anchorCache.cachedCategories()) {
+                double similarity = CosineSimilarity.compute(activityVector, anchorCache.centroidOf(category));
+                if (similarity > bestSimilarity) {
+                    bestSimilarity = similarity;
+                    best = category;
+                }
+            }
+
+            if (best == null || bestSimilarity < SIMILARITY_THRESHOLD) {
+                return ActivityClassificationRules.fallback(rawType);
+            }
+            return best;
+        } catch (IllegalArgumentException e) {
+            // 모델은 같다고 찍혀 있어도(데이터 이상 등으로) anchor와 차원이 다르면
+            // CosineSimilarity.compute()가 여기서 던진다 — 이 행만 규칙 폴백으로 돌린다.
+            log.warn("activity_classification_similarity_compute_failed id={}", activity.getId(), e);
+            return ActivityClassificationRules.fallback(rawType);
+        }
     }
 
+    /**
+     * 저장된 임베딩 JSON을 벡터로 역직렬화하고 기본적인 결함(빈 배열/null 원소/영벡터)을 미리
+     * 걸러낸다. 문제가 있으면 예외 대신 null을 돌려줘서 호출부가 규칙 폴백으로 처리하게 한다 —
+     * 코사인 유사도 계산 단계까지 넘기지 않아야 "예외로 배치가 죽는" 경로를 원천적으로 줄인다.
+     */
     private List<Float> parseVector(String embeddingJson, Long activityId) {
         if (embeddingJson == null || embeddingJson.isBlank()) {
             return null;
         }
+
+        List<Float> vector;
         try {
-            return objectMapper.readValue(embeddingJson, new TypeReference<List<Float>>() {
+            vector = objectMapper.readValue(embeddingJson, new TypeReference<List<Float>>() {
             });
         } catch (Exception e) {
             log.warn("activity_classification_vector_parse_failed id={}", activityId, e);
             return null;
         }
+
+        if (vector.isEmpty()) {
+            log.warn("activity_classification_empty_vector id={}", activityId);
+            return null;
+        }
+        if (vector.stream().anyMatch(Objects::isNull)) {
+            log.warn("activity_classification_vector_has_null_element id={}", activityId);
+            return null;
+        }
+        if (vector.stream().allMatch(v -> v == 0.0f)) {
+            log.warn("activity_classification_zero_vector id={}", activityId);
+            return null;
+        }
+
+        return vector;
     }
 }

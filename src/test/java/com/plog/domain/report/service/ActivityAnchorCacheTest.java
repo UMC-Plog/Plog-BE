@@ -78,4 +78,32 @@ class ActivityAnchorCacheTest {
 
         assertThat(decision).isNotEqualTo(simpleResponse);
     }
+
+    @Test
+    void 워밍업_전에_modelName을_조회하면_예외다() {
+        assertThatThrownBy(() -> cache.modelName())
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void 워밍업하면_modelName이_anchor_임베딩_모델명을_돌려준다() {
+        when(embeddingClient.embed(anyString()))
+                .thenReturn(new EmbeddingResponse(List.of(1.0f, 2.0f), "gemini-embedding-001"));
+
+        cache.warmUp();
+
+        assertThat(cache.modelName()).isEqualTo("gemini-embedding-001");
+    }
+
+    @Test
+    void anchor_문장들이_서로_다른_모델로_임베딩되면_예외다() {
+        // 같은 EmbeddingClient 빈을 호출하는데도 응답 모델이 섞여 나오는 비정상 상황을 흉내낸다
+        // (예: 배치 도중 프로바이더가 전환됨). 첫 응답 이후 모델이 바뀌면 즉시 감지돼야 한다.
+        when(embeddingClient.embed(anyString()))
+                .thenReturn(new EmbeddingResponse(List.of(1.0f), "model-a"))
+                .thenReturn(new EmbeddingResponse(List.of(1.0f), "model-b"));
+
+        assertThatThrownBy(() -> cache.warmUp())
+                .isInstanceOf(IllegalStateException.class);
+    }
 }
