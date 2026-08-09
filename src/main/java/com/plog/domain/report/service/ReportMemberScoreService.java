@@ -35,14 +35,14 @@ public class ReportMemberScoreService {
         BigDecimal internal = normalizeRequired(input.internalScore(), "internalScore");
         BigDecimal peer = normalizeRequired(input.peerScore(), "peerScore");
         BigDecimal self = normalizeRequired(input.selfFeedbackScore(), "selfFeedbackScore");
-        BigDecimal external = input.externalToolConnected()
+        BigDecimal external = input.externalScoreAvailable()
                 ? normalizeRequired(input.externalScore(), "externalScore")
                 : normalizeOptional(input.externalScore(), "externalScore");
 
         BigDecimal weighted = internal.multiply(INTERNAL_WEIGHT)
                 .add(peer.multiply(PEER_WEIGHT))
                 .add(self.multiply(SELF_WEIGHT));
-        if (input.externalToolConnected()) {
+        if (input.externalScoreAvailable()) {
             weighted = weighted.add(external.multiply(EXTERNAL_WEIGHT));
         } else {
             weighted = weighted.divide(NON_EXTERNAL_WEIGHT, 8, RoundingMode.HALF_UP);

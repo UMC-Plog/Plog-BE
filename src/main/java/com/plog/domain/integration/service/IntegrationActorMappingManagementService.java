@@ -18,6 +18,7 @@ import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -46,6 +47,7 @@ public class IntegrationActorMappingManagementService {
     private final ProjectMemberIntegrationIdentityAliasRepository aliasRepository;
     private final IntegrationActivityRepository activityRepository;
     private final ProjectAccessService projectAccessService;
+    private final IntegrationActivityReportLogAdapter reportLogAdapter;
 
     @Transactional(readOnly = true)
     public IntegrationActorMappingListResponse getMappings(Long projectId, Long userId, LinkType linkType) {
@@ -153,6 +155,7 @@ public class IntegrationActorMappingManagementService {
         if (oldActor != null) {
             clearActivities(integration.getId(), currentMember, linkType, oldActor);
         }
+        reportLogAdapter.deleteProjectMemberProjection(projectId, linkType, currentMember.getId());
         assignActivities(integration.getId(), currentMember, linkType, providerActor);
         return toMappingResponse(identity, true);
     }
@@ -172,6 +175,7 @@ public class IntegrationActorMappingManagementService {
         identityRepository.delete(identity);
         identityRepository.flush();
         clearActivities(integration.getId(), currentMember, linkType, actor);
+        reportLogAdapter.deleteProjectMemberProjection(projectId, linkType, currentMember.getId());
         return response;
     }
 
@@ -344,6 +348,7 @@ public class IntegrationActorMappingManagementService {
                         integrationId, projectMember, key.value());
             }
         }
+        reportLogAdapter.synchronizeProjectMemberActivities(integrationId, projectMember.getId());
     }
 
     private void clearActivities(
