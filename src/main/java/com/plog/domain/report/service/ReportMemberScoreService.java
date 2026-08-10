@@ -34,6 +34,8 @@ public class ReportMemberScoreService {
         BigDecimal internal = normalizeOptional(input.internalScore(), "internalScore");
         BigDecimal peer = normalizeOptional(input.peerScore(), "peerScore");
         BigDecimal self = normalizeOptional(input.selfFeedbackScore(), "selfFeedbackScore");
+        // externalToolConnected/externalScoreAvailable/externalScore 조합은 MemberScoreInput의
+        // compact constructor가 생성 시점에 검증한다. 여기서는 검증을 통과한 상태만 점수화한다.
         BigDecimal external = input.externalScoreAvailable()
                 ? normalizeRequired(input.externalScore(), "externalScore")
                 : normalizeOptional(input.externalScore(), "externalScore");

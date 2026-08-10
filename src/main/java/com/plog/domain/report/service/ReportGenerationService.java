@@ -131,10 +131,16 @@ public class ReportGenerationService {
             externalConnected |= collected.llmInput().externalToolConnected();
         }
 
-        Map<Long, ReportTeamMetricService.MemberAnalysis> memberAnalysis =
-                teamMetricService.calculateAndApply(reportId, target.members().size());
+        Map<Long, ReportTeamMetricService.MemberAnalysis> memberAnalysis;
+        try {
+            memberAnalysis = teamMetricService.calculateAndApply(reportId, target.members().size());
+        } catch (RuntimeException e) {
+            // 팀 상대 지표는 nullable 부가 정보다. 실패해도 개인 점수·텍스트 생성을 계속해
+            // 리포트가 GENERATING 상태에 영구 잔류하지 않도록 한다.
+            log.error("팀 지표 계산 실패(개인 리포트 생성은 계속합니다): reportId={}", reportId, e);
+            memberAnalysis = Map.of();
+        }
         if (memberAnalysis == null) {
-            // Mockito 기본 반환값이나 방어적인 대체 구현이 null을 돌려도 생성 자체는 계속한다.
             memberAnalysis = Map.of();
         }
 
@@ -168,7 +174,8 @@ public class ReportGenerationService {
 
         writeTeamInsight(reportId, target, finalScores, headlines,
                 completionRateSum, completionRateCount,
-                complianceRateSum, complianceRateCount, externalConnected);
+                complianceRateSum, complianceRateCount,
+                collectedMembers.size() == target.members().size(), externalConnected);
 
         textWriter.publish(reportId);
         eventPublisher.publishEvent(new ReportPublishedEvent(target.projectId(), reportId));
@@ -190,6 +197,7 @@ public class ReportGenerationService {
             int completionRateCount,
             double complianceRateSum,
             int complianceRateCount,
+            boolean completePopulation,
             boolean externalConnected
     ) {
         int memberCount = target.members().size();
@@ -197,8 +205,10 @@ public class ReportGenerationService {
             TeamReportText teamText = llmGateway.generateTeamText(new TeamLlmInput(
                     target.projectType(),
                     memberCount,
-                    completionRateCount == 0 ? null : completionRateSum / completionRateCount * 100.0,
-                    complianceRateCount == 0 ? null : complianceRateSum / complianceRateCount * 100.0,
+                    !completePopulation || completionRateCount == 0
+                            ? null : completionRateSum / completionRateCount * 100.0,
+                    !completePopulation || complianceRateCount == 0
+                            ? null : complianceRateSum / complianceRateCount * 100.0,
                     finalScores,
                     headlines,
                     externalConnected

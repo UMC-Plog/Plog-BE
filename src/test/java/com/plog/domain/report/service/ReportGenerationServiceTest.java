@@ -150,7 +150,7 @@ class ReportGenerationServiceTest {
         givenReportWithMembers(1L, 2L);
         when(dataCollector.collect(anyLong(), anyLong(), any(), any(), any(), anyInt()))
                 .thenThrow(new IllegalStateException("포트 실패"))
-                .thenReturn(collected(2L));
+                .thenReturn(collected(2L, internalWithRates()));
         when(llmGateway.generateMemberText(any())).thenReturn(generatedText("두 번째"));
         when(llmGateway.generateTeamText(any())).thenReturn(new TeamReportText("잘함", "제안"));
 
@@ -159,6 +159,30 @@ class ReportGenerationServiceTest {
         assertThat(result.published()).isTrue();
         assertThat(result.textSucceeded()).isEqualTo(1);
         verify(textWriter).writeMemberText(eq(REPORT_ID), eq(2L), any());
+
+        org.mockito.ArgumentCaptor<TeamLlmInput> captor =
+                org.mockito.ArgumentCaptor.forClass(TeamLlmInput.class);
+        verify(llmGateway).generateTeamText(captor.capture());
+        assertThat(captor.getValue().teamCompletionRate()).isNull();
+        assertThat(captor.getValue().teamDeadlineComplianceRate()).isNull();
+    }
+
+    @Test
+    void 팀_지표_계산이_실패해도_개인_리포트를_생성하고_발행한다() {
+        givenReportWithMembers(1L);
+        givenCollectionSucceeds();
+        when(teamMetricService.calculateAndApply(REPORT_ID, 1))
+                .thenThrow(new IllegalStateException("팀 지표 실패"));
+        when(llmGateway.generateMemberText(any())).thenReturn(generatedText("한 줄"));
+        when(llmGateway.generateTeamText(any())).thenReturn(new TeamReportText("잘함", "제안"));
+
+        ReportGenerationResult result = service.generate(REPORT_ID);
+
+        assertThat(result.published()).isTrue();
+        assertThat(result.textSucceeded()).isEqualTo(1);
+        verify(textWriter).writeMemberText(eq(REPORT_ID), eq(1L), any());
+        verify(textWriter).publish(REPORT_ID);
+        verify(textWriter, never()).markFailed(REPORT_ID);
     }
 
     @Test
@@ -285,19 +309,29 @@ class ReportGenerationServiceTest {
     }
 
     private ReportMemberDataCollector.CollectedMember collected(Long memberId) {
+        return collected(memberId, InternalReportData.empty());
+    }
+
+    private ReportMemberDataCollector.CollectedMember collected(Long memberId, InternalReportData internal) {
         return new ReportMemberDataCollector.CollectedMember(
                 memberId,
                 MemberLlmInput.of(
                         ProjectType.DEVELOP, 2,
-                        InternalReportData.empty(),
+                        internal,
                         com.plog.domain.report.port.ExternalReportData.notConnected(),
                         com.plog.domain.report.port.PeerEvaluationSummary.none(),
                         com.plog.domain.report.port.SelfFeedbackMatchSummary.notSubmitted(),
                         new BigDecimal("82.50")
                 ),
                 new BigDecimal("82.50"),
-                InternalReportData.empty()
+                internal
         );
+    }
+
+    private InternalReportData internalWithRates() {
+        return new InternalReportData(
+                List.of(), 1, 1, 1, 1, 1.0, 0.75,
+                List.of(), Map.of(), Map.of(), new BigDecimal("80.00"));
     }
 
     private ReportLlmGateway.GeneratedMemberText generatedText(String headline) {

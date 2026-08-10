@@ -100,6 +100,16 @@ class ActivityEmbeddingServiceTest {
             public String getContent() {
                 return content;
             }
+
+            @Override
+            public String getSourceDomain() {
+                return null;
+            }
+
+            @Override
+            public String getSourceRefId() {
+                return null;
+            }
         };
     }
 

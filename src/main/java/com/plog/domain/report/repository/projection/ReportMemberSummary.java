@@ -16,9 +16,7 @@ public interface ReportMemberSummary {
 
     BigDecimal getFinalScore();
 
-    default BigDecimal getContributionRate() {
-        return null;
-    }
+    BigDecimal getContributionRate();
 
     ReliabilityTier getReliabilityTier();
 
