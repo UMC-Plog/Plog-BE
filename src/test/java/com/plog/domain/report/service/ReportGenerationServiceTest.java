@@ -18,6 +18,7 @@ import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.report.entity.Report;
+import com.plog.domain.report.entity.CompetencyCategory;
 import com.plog.domain.report.llm.MemberLlmInput;
 import com.plog.domain.report.llm.MemberReportText;
 import com.plog.domain.report.llm.ReportLlmGateway;
@@ -62,6 +63,8 @@ class ReportGenerationServiceTest {
     private ReportMemberDataCollector dataCollector;
     @Mock
     private ReportTextWriter textWriter;
+    @Mock
+    private ReportTeamMetricService teamMetricService;
     @Mock
     private ReportLlmGateway llmGateway;
     @Mock
@@ -242,6 +245,28 @@ class ReportGenerationServiceTest {
         assertThat(teamInput.memberFinalScores()).hasSize(2);
         assertThat(teamInput.memberHeadlines()).containsOnly("한 줄");
         assertThat(teamInput.projectType()).isEqualTo(ProjectType.DEVELOP);
+    }
+
+    @Test
+    void 서버에서_확정한_팀_분석값을_개인_LLM_입력에_전달한다() {
+        givenReportWithMembers(1L);
+        givenCollectionSucceeds();
+        when(teamMetricService.calculateAndApply(REPORT_ID, 1)).thenReturn(Map.of(
+                1L, new ReportTeamMetricService.MemberAnalysis(
+                        new BigDecimal("84.00"), new BigDecimal("65.00"),
+                        CompetencyCategory.COMMUNICATION)));
+        when(llmGateway.generateMemberText(any())).thenReturn(generatedText("한 줄"));
+        when(llmGateway.generateTeamText(any())).thenReturn(new TeamReportText("잘함", "제안"));
+
+        service.generate(REPORT_ID);
+
+        org.mockito.ArgumentCaptor<MemberLlmInput> captor =
+                org.mockito.ArgumentCaptor.forClass(MemberLlmInput.class);
+        verify(llmGateway).generateMemberText(captor.capture());
+        assertThat(captor.getValue().collaborationStability()).isEqualByComparingTo("84.00");
+        assertThat(captor.getValue().vulnerability()).isEqualByComparingTo("65.00");
+        assertThat(captor.getValue().vulnerableCompetency())
+                .isEqualTo(CompetencyCategory.COMMUNICATION);
     }
 
     private void givenReportWithMembers(Long... memberIds) {

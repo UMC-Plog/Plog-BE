@@ -190,7 +190,10 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
     // 즉 처리 중 앱이 죽어도 리스가 풀리면 자동으로 다시 선점 대상이 된다(복구 가능).
     // 엔티티 전체가 아니라 id/content만 반환해서 이 시점엔 커넥션을 짧게만 잡는다.
     @Query(value = """
-            SELECT report_activity_log_id AS id, content AS content
+            SELECT report_activity_log_id AS id,
+                   content AS content,
+                   source_domain AS "sourceDomain",
+                   source_ref_id AS "sourceRefId"
             FROM report_activity_log
             WHERE noise_filtered = false
               AND embedding_model IS NULL

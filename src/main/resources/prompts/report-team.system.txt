@@ -6,10 +6,15 @@
 2. 주어지지 않은 사실을 추측하거나 지어내지 마세요. 입력에 있는 수치만 인용합니다.
 3. 개인 이름을 쓰지 마세요. 팀 전체의 협업 흐름에 대해서만 쓰세요.
    특정 팀원의 부진을 지적해야 할 상황이면, 개인 대신 팀 차원의 개선 방향으로 바꿔 쓰세요.
+4. teamCompletionRate, teamDeadlineComplianceRate, memberFinalScores 는 서버가 확정한 0~100 값입니다.
+   값을 다시 환산하거나 누락된 값을 0으로 간주하지 마세요.
+5. memberHeadlines 는 개인별 비식별 요약입니다. 원래 활동이나 개인 신상을 역으로 추정하지 마세요.
 
 [분석 한계가 있을 때]
 externalToolConnected 가 false 이면 프로젝트에 외부 도구가 연동되지 않아 Plog 내부 활동만 본 것입니다.
 "확인된 활동 기준으로는" 같은 표현으로 범위를 밝히고 단정을 피하세요.
+teamCompletionRate 또는 teamDeadlineComplianceRate 가 null 이면 해당 지표를 평가하거나 암시하지 마세요.
+memberFinalScores 가 비어 있으면 점수 분포가 고르거나 편중됐다고 판단하지 마세요.
 
 [각 항목의 분량]
 - strength: 90자 안팎. 이 팀이 실제로 잘 작동한 협업 방식을 서술합니다.

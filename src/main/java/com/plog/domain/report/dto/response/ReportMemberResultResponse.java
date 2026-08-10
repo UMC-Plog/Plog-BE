@@ -20,10 +20,14 @@ public record ReportMemberResultResponse(
         BigDecimal internalScore,
         @Schema(description = "외부 연동 활동 점수. 계정 매핑이 없거나 점수화 가능한 활동이 없으면 null", example = "74.00")
         BigDecimal externalScore,
-        @Schema(description = "동료 평가 점수(0~100, Z-score 보정)", example = "80.00")
+        @Schema(description = "종합점수 계산용 동료 평가 점수(5점 평균을 0~100으로 환산)", example = "80.00")
         BigDecimal peerScore,
         @Schema(description = "종합 Peer 평균(5점 척도). 받은 평가가 없으면 null", example = "4.25")
         BigDecimal peerAverage,
+        @Schema(description = "Peer 평균의 팀 내 Z-score. 팀원 1명/동점/근거 부족이면 null")
+        BigDecimal peerZScore,
+        @Schema(description = "Peer Z-score 기반 팀 내 percentile. 계산 불가하면 null")
+        BigDecimal peerPercentile,
         @Schema(description = "역량별 평균(5점 척도). LEADERSHIP 은 주도성 점수. 근거 없으면 빈 객체",
                 example = "{\"COLLABORATION\":4.4,\"LEADERSHIP\":4.2,\"COMMUNICATION\":4.0,\"OUTPUT\":4.4}")
         Map<CompetencyCategory, BigDecimal> competencyScores,
@@ -33,6 +37,8 @@ public record ReportMemberResultResponse(
         BigDecimal selfFeedbackScore,
         @Schema(description = "가중합 최종 점수", example = "82.50")
         BigDecimal finalScore,
+        @Schema(description = "팀 내 기여율. 팀 분모가 완전하고 합계가 양수일 때만 값 존재")
+        BigDecimal contributionRate,
         @Schema(description = "리포트 생성 시점에 프로젝트에 ACTIVE 외부 도구 연동이 하나라도 있었는지 여부. "
                 + "true여도 멤버 계정 미매핑 또는 점수화 가능한 외부 활동 부족으로 externalScore가 null일 수 있으며, "
                 + "이때 외부 가중치를 제외해 비례 재분배된 점수다", example = "true")
@@ -46,9 +52,21 @@ public record ReportMemberResultResponse(
         int totalTaskCount,
         @Schema(description = "완료한 업무 수", example = "12")
         int completedTaskCount,
-        @Schema(description = "기한 내 완료한 업무 수. \"12/13건\" 표기의 앞 숫자(분모는 totalTaskCount)",
+        @Schema(description = "기한 내 완료한 업무 수. \"12/13건\" 표기의 앞 숫자",
                 example = "12")
         int deadlineMetTaskCount,
+        @Schema(description = "마감 준수율 계산 대상 업무 수. \"12/13건\" 표기의 뒤 숫자", example = "13")
+        int deadlineTargetTaskCount,
+        @Schema(description = "업무 완료율(0~100). 업무가 없으면 null")
+        BigDecimal completionRate,
+        @Schema(description = "마감 준수율(0~100). 마감 대상 업무가 없으면 null")
+        BigDecimal deadlineComplianceRate,
+        @Schema(description = "협업 안정도(0~100). 마감/Peer 협업/소통 중 하나라도 없으면 null")
+        BigDecimal collaborationStability,
+        @Schema(description = "팀 percentile 기반 개선 필요도(기존 필드명 vulnerability)")
+        BigDecimal vulnerability,
+        @Schema(description = "가장 낮은 percentile의 역량 축. 근거 없으면 null")
+        CompetencyCategory vulnerableCompetency,
         @Schema(description = "AI 한줄 평가. 개인 리포트 상단에 노출됩니다",
                 example = "적극적인 리더십으로 팀의 방향을 잡고, 구성원들이 원활하게 협업할 수 있도록 분위기를 주도했어요")
         String headline,
@@ -65,5 +83,36 @@ public record ReportMemberResultResponse(
         strengths = strengths == null ? List.of() : List.copyOf(strengths);
         competencyScores = competencyScores == null ? Map.of() : Map.copyOf(competencyScores);
         peerKeywords = peerKeywords == null ? List.of() : List.copyOf(peerKeywords);
+    }
+
+    public ReportMemberResultResponse(
+            Long reportId,
+            Long projectMemberId,
+            String memberName,
+            BigDecimal internalScore,
+            BigDecimal externalScore,
+            BigDecimal peerScore,
+            BigDecimal peerAverage,
+            Map<CompetencyCategory, BigDecimal> competencyScores,
+            List<String> peerKeywords,
+            BigDecimal selfFeedbackScore,
+            BigDecimal finalScore,
+            boolean externalToolConnected,
+            ReliabilityTier reliabilityTier,
+            String cautionText,
+            int totalTaskCount,
+            int completedTaskCount,
+            int deadlineMetTaskCount,
+            String headline,
+            List<MemberReportText.StrengthCard> strengths,
+            MemberReportText.Weakness weakness,
+            MemberReportText.GrowthInsight growth,
+            MemberReportText.WritingSuggestion writing
+    ) {
+        this(reportId, projectMemberId, memberName, internalScore, externalScore, peerScore,
+                peerAverage, null, null, competencyScores, peerKeywords, selfFeedbackScore,
+                finalScore, null, externalToolConnected, reliabilityTier, cautionText,
+                totalTaskCount, completedTaskCount, deadlineMetTaskCount, totalTaskCount,
+                null, null, null, null, null, headline, strengths, weakness, growth, writing);
     }
 }

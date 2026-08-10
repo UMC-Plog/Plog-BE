@@ -96,8 +96,8 @@ class ReportPipelineIntegrationTest extends E2eTestBase {
                 task.getId(), memberId, TaskStatus.TODO, TaskStatus.DONE, occurredAt);
 
         // 오너→멤버 Peer 평가 1건 + 멤버 자기 피드백 1건. 오너는 의도적으로 평가도 못 받고
-        // 자기 피드백도 안 낸 상태로 둔다 — PeerEvaluationSummary.none()/SelfFeedbackMatchSummary
-        // .notSubmitted()의 normalizedScore가 null이 아니라 0인지(직전 버그 수정)를 이 케이스로 검증한다.
+        // 자기 피드백도 안 낸 상태로 둔다 — none()/notSubmitted() 상태가 최종점수에서
+        // 실제 0점이 아니라 측정 불가(null)로 소비되는지 이 케이스로 검증한다.
         peerEvaluationRepository.save(PeerEvaluation.builder()
                 .evaluator(owner).evaluatee(member)
                 .collaborationScore(4).initiativeScore(4).communicationScore(4).outputScore(4)
@@ -126,15 +126,14 @@ class ReportPipelineIntegrationTest extends E2eTestBase {
         Report saved = reportRepository.findById(report.getId()).orElseThrow();
         assertThat(saved.getStatus()).isEqualTo(ReportStatus.COMPLETED);
 
-        // 이번에 고친 두 버그(internalScore null, peer/self null)가 실제로 안 터지는지의 최종 확인 —
-        // 평가/피드백이 하나도 없는 오너 쪽 결과에서 특히 중요하다.
+        // 측정 불가(null)와 실제 0을 구분하면서도 멤버를 제외하지 않고 끝까지 발행하는지 확인한다.
         ReportMemberResult ownerResult = reportMemberResultRepository
                 .findByReportIdAndProjectMemberId(report.getId(), ownerId)
                 .orElseThrow();
-        assertThat(ownerResult.getInternalScore()).isNotNull();
-        assertThat(ownerResult.getPeerScore()).isNotNull();
-        assertThat(ownerResult.getSelfFeedbackScore()).isNotNull();
-        assertThat(ownerResult.getFinalScore()).isNotNull();
+        assertThat(ownerResult.getInternalScore()).isNull();
+        assertThat(ownerResult.getPeerScore()).isNull();
+        assertThat(ownerResult.getSelfFeedbackScore()).isNull();
+        assertThat(ownerResult.getFinalScore()).isNull();
 
         ReportMemberResult memberResult = reportMemberResultRepository
                 .findByReportIdAndProjectMemberId(report.getId(), memberId)

@@ -1,6 +1,8 @@
 package com.plog.domain.report.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.plog.domain.chat.repository.ChatMessageRepository;
+import com.plog.domain.report.entity.SourceDomain;
 import com.plog.domain.report.entity.ReportActivityLog;
 import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.domain.report.repository.projection.EmbeddingClaimProjection;
@@ -13,6 +15,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -55,20 +58,33 @@ public class ActivityEmbeddingService {
     private static final int LEASE_RENEWAL_INTERVAL = 25;
 
     private final ReportActivityLogRepository activityLogRepository;
+    private final ChatMessageRepository chatMessageRepository;
     private final EmbeddingClient embeddingClient;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
 
+    @Autowired
     public ActivityEmbeddingService(
             ReportActivityLogRepository activityLogRepository,
+            ChatMessageRepository chatMessageRepository,
             EmbeddingClient embeddingClient,
             ObjectMapper objectMapper,
             PlatformTransactionManager transactionManager
     ) {
         this.activityLogRepository = activityLogRepository;
+        this.chatMessageRepository = chatMessageRepository;
         this.embeddingClient = embeddingClient;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
+
+    ActivityEmbeddingService(
+            ReportActivityLogRepository activityLogRepository,
+            EmbeddingClient embeddingClient,
+            ObjectMapper objectMapper,
+            PlatformTransactionManager transactionManager
+    ) {
+        this(activityLogRepository, null, embeddingClient, objectMapper, transactionManager);
     }
 
     /**
@@ -97,7 +113,7 @@ public class ActivityEmbeddingService {
             }
 
             EmbeddingClaimProjection activity = claimed.get(i);
-            EmbedResult result = processOne(activity.getId(), activity.getContent());
+            EmbedResult result = processOne(activity.getId(), resolveContent(activity));
             if (result == EmbedResult.SUCCESS) {
                 embedded++;
             } else if (result == EmbedResult.RATE_LIMITED) {
@@ -110,6 +126,26 @@ public class ActivityEmbeddingService {
 
         log.info("activity_embedding_batch_applied embedded={} total={}", embedded, claimed.size());
         return embedded;
+    }
+
+    /** CHAT 원문은 활동 로그에 복제하지 않고, 처리 순간에 원본 엔티티에서만 읽는다. */
+    private String resolveContent(EmbeddingClaimProjection activity) {
+        if (!SourceDomain.CHAT.name().equals(activity.getSourceDomain())) {
+            return activity.getContent();
+        }
+        String sourceRefId = activity.getSourceRefId();
+        if (sourceRefId == null || !sourceRefId.startsWith("chat:")) {
+            return null;
+        }
+        try {
+            Long chatMessageId = Long.valueOf(sourceRefId.substring("chat:".length()));
+            return chatMessageRepository.findById(chatMessageId)
+                    .map(message -> message.getMessage())
+                    .orElse(null);
+        } catch (NumberFormatException exception) {
+            log.warn("chat_activity_invalid_source_ref sourceRefId={}", sourceRefId);
+            return null;
+        }
     }
 
     private List<Long> remainingIds(List<EmbeddingClaimProjection> claimed, int fromIndexInclusive) {

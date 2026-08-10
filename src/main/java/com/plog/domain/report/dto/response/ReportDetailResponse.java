@@ -9,6 +9,8 @@ import java.util.List;
 public record ReportDetailResponse(
         @Schema(description = "리포트 ID", example = "20")
         Long reportId,
+        @Schema(description = "리포트 표시 코드", example = "PLOG-2026-07-00000020")
+        String reportCode,
         @Schema(description = "프로젝트 ID", example = "1")
         Long projectId,
         @Schema(description = "프로젝트 이름", example = "Plog")
@@ -25,7 +27,19 @@ public record ReportDetailResponse(
         @Schema(description = "팀 AI 인사이트 - 개선 제안. 생성 실패 시 null",
                 example = "앞으로는 초기 단계에서 우선순위와 의사결정 기준을 더욱 명확히 정한다면 협업 효율을 높일 수 있습니다")
         String teamSuggestion,
+        @Schema(description = "계산 가능한 멤버 완료율의 단순 평균(0~100)", example = "75.00")
+        java.math.BigDecimal teamCompletionRate,
+        @Schema(description = "계산 가능한 멤버 마감 준수율의 단순 평균(0~100)", example = "80.00")
+        java.math.BigDecimal teamDeadlineComplianceRate,
         @Schema(description = "멤버 요약 목록. 발행 전(GENERATING/FAILED)에는 항상 빈 배열")
         List<ReportMemberSummaryResponse> members
 ) {
+    public ReportDetailResponse(
+            Long reportId, Long projectId, String projectName, ReportStatus status,
+            Instant completedAt, boolean pdfAvailable, String teamStrength,
+            String teamSuggestion, List<ReportMemberSummaryResponse> members
+    ) {
+        this(reportId, null, projectId, projectName, status, completedAt, pdfAvailable,
+                teamStrength, teamSuggestion, null, null, members);
+    }
 }

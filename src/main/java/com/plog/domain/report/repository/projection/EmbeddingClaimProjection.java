@@ -8,4 +8,12 @@ public interface EmbeddingClaimProjection {
     Long getId();
 
     String getContent();
+
+    default String getSourceDomain() {
+        return null;
+    }
+
+    default String getSourceRefId() {
+        return null;
+    }
 }

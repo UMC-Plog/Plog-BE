@@ -16,8 +16,8 @@ import java.util.List;
 public record TeamLlmInput(
         ProjectType projectType,
         int teamSize,
-        double teamCompletionRate,
-        double teamDeadlineComplianceRate,
+        Double teamCompletionRate,
+        Double teamDeadlineComplianceRate,
         List<BigDecimal> memberFinalScores,
         List<String> memberHeadlines,
         boolean externalToolConnected

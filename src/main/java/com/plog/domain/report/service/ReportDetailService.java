@@ -82,6 +82,7 @@ public class ReportDetailService {
     private ReportDetailResponse toDetailResponse(Report report, List<ReportMemberSummaryResponse> members) {
         return new ReportDetailResponse(
                 report.getId(),
+                report.getReportCode(),
                 report.getProject().getId(),
                 report.getProject().getProjectName(),
                 report.getStatus(),
@@ -89,6 +90,8 @@ public class ReportDetailService {
                 isPdfAvailable(report),
                 report.getTeamStrength(),
                 report.getTeamSuggestion(),
+                report.getTeamCompletionRate(),
+                report.getTeamDeadlineComplianceRate(),
                 members
         );
     }
@@ -105,6 +108,7 @@ public class ReportDetailService {
                 summary.getProjectMemberId(),
                 summary.getMemberName(),
                 summary.getFinalScore(),
+                summary.getContributionRate(),
                 summary.getReliabilityTier(),
                 summary.getHeadline()
         );
@@ -119,16 +123,25 @@ public class ReportDetailService {
                 result.getExternalScore(),
                 result.getPeerScore(),
                 result.getPeerAverage(),
+                result.getPeerZScore(),
+                result.getPeerPercentile(),
                 result.getCompetencyScores(),
                 result.getPeerKeywords(),
                 result.getSelfFeedbackScore(),
                 result.getFinalScore(),
+                result.getContributionRate(),
                 result.isExternalToolConnected(),
                 result.getReliabilityTier(),
                 result.getCautionText(),
                 result.getTotalTaskCount(),
                 result.getCompletedTaskCount(),
                 result.getDeadlineMetTaskCount(),
+                result.getDeadlineTargetTaskCount(),
+                result.getCompletionRate(),
+                result.getDeadlineComplianceRate(),
+                result.getCollaborationStability(),
+                result.getVulnerability(),
+                result.getVulnerableCompetency(),
                 result.getHeadline(),
                 readJson(result.getStrengths(), STRENGTH_LIST),
                 readJson(result.getWeakness(), MemberReportText.Weakness.class),

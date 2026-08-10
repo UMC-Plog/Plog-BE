@@ -38,6 +38,8 @@ public class FakeInternalReportDataProvider implements InternalReportDataProvide
                 ),
                 total,
                 completed,
+                3,
+                4,
                 completed / (double) total,
                 0.75 + seed * 0.05,
                 List.of("발표자료 1건 첨부", "회의록 2건 첨부"),

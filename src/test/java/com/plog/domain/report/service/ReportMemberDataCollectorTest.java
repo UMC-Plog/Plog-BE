@@ -143,6 +143,9 @@ class ReportMemberDataCollectorTest {
         assertThat(input.externalToolConnected()).isTrue();
         assertThat(input.externalScoreAvailable()).isFalse();
         assertThat(input.externalScore()).isNull();
+        // 종합점수에는 Z-score 보정값(70)이 아니라 Peer 평균 4.0을 100점으로 환산한 80을 쓴다.
+        assertThat(input.peerScore()).isEqualByComparingTo("80.0");
+        assertThat(input.selfFeedbackScore()).isEqualByComparingTo("60");
         assertThat(collected.llmInput().externalToolConnected()).isTrue();
         assertThat(collected.llmInput().externalScoreAvailable()).isFalse();
         assertThat(collected.llmInput().externalCompetencyActivityCount())

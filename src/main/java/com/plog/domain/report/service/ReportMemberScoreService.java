@@ -13,11 +13,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ReportMemberScoreService {
-    private static final BigDecimal INTERNAL_WEIGHT = new BigDecimal("0.35");
-    private static final BigDecimal EXTERNAL_WEIGHT = new BigDecimal("0.15");
+    private static final BigDecimal INTERNAL_WEIGHT = new BigDecimal("0.40");
+    private static final BigDecimal EXTERNAL_WEIGHT = new BigDecimal("0.20");
     private static final BigDecimal PEER_WEIGHT = new BigDecimal("0.35");
-    private static final BigDecimal SELF_WEIGHT = new BigDecimal("0.15");
-    private static final BigDecimal NON_EXTERNAL_WEIGHT = new BigDecimal("0.85");
+    private static final BigDecimal SELF_WEIGHT = new BigDecimal("0.05");
     private static final BigDecimal MIN_SCORE = BigDecimal.ZERO;
     private static final BigDecimal MAX_SCORE = new BigDecimal("100");
 
@@ -32,23 +31,34 @@ public class ReportMemberScoreService {
             throw new IllegalArgumentException("reliabilityTier must not be null");
         }
 
-        BigDecimal internal = normalizeRequired(input.internalScore(), "internalScore");
-        BigDecimal peer = normalizeRequired(input.peerScore(), "peerScore");
-        BigDecimal self = normalizeRequired(input.selfFeedbackScore(), "selfFeedbackScore");
+        BigDecimal internal = normalizeOptional(input.internalScore(), "internalScore");
+        BigDecimal peer = normalizeOptional(input.peerScore(), "peerScore");
+        BigDecimal self = normalizeOptional(input.selfFeedbackScore(), "selfFeedbackScore");
         BigDecimal external = input.externalScoreAvailable()
                 ? normalizeRequired(input.externalScore(), "externalScore")
                 : normalizeOptional(input.externalScore(), "externalScore");
 
-        BigDecimal weighted = internal.multiply(INTERNAL_WEIGHT)
-                .add(peer.multiply(PEER_WEIGHT))
-                .add(self.multiply(SELF_WEIGHT));
-        if (input.externalScoreAvailable()) {
-            weighted = weighted.add(external.multiply(EXTERNAL_WEIGHT));
-        } else {
-            weighted = weighted.divide(NON_EXTERNAL_WEIGHT, 8, RoundingMode.HALF_UP);
-            external = null;
+        BigDecimal weighted = BigDecimal.ZERO;
+        BigDecimal availableWeight = BigDecimal.ZERO;
+        if (internal != null) {
+            weighted = weighted.add(internal.multiply(INTERNAL_WEIGHT));
+            availableWeight = availableWeight.add(INTERNAL_WEIGHT);
         }
-        BigDecimal finalScore = weighted.setScale(2, RoundingMode.HALF_UP);
+        if (external != null) {
+            weighted = weighted.add(external.multiply(EXTERNAL_WEIGHT));
+            availableWeight = availableWeight.add(EXTERNAL_WEIGHT);
+        }
+        if (peer != null) {
+            weighted = weighted.add(peer.multiply(PEER_WEIGHT));
+            availableWeight = availableWeight.add(PEER_WEIGHT);
+        }
+        if (self != null) {
+            weighted = weighted.add(self.multiply(SELF_WEIGHT));
+            availableWeight = availableWeight.add(SELF_WEIGHT);
+        }
+        BigDecimal finalScore = availableWeight.signum() == 0
+                ? null
+                : weighted.divide(availableWeight, 2, RoundingMode.HALF_UP);
 
         ReportMemberResult result = resultRepository
                 .findByReportIdAndProjectMemberId(report.getId(), member.getId())
