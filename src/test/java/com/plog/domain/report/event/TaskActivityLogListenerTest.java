@@ -27,7 +27,8 @@ class TaskActivityLogListenerTest {
                 new TaskStatusChangedEvent(1L, 7L, TaskStatus.IN_PROGRESS, TaskStatus.DONE, occurredAt));
         listener.onTaskAttachmentAdded(new TaskAttachmentAddedEvent(9L, 1L, 7L, occurredAt));
 
-        verify(activityLogService).collectStatusChanged(1L, 7L, TaskStatus.DONE, occurredAt);
+        verify(activityLogService).collectStatusChanged(
+                1L, 7L, TaskStatus.IN_PROGRESS, TaskStatus.DONE, occurredAt);
         verify(activityLogService).collectAttachmentAdded(9L, 1L, 7L, occurredAt);
     }
 

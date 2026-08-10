@@ -10,6 +10,7 @@ import com.plog.domain.task.repository.TaskRepository;
 import com.plog.global.api.error.TaskErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
+import java.time.LocalDateTime;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -51,9 +52,17 @@ public class TaskStatusService {
         if (previousStatus != request.cardStatus()) {
             eventPublisher.publishEvent(new TaskStatusChangedEvent(
                     task.getId(), task.getProjectMember().getId(), previousStatus, request.cardStatus(),
-                    TimeUtil.nowUtc()));
+                    occurredAt(task, request.cardStatus())));
         }
 
         return TaskStatusUpdateResponse.from(task);
+    }
+
+    // DONE으로 바뀌는 경우엔 completedAt을 그대로 재사용한다 — 새로 TimeUtil.nowUtc()를 부르면
+    // 두 값이 미세하게 어긋나서, TaskActivityLogRecoveryScheduler가 completedAt으로 재구성한
+    // occurredAt과 정상 경로가 남긴 occurredAt이 일치하지 않아 안전망 조회가 무력화된다.
+    // 그 외 전이는 Task에 저장해두는 시각이 없으니 지금 시각을 쓴다(재수집 대상에서는 제외됨).
+    private LocalDateTime occurredAt(Task task, TaskStatus newStatus) {
+        return newStatus == TaskStatus.DONE ? task.getCompletedAt() : TimeUtil.nowUtc();
     }
 }

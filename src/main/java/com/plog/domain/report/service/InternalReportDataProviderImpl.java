@@ -122,10 +122,19 @@ public class InternalReportDataProviderImpl implements InternalReportDataProvide
         return totalAttachments == 0 ? List.of() : List.of("산출물 " + totalAttachments + "건 첨부");
     }
 
-    /** 카테고리별 분류된 활동 건수. classifiedType이 없는(2단계 미처리) 행은 집계에서 제외한다. */
+    /**
+     * 카테고리별 분류된 활동 건수. classifiedType이 없는(2단계 미처리) 행은 집계에서 제외한다.
+     * TASK_STATUS_CHANGE도 제외한다 — 상태 변경 로그는 감사·이력용으로 ReportActivityLog에
+     * 남기지만 점수에는 반영하지 않는다: IN_PROGRESS 전환은 일정 조율의 증거가 아니고, 상태를
+     * 여러 번 바꾸면 활동 점수가 부풀려질 수 있으며, 무엇보다 completionRate/deadlineComplianceRate에
+     * 이미 업무 상태가 반영돼 있어 activityComponent에서 또 세면 이중 계산이 된다.
+     */
     private Map<ActivityCategory, Integer> summarizeActivityTypes(List<ReportActivityLog> activities) {
         Map<ActivityCategory, Integer> summary = new EnumMap<>(ActivityCategory.class);
         for (ReportActivityLog activity : activities) {
+            if (activity.getRawActivityType() == RawActivityType.TASK_STATUS_CHANGE) {
+                continue;
+            }
             ActivityCategory category = activity.getClassifiedType();
             if (category == null) {
                 continue;

@@ -18,7 +18,8 @@ public class TaskActivityLogListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onTaskStatusChanged(TaskStatusChangedEvent event) {
         activityLogService.collectStatusChanged(
-                event.taskId(), event.projectMemberId(), event.newStatus(), event.occurredAt());
+                event.taskId(), event.projectMemberId(), event.previousStatus(), event.newStatus(),
+                event.occurredAt());
     }
 
     @Async
