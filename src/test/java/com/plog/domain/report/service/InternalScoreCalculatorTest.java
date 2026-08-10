@@ -18,10 +18,10 @@ class InternalScoreCalculatorTest {
     @Test
     void 업무만_있고_활동이_없으면_taskComponent만_반영된다() {
         // taskComponent = 100*(0.6*1.0 + 0.4*1.0) = 100.00
-        // combined = 100.00*0.6 + 0(activityComponent)*0.4 = 60.00
+        // 활동 축이 없으므로 taskComponent 가중치를 100%로 재분배한다.
         BigDecimal result = InternalScoreCalculator.calculate(Map.of(), 5, 1.0, 1.0);
 
-        assertThat(result).isEqualByComparingTo("60.00");
+        assertThat(result).isEqualByComparingTo("100.00");
     }
 
     @Test
@@ -37,10 +37,17 @@ class InternalScoreCalculatorTest {
     }
 
     @Test
-    void 업무도_활동도_없으면_0을_돌려준다() {
-        BigDecimal result = InternalScoreCalculator.calculate(Map.of(), 0, 0.0, 0.0);
+    void 업무도_활동도_없으면_null을_돌려준다() {
+        BigDecimal result = InternalScoreCalculator.calculate(Map.of(), 0, null, null);
 
-        assertThat(result).isEqualByComparingTo("0.00");
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void 마감_대상_업무가_없으면_완료율_축만_재분배한다() {
+        BigDecimal result = InternalScoreCalculator.calculate(Map.of(), 2, 0.5, null);
+
+        assertThat(result).isEqualByComparingTo("50.00");
     }
 
     @Test

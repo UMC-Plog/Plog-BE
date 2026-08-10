@@ -53,6 +53,7 @@ public class ReportGenerationService {
     private final ExternalReportDataProvider externalDataProvider;
     private final ReportMemberDataCollector dataCollector;
     private final ReportTextWriter textWriter;
+    private final ReportTeamMetricService teamMetricService;
     private final ReportLlmGateway llmGateway;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -82,8 +83,11 @@ public class ReportGenerationService {
 
         List<BigDecimal> finalScores = new ArrayList<>();
         List<String> headlines = new ArrayList<>();
+        List<ReportMemberDataCollector.CollectedMember> collectedMembers = new ArrayList<>();
         double completionRateSum = 0.0;
         double complianceRateSum = 0.0;
+        int completionRateCount = 0;
+        int complianceRateCount = 0;
         boolean externalConnected = false;
         int succeeded = 0;
         Map<Long, ExternalReportData> externalDataByMember;
@@ -112,15 +116,46 @@ public class ReportGenerationService {
                 continue;
             }
 
-            finalScores.add(collected.finalScore());
-            completionRateSum += collected.internal().completionRate();
-            complianceRateSum += collected.internal().deadlineComplianceRate();
+            collectedMembers.add(collected);
+            if (collected.finalScore() != null) {
+                finalScores.add(collected.finalScore());
+            }
+            if (collected.internal().completionRate() != null) {
+                completionRateSum += collected.internal().completionRate();
+                completionRateCount++;
+            }
+            if (collected.internal().deadlineComplianceRate() != null) {
+                complianceRateSum += collected.internal().deadlineComplianceRate();
+                complianceRateCount++;
+            }
             externalConnected |= collected.llmInput().externalToolConnected();
+        }
 
+        Map<Long, ReportTeamMetricService.MemberAnalysis> memberAnalysis;
+        try {
+            memberAnalysis = teamMetricService.calculateAndApply(reportId, target.members().size());
+        } catch (RuntimeException e) {
+            // 팀 상대 지표는 nullable 부가 정보다. 실패해도 개인 점수·텍스트 생성을 계속해
+            // 리포트가 GENERATING 상태에 영구 잔류하지 않도록 한다.
+            log.error("팀 지표 계산 실패(개인 리포트 생성은 계속합니다): reportId={}", reportId, e);
+            memberAnalysis = Map.of();
+        }
+        if (memberAnalysis == null) {
+            memberAnalysis = Map.of();
+        }
+
+        for (ReportMemberDataCollector.CollectedMember collected : collectedMembers) {
             try {
+                ReportTeamMetricService.MemberAnalysis analysis = memberAnalysis.get(collected.projectMemberId());
+                var llmInput = analysis == null
+                        ? collected.llmInput()
+                        : collected.llmInput().withTeamAnalysis(
+                                analysis.collaborationStability(),
+                                analysis.vulnerability(),
+                                analysis.vulnerableCompetency());
                 // 트랜잭션 밖. 여기서 수 초~수십 초가 걸린다.
                 ReportLlmGateway.GeneratedMemberText generated =
-                        llmGateway.generateMemberText(collected.llmInput());
+                        llmGateway.generateMemberText(llmInput);
                 textWriter.writeMemberText(reportId, collected.projectMemberId(), generated);
                 headlines.add(generated.text().headline());
                 succeeded++;
@@ -138,7 +173,9 @@ public class ReportGenerationService {
         }
 
         writeTeamInsight(reportId, target, finalScores, headlines,
-                completionRateSum, complianceRateSum, externalConnected);
+                completionRateSum, completionRateCount,
+                complianceRateSum, complianceRateCount,
+                collectedMembers.size() == target.members().size(), externalConnected);
 
         textWriter.publish(reportId);
         eventPublisher.publishEvent(new ReportPublishedEvent(target.projectId(), reportId));
@@ -157,7 +194,10 @@ public class ReportGenerationService {
             List<BigDecimal> finalScores,
             List<String> headlines,
             double completionRateSum,
+            int completionRateCount,
             double complianceRateSum,
+            int complianceRateCount,
+            boolean completePopulation,
             boolean externalConnected
     ) {
         int memberCount = target.members().size();
@@ -165,8 +205,10 @@ public class ReportGenerationService {
             TeamReportText teamText = llmGateway.generateTeamText(new TeamLlmInput(
                     target.projectType(),
                     memberCount,
-                    completionRateSum / memberCount,
-                    complianceRateSum / memberCount,
+                    !completePopulation || completionRateCount == 0
+                            ? null : completionRateSum / completionRateCount * 100.0,
+                    !completePopulation || complianceRateCount == 0
+                            ? null : complianceRateSum / complianceRateCount * 100.0,
                     finalScores,
                     headlines,
                     externalConnected

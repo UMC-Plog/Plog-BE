@@ -84,12 +84,43 @@ public class ReportMemberResult extends BaseEntity {
     @Column(name = "completed_task_count", nullable = false, columnDefinition = "integer default 0")
     private int completedTaskCount;
 
-    /** 기한 내 완료한 업무 수. 화면 "12/13건" 표기의 앞 숫자(분모는 totalTaskCount). */
+    /** 기한 내 완료한 업무 수. 화면 "12/13건" 표기의 앞 숫자. */
     @Column(name = "deadline_met_task_count", nullable = false, columnDefinition = "integer default 0")
     private int deadlineMetTaskCount;
 
+    /** 마감일이 있어 준수율 분모에 포함되는 업무 수. */
+    @Column(name = "deadline_target_task_count", nullable = false, columnDefinition = "integer default 0")
+    private int deadlineTargetTaskCount;
+
+    /** 업무가 없으면 null. 0~100 퍼센트 스냅샷. */
+    @Column(name = "completion_rate", precision = 5, scale = 2)
+    private BigDecimal completionRate;
+
+    /** 마감일이 있는 업무가 없으면 null. 0~100 퍼센트 스냅샷. */
+    @Column(name = "deadline_compliance_rate", precision = 5, scale = 2)
+    private BigDecimal deadlineComplianceRate;
+
+    @Column(name = "contribution_rate", precision = 5, scale = 2)
+    private BigDecimal contributionRate;
+
+    @Column(name = "peer_z_score", precision = 7, scale = 4)
+    private BigDecimal peerZScore;
+
+    @Column(name = "peer_percentile", precision = 5, scale = 2)
+    private BigDecimal peerPercentile;
+
+    @Column(name = "collaboration_stability", precision = 5, scale = 2)
+    private BigDecimal collaborationStability;
+
+    @Column(name = "vulnerability", precision = 5, scale = 2)
+    private BigDecimal vulnerability;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "vulnerable_competency", length = 20)
+    private CompetencyCategory vulnerableCompetency;
+
     // ── 팀 리포트 시안의 역량점수/태그 표시용 Peer 집계. 점수 확정 시점에 함께 채워진다. ──
-    // 기존 peer_score(0~100, Z-score 보정)는 그대로 두고, 아래는 화면 표기와 같은 5점 척도다.
+    // peer_score는 5점 평균을 0~100으로 환산한 종합점수용 값이고, 아래는 화면 표기용 5점 척도다.
     // 근거가 없는 멤버(none())는 null/빈 값으로 남고, 화면은 빈 섹션을 숨긴다.
 
     /** 종합 Peer 평균 (0.00~5.00, 5점 척도). 개인 리포트의 역량 종합 점수. */
@@ -177,10 +208,60 @@ public class ReportMemberResult extends BaseEntity {
      * 팀 리포트 표의 완료율·마감 준수율(멤버별 컬럼을 합산해서 계산)과
      * 멤버 상세의 "12/13건" 표기에 쓰인다.
      */
-    public void applyTaskCounts(int totalTaskCount, int completedTaskCount, int deadlineMetTaskCount) {
+    public void applyTaskStatistics(
+            int totalTaskCount,
+            int completedTaskCount,
+            int deadlineMetTaskCount,
+            int deadlineTargetTaskCount,
+            Double completionRate,
+            Double deadlineComplianceRate
+    ) {
         this.totalTaskCount = totalTaskCount;
         this.completedTaskCount = completedTaskCount;
         this.deadlineMetTaskCount = deadlineMetTaskCount;
+        this.deadlineTargetTaskCount = deadlineTargetTaskCount;
+        this.completionRate = toPercent(completionRate);
+        this.deadlineComplianceRate = toPercent(deadlineComplianceRate);
+    }
+
+    public void applyTaskStatistics(
+            int totalTaskCount,
+            int completedTaskCount,
+            int deadlineMetTaskCount,
+            Double completionRate,
+            Double deadlineComplianceRate
+    ) {
+        applyTaskStatistics(totalTaskCount, completedTaskCount, deadlineMetTaskCount,
+                totalTaskCount, completionRate, deadlineComplianceRate);
+    }
+
+    /** 기존 호출부 호환용. 새 생성 경로는 nullable 비율까지 함께 저장한다. */
+    public void applyTaskCounts(int totalTaskCount, int completedTaskCount, int deadlineMetTaskCount) {
+        applyTaskStatistics(totalTaskCount, completedTaskCount, deadlineMetTaskCount, totalTaskCount,
+                totalTaskCount == 0 ? null : completedTaskCount / (double) totalTaskCount,
+                totalTaskCount == 0 ? null : deadlineMetTaskCount / (double) totalTaskCount);
+    }
+
+    public void applyTeamAnalysis(
+            BigDecimal contributionRate,
+            BigDecimal peerZScore,
+            BigDecimal peerPercentile,
+            BigDecimal collaborationStability,
+            BigDecimal vulnerability,
+            CompetencyCategory vulnerableCompetency
+    ) {
+        this.contributionRate = contributionRate;
+        this.peerZScore = peerZScore;
+        this.peerPercentile = peerPercentile;
+        this.collaborationStability = collaborationStability;
+        this.vulnerability = vulnerability;
+        this.vulnerableCompetency = vulnerableCompetency;
+    }
+
+    private BigDecimal toPercent(Double ratio) {
+        return ratio == null ? null : BigDecimal.valueOf(ratio)
+                .multiply(new BigDecimal("100"))
+                .setScale(2, java.math.RoundingMode.HALF_UP);
     }
 
     /**

@@ -81,8 +81,10 @@ class ReportMemberResultRepositoryIntegrationTest {
         ProjectMember withAlias = saveMember(project, "chang", "창훈", "별명창훈");
         ProjectMember blankAlias = saveMember(project, "somin", "송민", "   ");
         ProjectMember unscored = saveMember(project, "hyunmo", "현모", null);
-        saveResult(report, withAlias, new BigDecimal("70.00"));
-        saveResult(report, blankAlias, new BigDecimal("82.50"));
+        ReportMemberResult aliasedResult = saveResult(report, withAlias, new BigDecimal("70.00"));
+        aliasedResult.applyTeamAnalysis(new BigDecimal("30.00"), null, null, null, null, null);
+        ReportMemberResult topResult = saveResult(report, blankAlias, new BigDecimal("82.50"));
+        topResult.applyTeamAnalysis(new BigDecimal("70.00"), null, null, null, null, null);
         saveResult(report, unscored, null);
         entityManager.flush();
         entityManager.clear();
@@ -92,6 +94,8 @@ class ReportMemberResultRepositoryIntegrationTest {
         assertThat(summaries).extracting(ReportMemberSummary::getMemberName)
                 .containsExactly("송민", "별명창훈", "현모");
         assertThat(summaries.getFirst().getFinalScore()).isEqualByComparingTo("82.50");
+        assertThat(summaries.getFirst().getContributionRate()).isEqualByComparingTo("70.00");
+        assertThat(summaries.get(1).getContributionRate()).isEqualByComparingTo("30.00");
         assertThat(summaries.getFirst().getReliabilityTier()).isEqualTo(ReliabilityTier.P1);
         assertThat(summaries.getLast().getFinalScore()).isNull();
     }

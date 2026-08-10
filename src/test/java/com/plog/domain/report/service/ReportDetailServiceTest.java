@@ -75,6 +75,7 @@ class ReportDetailServiceTest {
         assertThat(response.members()).hasSize(1);
         assertThat(response.members().getFirst().memberName()).isEqualTo("창훈");
         assertThat(response.members().getFirst().finalScore()).isEqualByComparingTo("82.50");
+        assertThat(response.members().getFirst().contributionRate()).isEqualByComparingTo("25.00");
         verify(projectAccessService).requireActiveMember(PROJECT_ID, USER_ID);
     }
 
@@ -299,6 +300,11 @@ class ReportDetailServiceTest {
             @Override
             public BigDecimal getFinalScore() {
                 return finalScore;
+            }
+
+            @Override
+            public BigDecimal getContributionRate() {
+                return new BigDecimal("25.00");
             }
 
             @Override

@@ -16,6 +16,8 @@ public interface ReportMemberSummary {
 
     BigDecimal getFinalScore();
 
+    BigDecimal getContributionRate();
+
     ReliabilityTier getReliabilityTier();
 
     /** 팀 리포트 멤버 카드의 AI 한줄 평가. LLM 생성이 실패한 멤버는 null 이다. */

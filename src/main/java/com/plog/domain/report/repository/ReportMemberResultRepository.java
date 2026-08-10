@@ -13,6 +13,9 @@ public interface ReportMemberResultRepository extends JpaRepository<ReportMember
 
     Optional<ReportMemberResult> findByReportIdAndProjectMemberId(Long reportId, Long projectMemberId);
 
+    @EntityGraph(attributePaths = {"projectMember"})
+    List<ReportMemberResult> findAllByReportIdOrderByProjectMemberIdAsc(Long reportId);
+
     /**
      * 멤버별 결과 상세 조회용. 표시 닉네임을 만들려면 projectMember 와 user 가 둘 다 필요한데,
      * LAZY 라 그냥 조회하면 응답 매핑 시점에 쿼리가 두 번 더 나간다.
@@ -34,6 +37,7 @@ public interface ReportMemberResultRepository extends JpaRepository<ReportMember
             + "coalesce(nullif(trim(result.projectMember.anNickname), ''), "
             + "result.projectMember.user.nickname) as memberName, "
             + "result.finalScore as finalScore, "
+            + "result.contributionRate as contributionRate, "
             + "result.reliabilityTier as reliabilityTier, "
             + "result.headline as headline "
             + "from ReportMemberResult result "

@@ -15,6 +15,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.Locale;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -64,6 +65,12 @@ public class Report extends BaseEntity {
     @Column(name = "team_suggestion", columnDefinition = "TEXT")
     private String teamSuggestion;
 
+    @Column(name = "team_completion_rate", precision = 5, scale = 2)
+    private BigDecimal teamCompletionRate;
+
+    @Column(name = "team_deadline_compliance_rate", precision = 5, scale = 2)
+    private BigDecimal teamDeadlineComplianceRate;
+
     private Report(Project project) {
         if (project == null) {
             throw new IllegalArgumentException("project must not be null");
@@ -96,6 +103,16 @@ public class Report extends BaseEntity {
         requireGenerating();
         this.teamStrength = strength;
         this.teamSuggestion = suggestion;
+    }
+
+    public void applyTeamRates(BigDecimal completionRate, BigDecimal deadlineComplianceRate) {
+        requireGenerating();
+        this.teamCompletionRate = completionRate;
+        this.teamDeadlineComplianceRate = deadlineComplianceRate;
+    }
+
+    public String getReportCode() {
+        return ReportCodeFormatter.format(id, getCreatedAt());
     }
 
     public void attachPdf(String objectKey, String fileName) {

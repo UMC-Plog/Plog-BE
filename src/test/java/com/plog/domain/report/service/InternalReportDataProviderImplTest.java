@@ -77,6 +77,17 @@ class InternalReportDataProviderImplTest {
         return log;
     }
 
+    private ReportActivityLog classifiedLog(
+            RawActivityType rawType, SourceDomain domain, String content,
+            LocalDateTime occurredAt, ActivityCategory category, String sourceRefId
+    ) {
+        ReportActivityLog log = ReportActivityLog.create(
+                member(), domain, rawType, content, occurredAt, null, sourceRefId);
+        log.applyNoiseFilter(false);
+        log.classify(category);
+        return log;
+    }
+
     private void stubNoTasks() {
         when(taskRepository.findAllByProjectMember_IdOrderByCreatedAtAsc(PROJECT_MEMBER_ID))
                 .thenReturn(List.of());
@@ -118,10 +129,11 @@ class InternalReportDataProviderImplTest {
         assertThat(result.taskCardSummary().stream().filter(TaskSummary::metDeadline).count())
                 .isEqualTo(1);
         assertThat(result.completionRate()).isEqualTo(3 / 4.0);
-        assertThat(result.deadlineComplianceRate()).isEqualTo(1 / 4.0);
-        // taskComponent = 100*(0.6*0.75 + 0.4*0.25) = 55.00, activityComponent = 0 (활동 없음)
-        // internalScore = 55.00*0.6 + 0*0.4 = 33.00
-        assertThat(result.internalScore()).isEqualByComparingTo("33.00");
+        assertThat(result.deadlineMetTaskCount()).isEqualTo(1);
+        assertThat(result.deadlineTargetTaskCount()).isEqualTo(3);
+        assertThat(result.deadlineComplianceRate()).isEqualTo(1 / 3.0);
+        // 활동 축이 없으므로 taskScore만 재분배: 100*(0.6*0.75 + 0.4*(1/3)) = 58.33
+        assertThat(result.internalScore()).isEqualByComparingTo("58.33");
         assertThat(result.activityTypeSummary()).isEmpty();
         assertThat(result.competencyEvidence()).isEmpty();
     }
@@ -139,8 +151,8 @@ class InternalReportDataProviderImplTest {
 
         // 업무카드가 없어 0으로 나누는 상황이라도 NaN이 아니라 0.0으로 방어돼야 한다.
         assertThat(result.totalTaskCount()).isZero();
-        assertThat(result.completionRate()).isZero();
-        assertThat(result.deadlineComplianceRate()).isZero();
+        assertThat(result.completionRate()).isNull();
+        assertThat(result.deadlineComplianceRate()).isNull();
         assertThat(result.activityTypeSummary()).containsEntry(ActivityCategory.SCHEDULE_COORDINATION, 1);
         // totalTaskCount=0 → taskComponent 제외, activityComponent 100%로 계산.
         // SCHEDULE_COORDINATION 가중치 3, weightedSum=3 → 100*3/(3+30) = 9.0909... → 9.09
@@ -148,14 +160,14 @@ class InternalReportDataProviderImplTest {
     }
 
     @Test
-    void 업무_활동_모두_없으면_empty의_internalScore는_0이다() {
+    void 업무_활동_모두_없으면_empty의_internalScore는_null이다() {
         provider = newProvider();
         stubNoTasks();
         when(activityLogRepository.findByProjectMember_Id(PROJECT_MEMBER_ID)).thenReturn(List.of());
 
         InternalReportData result = provider.provide(PROJECT_ID, PROJECT_MEMBER_ID);
 
-        assertThat(result.internalScore()).isEqualByComparingTo("0");
+        assertThat(result.internalScore()).isNull();
     }
 
     @Test
@@ -217,7 +229,7 @@ class InternalReportDataProviderImplTest {
     }
 
     @Test
-    void 역량별_근거는_최신순으로_최대_3개까지만_담는다() {
+    void 역량별_근거는_최대_3개이며_원문을_노출하지_않는다() {
         provider = newProvider();
         stubNoTasks();
         List<ReportActivityLog> logs = List.of(
@@ -236,9 +248,8 @@ class InternalReportDataProviderImplTest {
 
         List<String> evidence = result.competencyEvidence().get(CompetencyCategory.COMMUNICATION);
         assertThat(evidence).hasSize(3);
-        assertThat(evidence.get(0)).contains("네번째(가장 최신) 피드백");
-        assertThat(evidence.get(1)).contains("세번째 피드백");
-        assertThat(evidence.get(2)).contains("두번째 피드백");
+        assertThat(evidence).allMatch(line -> line.contains("업무 진행에 필요한 피드백을 제공함"));
+        assertThat(evidence).noneMatch(line -> line.contains("피드백" + "피드백"));
     }
 
     @Test
@@ -260,7 +271,7 @@ class InternalReportDataProviderImplTest {
         assertThat(result.activityTypeSummary()).containsEntry(ActivityCategory.DELIVERABLE_SUBMIT, 1);
         List<String> evidence = result.competencyEvidence().get(CompetencyCategory.OUTPUT);
         assertThat(evidence).hasSize(1);
-        assertThat(evidence.get(0)).contains("산출물 공유드려요");
+        assertThat(evidence.get(0)).contains("프로젝트 관련 자료를 공유함");
     }
 
     @Test
@@ -280,7 +291,7 @@ class InternalReportDataProviderImplTest {
     }
 
     @Test
-    void 원문이_30자보다_길면_잘라낸다() {
+    void 원문은_길이와_무관하게_근거에_복제하지_않는다() {
         provider = newProvider();
         stubNoTasks();
         String longContent = "가".repeat(40);
@@ -293,8 +304,8 @@ class InternalReportDataProviderImplTest {
         InternalReportData result = provider.provide(PROJECT_ID, PROJECT_MEMBER_ID);
 
         String evidenceLine = result.competencyEvidence().get(CompetencyCategory.COMMUNICATION).get(0);
-        assertThat(evidenceLine).contains("가".repeat(30));
-        assertThat(evidenceLine).doesNotContain("가".repeat(31));
+        assertThat(evidenceLine).doesNotContain("가");
+        assertThat(evidenceLine).contains("업무 진행에 필요한 피드백을 제공함");
     }
 
     @Test
@@ -311,7 +322,73 @@ class InternalReportDataProviderImplTest {
 
         List<String> evidence = result.competencyEvidence().get(CompetencyCategory.OUTPUT);
         assertThat(evidence).hasSize(1);
-        assertThat(evidence.get(0)).isEqualTo("업무카드: 산출물 첨부 (6/1)");
+        assertThat(evidence.get(0)).isEqualTo("업무카드: 산출물을 제출함 (6/1)");
+    }
+
+    @Test
+    void 대표근거는_단순_최신순이_아니라_정보량을_우선한다() {
+        provider = newProvider();
+        stubNoTasks();
+        List<ReportActivityLog> logs = List.of(
+                classifiedLog(RawActivityType.CHAT_MESSAGE, SourceDomain.CHAT, "원문",
+                        LocalDateTime.of(2026, 6, 1, 9, 0), ActivityCategory.PROBLEM_SOLVING),
+                classifiedLog(RawActivityType.CHAT_MESSAGE, SourceDomain.CHAT, "원문",
+                        LocalDateTime.of(2026, 6, 2, 9, 0), ActivityCategory.DELIVERABLE_SUBMIT),
+                classifiedLog(RawActivityType.CHAT_MESSAGE, SourceDomain.CHAT, "원문",
+                        LocalDateTime.of(2026, 6, 3, 9, 0), ActivityCategory.DELIVERABLE_SUBMIT),
+                classifiedLog(RawActivityType.CHAT_MESSAGE, SourceDomain.CHAT, "원문",
+                        LocalDateTime.of(2026, 6, 4, 9, 0), ActivityCategory.DELIVERABLE_SUBMIT)
+        );
+        when(activityLogRepository.findByProjectMember_Id(PROJECT_MEMBER_ID)).thenReturn(logs);
+
+        List<String> evidence = provider.provide(PROJECT_ID, PROJECT_MEMBER_ID)
+                .competencyEvidence().get(CompetencyCategory.OUTPUT);
+
+        assertThat(evidence).hasSize(3);
+        assertThat(evidence.get(0)).contains("문제 해결에 기여함").contains("(6/1)");
+    }
+
+    @Test
+    void 동일_sourceRefId_활동은_대표근거에서_중복_제거한다() {
+        provider = newProvider();
+        stubNoTasks();
+        List<ReportActivityLog> logs = List.of(
+                classifiedLog(RawActivityType.CHAT_MESSAGE, SourceDomain.CHAT, "첫 이벤트",
+                        LocalDateTime.of(2026, 6, 1, 9, 0), ActivityCategory.FEEDBACK, "chat:15"),
+                classifiedLog(RawActivityType.CHAT_MESSAGE, SourceDomain.CHAT, "재처리 이벤트",
+                        LocalDateTime.of(2026, 6, 2, 9, 0), ActivityCategory.FEEDBACK, "chat:15")
+        );
+        when(activityLogRepository.findByProjectMember_Id(PROJECT_MEMBER_ID)).thenReturn(logs);
+
+        List<String> evidence = provider.provide(PROJECT_ID, PROJECT_MEMBER_ID)
+                .competencyEvidence().get(CompetencyCategory.COMMUNICATION);
+
+        assertThat(evidence).hasSize(1);
+    }
+
+    @Test
+    void 대표근거는_같은_출처_반복보다_출처_다양성을_반영한다() {
+        provider = newProvider();
+        stubNoTasks();
+        List<ReportActivityLog> logs = List.of(
+                classifiedLog(RawActivityType.CHAT_MESSAGE, SourceDomain.CHAT, null,
+                        LocalDateTime.of(2026, 6, 1, 9, 0), ActivityCategory.PROBLEM_SOLVING, "chat:1"),
+                classifiedLog(RawActivityType.COMMENT_CREATE, SourceDomain.POST, null,
+                        LocalDateTime.of(2026, 6, 2, 9, 0), ActivityCategory.PROBLEM_SOLVING, "comment:1"),
+                classifiedLog(RawActivityType.POST_CREATE, SourceDomain.POST, null,
+                        LocalDateTime.of(2026, 6, 3, 9, 0), ActivityCategory.DELIVERABLE_SUBMIT, "post:1"),
+                classifiedLog(RawActivityType.TASK_ATTACHMENT_ADD, SourceDomain.TASK, null,
+                        LocalDateTime.of(2026, 6, 4, 9, 0), ActivityCategory.DELIVERABLE_SUBMIT, "task-attachment:1")
+        );
+        when(activityLogRepository.findByProjectMember_Id(PROJECT_MEMBER_ID)).thenReturn(logs);
+
+        List<String> evidence = provider.provide(PROJECT_ID, PROJECT_MEMBER_ID)
+                .competencyEvidence().get(CompetencyCategory.OUTPUT);
+
+        assertThat(evidence).hasSize(3);
+        assertThat(evidence).anyMatch(line -> line.startsWith("채팅:"));
+        assertThat(evidence).anyMatch(line -> line.startsWith("댓글:"));
+        assertThat(evidence).anyMatch(line -> line.startsWith("업무카드:"));
     }
 
     private TaskAttachmentRepository.TaskAttachmentCount attachmentCount(Long taskId, long count) {
