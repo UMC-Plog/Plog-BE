@@ -17,6 +17,7 @@ import com.plog.domain.report.entity.ReliabilityTier;
 import com.plog.domain.report.entity.Report;
 import com.plog.domain.report.entity.ReportMemberResult;
 import com.plog.domain.report.entity.ReportStatus;
+import com.plog.domain.report.entity.CompetencyCategory;
 import com.plog.domain.report.repository.ReportMemberResultRepository;
 import com.plog.domain.report.repository.ReportRepository;
 import com.plog.domain.report.repository.projection.ReportMemberSummary;
@@ -26,6 +27,8 @@ import com.plog.global.api.error.ReportErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -76,6 +79,14 @@ class ReportDetailServiceTest {
         assertThat(response.members().getFirst().memberName()).isEqualTo("창훈");
         assertThat(response.members().getFirst().finalScore()).isEqualByComparingTo("82.50");
         assertThat(response.members().getFirst().contributionRate()).isEqualByComparingTo("25.00");
+        assertThat(response.projectStartDate()).isEqualTo(LocalDate.of(2026, 5, 1));
+        assertThat(response.projectEndDate()).isEqualTo(LocalDate.of(2026, 6, 12));
+        assertThat(response.totalTaskCount()).isEqualTo(4);
+        assertThat(response.completedTaskCount()).isEqualTo(3);
+        assertThat(response.deadlineMetTaskCount()).isEqualTo(2);
+        assertThat(response.deadlineTargetTaskCount()).isEqualTo(3);
+        assertThat(response.memberCount()).isEqualTo(1);
+        assertThat(response.members().getFirst().peerAverage()).isEqualByComparingTo("4.25");
         verify(projectAccessService).requireActiveMember(PROJECT_ID, USER_ID);
     }
 
@@ -127,6 +138,11 @@ class ReportDetailServiceTest {
         assertThat(response.externalToolConnected()).isFalse();
         assertThat(response.externalScore()).isNull();
         assertThat(response.reliabilityTier()).isEqualTo(ReliabilityTier.P2);
+        assertThat(response.reportCode()).startsWith("PLOG-");
+        assertThat(response.projectName()).isEqualTo("Plog");
+        assertThat(response.projectStartDate()).isEqualTo(LocalDate.of(2026, 5, 1));
+        assertThat(response.competencyScores100().get(CompetencyCategory.COLLABORATION))
+                .isEqualByComparingTo("88.00");
     }
 
     // jsonb 컬럼은 문자열로 저장돼 있다 — 응답에 그대로 실으면 프론트가 한 번 더 파싱해야 한다.
@@ -249,8 +265,9 @@ class ReportDetailServiceTest {
     private Report completedReport() {
         Report report = Report.start(project());
         ReflectionTestUtils.setField(report, "id", REPORT_ID);
+        ReflectionTestUtils.setField(report, "createdAt", LocalDateTime.of(2026, 7, 20, 11, 0));
         report.complete(LocalDateTime.of(2026, 7, 20, 12, 0));
-        report.attachPdf("reports/20/report.pdf", "Plog-report.pdf");
+        report.attachPdf("reports/20/reports.zip", "Plog-reports.zip");
         return report;
     }
 
@@ -260,6 +277,8 @@ class ReportDetailServiceTest {
                 .projectName("Plog")
                 .inviteTokenHash("invite-hash")
                 .inviteTokenEncrypted("encrypted-invite")
+                .startDay(LocalDate.of(2026, 5, 1))
+                .endDay(LocalDate.of(2026, 6, 12))
                 .build();
     }
 
@@ -282,6 +301,10 @@ class ReportDetailServiceTest {
                 ReliabilityTier.P2,
                 "Notion이 연동되지 않아 일부 작업 과정은 반영되지 않았을 수 있습니다."
         );
+        result.applyTaskStatistics(2, 2, 2, 2, 1.0, 1.0);
+        result.applyPeerBreakdown(new BigDecimal("4.25"),
+                Map.of(CompetencyCategory.COLLABORATION, new BigDecimal("4.40")),
+                List.of("책임감"));
         return result;
     }
 
@@ -311,6 +334,23 @@ class ReportDetailServiceTest {
             public ReliabilityTier getReliabilityTier() {
                 return ReliabilityTier.P1;
             }
+
+            @Override
+            public com.plog.domain.user.entity.ProfilePreset getProfilePreset() {
+                return com.plog.domain.user.entity.ProfilePreset.OTTER;
+            }
+
+            @Override public int getTotalTaskCount() { return 4; }
+            @Override public int getCompletedTaskCount() { return 3; }
+            @Override public int getDeadlineMetTaskCount() { return 2; }
+            @Override public int getDeadlineTargetTaskCount() { return 3; }
+            @Override public BigDecimal getCompletionRate() { return new BigDecimal("75.00"); }
+            @Override public BigDecimal getDeadlineComplianceRate() { return new BigDecimal("66.67"); }
+            @Override public BigDecimal getPeerAverage() { return new BigDecimal("4.25"); }
+            @Override public Map<CompetencyCategory, BigDecimal> getCompetencyScores() {
+                return Map.of(CompetencyCategory.COLLABORATION, new BigDecimal("4.40"));
+            }
+            @Override public List<String> getPeerKeywords() { return List.of("책임감"); }
 
             @Override
             public String getHeadline() {

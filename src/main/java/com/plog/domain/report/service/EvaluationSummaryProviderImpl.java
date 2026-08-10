@@ -31,8 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  *   <li>{@code average}/{@code categoryScores} 는 화면 표기와 같은 <b>5점 척도</b>
  *       ({@code PeerEvaluation} 원본 컬럼 척도).</li>
- *   <li>{@code normalizedScore} 만 점수 조립용 <b>0~100 척도</b>
- *       (팀 평균/표준편차로 보정한 Z-score, {@link EvaluationScoreCalculationService}).</li>
+ *   <li>{@code normalizedScore} 는 평가 도메인의 기존 상대 점수이며 현재 리포트 종합점수에는 쓰지 않는다.
+ *       종합점수용 Peer 값은 수집기에서 {@code average * 20}으로 환산한다.</li>
  * </ul>
  * 데이터가 없는 멤버는 예외 대신 {@link PeerEvaluationSummary#none()} /
  * {@link SelfFeedbackMatchSummary#notSubmitted()} 를 돌려준다 — 참여가 저조한 멤버도 리포트에 나와야 한다.
@@ -73,7 +73,7 @@ public class EvaluationSummaryProviderImpl implements EvaluationSummaryProvider 
         BigDecimal average = scale2((collaboration + leadership + communication + output) / 4.0);
         List<String> keywords = distinctKeywords(received);
 
-        // 0~100 정규화 점수는 팀 전체가 있어야 계산되므로(Z-score) 계산 서비스에 위임한다.
+        // 평가 도메인의 기존 상대 점수. 리포트 종합점수는 이 값이 아니라 average * 20을 사용한다.
         BigDecimal normalizedScore = calculationService
                 .calculatePeerScore(projectId, projectMemberId)
                 .score();

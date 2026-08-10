@@ -55,6 +55,8 @@ public class ReportGenerationService {
     private final ReportTextWriter textWriter;
     private final ReportTeamMetricService teamMetricService;
     private final ReportLlmGateway llmGateway;
+    private final ReportPdfArchiveService pdfArchiveService;
+    private final ReportActivityPreparationService activityPreparationService;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -81,6 +83,14 @@ public class ReportGenerationService {
             return new ReportGenerationResult(reportId, 0, 0, false);
         }
 
+        try {
+            activityPreparationService.prepare(target.projectId(), target.snapshotAt());
+        } catch (RuntimeException exception) {
+            log.error("리포트 활동 준비 실패: reportId={}", reportId, exception);
+            textWriter.markFailed(reportId);
+            return new ReportGenerationResult(reportId, target.members().size(), 0, false);
+        }
+
         List<BigDecimal> finalScores = new ArrayList<>();
         List<String> headlines = new ArrayList<>();
         List<ReportMemberDataCollector.CollectedMember> collectedMembers = new ArrayList<>();
@@ -94,7 +104,8 @@ public class ReportGenerationService {
         try {
             externalDataByMember = externalDataProvider.provide(
                     target.projectId(),
-                    target.members().stream().map(ProjectMember::getId).toList()
+                    target.members().stream().map(ProjectMember::getId).toList(),
+                    target.snapshotAt()
             );
             validateExternalData(target.members(), externalDataByMember);
         } catch (RuntimeException e) {
@@ -108,7 +119,8 @@ public class ReportGenerationService {
             try {
                 ExternalReportData external = externalDataByMember.get(member.getId());
                 collected = dataCollector.collect(
-                        reportId, target.projectId(), target.projectType(), member, external, target.members().size());
+                        reportId, target.projectId(), target.projectType(), member, external,
+                        target.members().size(), target.snapshotAt());
             } catch (RuntimeException e) {
                 // 점수 수집 실패는 텍스트 실패보다 무겁지만, 여기서도 멤버 단위로 격리한다.
                 log.error("리포트 멤버 데이터 수집 실패: reportId={}, projectMemberId={}",
@@ -157,7 +169,7 @@ public class ReportGenerationService {
                 ReportLlmGateway.GeneratedMemberText generated =
                         llmGateway.generateMemberText(llmInput);
                 textWriter.writeMemberText(reportId, collected.projectMemberId(), generated);
-                headlines.add(generated.text().headline());
+                headlines.add(generated.text().teamMemberHeadline());
                 succeeded++;
             } catch (RuntimeException e) {
                 // 텍스트만 비고 점수는 남는다 — 이 멤버 카드는 점수만 나온다.
@@ -178,6 +190,12 @@ public class ReportGenerationService {
                 collectedMembers.size() == target.members().size(), externalConnected);
 
         textWriter.publish(reportId);
+        try {
+            pdfArchiveService.generateAndAttach(reportId);
+        } catch (RuntimeException exception) {
+            // PDF는 재생성 가능한 부가 산출물이다. 본문 발행을 되돌리지 않고 다운로드만 비활성화한다.
+            log.error("리포트 PDF ZIP 생성 실패(리포트 발행은 유지합니다): reportId={}", reportId, exception);
+        }
         eventPublisher.publishEvent(new ReportPublishedEvent(target.projectId(), reportId));
         log.info("리포트 발행 완료: reportId={}, 멤버 {}명 중 {}명 텍스트 생성",
                 reportId, target.members().size(), succeeded);
@@ -209,8 +227,8 @@ public class ReportGenerationService {
                             ? null : completionRateSum / completionRateCount * 100.0,
                     !completePopulation || complianceRateCount == 0
                             ? null : complianceRateSum / complianceRateCount * 100.0,
-                    finalScores,
-                    headlines,
+                    completePopulation ? finalScores : List.of(),
+                    headlines.size() == memberCount ? headlines : List.of(),
                     externalConnected
             ));
             textWriter.writeTeamInsight(reportId, teamText);
@@ -247,12 +265,13 @@ public class ReportGenerationService {
         Project project = report.getProject();
         List<ProjectMember> members = projectMemberRepository
                 .findAllByProjectIdAndStatusOrderByIdAsc(project.getId(), MemberStatus.ACTIVE);
-        return new GenerationTarget(project.getId(), project.getProjectType(), members);
+        return new GenerationTarget(project.getId(), project.getProjectType(), report.getSnapshotAt(), members);
     }
 
     private record GenerationTarget(
             Long projectId,
             com.plog.domain.project.entity.ProjectType projectType,
+            java.time.LocalDateTime snapshotAt,
             List<ProjectMember> members
     ) {
     }

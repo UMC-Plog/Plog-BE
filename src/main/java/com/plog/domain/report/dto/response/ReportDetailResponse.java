@@ -3,6 +3,7 @@ package com.plog.domain.report.dto.response;
 import com.plog.domain.report.entity.ReportStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 @Schema(description = "리포트 상세 응답")
@@ -32,7 +33,21 @@ public record ReportDetailResponse(
         @Schema(description = "계산 가능한 멤버 마감 준수율의 단순 평균(0~100)", example = "80.00")
         java.math.BigDecimal teamDeadlineComplianceRate,
         @Schema(description = "멤버 요약 목록. 발행 전(GENERATING/FAILED)에는 항상 빈 배열")
-        List<ReportMemberSummaryResponse> members
+        List<ReportMemberSummaryResponse> members,
+        @Schema(description = "프로젝트 시작일")
+        LocalDate projectStartDate,
+        @Schema(description = "프로젝트 종료일")
+        LocalDate projectEndDate,
+        @Schema(description = "리포트 대상 팀원 수")
+        int memberCount,
+        @Schema(description = "팀 전체 배정 업무 수")
+        int totalTaskCount,
+        @Schema(description = "팀 전체 완료 업무 수")
+        int completedTaskCount,
+        @Schema(description = "팀 전체 기한 내 완료 업무 수")
+        int deadlineMetTaskCount,
+        @Schema(description = "팀 전체 마감 대상 업무 수")
+        int deadlineTargetTaskCount
 ) {
     public ReportDetailResponse(
             Long reportId, Long projectId, String projectName, ReportStatus status,
@@ -40,6 +55,18 @@ public record ReportDetailResponse(
             String teamSuggestion, List<ReportMemberSummaryResponse> members
     ) {
         this(reportId, null, projectId, projectName, status, completedAt, pdfAvailable,
-                teamStrength, teamSuggestion, null, null, members);
+                teamStrength, teamSuggestion, null, null, members,
+                null, null, members == null ? 0 : members.size(), 0, 0, 0, 0);
+    }
+
+    public ReportDetailResponse(
+            Long reportId, String reportCode, Long projectId, String projectName, ReportStatus status,
+            Instant completedAt, boolean pdfAvailable, String teamStrength, String teamSuggestion,
+            java.math.BigDecimal teamCompletionRate, java.math.BigDecimal teamDeadlineComplianceRate,
+            List<ReportMemberSummaryResponse> members
+    ) {
+        this(reportId, reportCode, projectId, projectName, status, completedAt, pdfAvailable,
+                teamStrength, teamSuggestion, teamCompletionRate, teamDeadlineComplianceRate, members,
+                null, null, members == null ? 0 : members.size(), 0, 0, 0, 0);
     }
 }

@@ -26,6 +26,8 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
      */
     boolean existsByProjectIdAndStatusIn(Long projectId, Collection<ReportStatus> statuses);
 
+    Optional<Report> findFirstByProjectIdOrderByIdDesc(Long projectId);
+
     /** 상세 조회용. 권한 확인과 응답 모두 project 가 필요해서 LAZY 프록시를 미리 채워 온다. */
     @EntityGraph(attributePaths = {"project"})
     Optional<Report> findWithProjectById(Long reportId);

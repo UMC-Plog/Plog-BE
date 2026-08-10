@@ -31,12 +31,12 @@ class ReportTest {
         LocalDateTime completedAt = LocalDateTime.of(2026, 7, 21, 10, 0);
 
         report.complete(completedAt);
-        report.attachPdf("reports/1/report.pdf", "Plog-report.pdf");
+        report.attachPdf("reports/1/reports.zip", "Plog-reports.zip");
 
         assertThat(report.getStatus()).isEqualTo(ReportStatus.COMPLETED);
         assertThat(report.getCompletedAt()).isEqualTo(completedAt);
-        assertThat(report.getPdfObjectKey()).isEqualTo("reports/1/report.pdf");
-        assertThat(report.getPdfFileName()).isEqualTo("Plog-report.pdf");
+        assertThat(report.getPdfObjectKey()).isEqualTo("reports/1/reports.zip");
+        assertThat(report.getPdfFileName()).isEqualTo("Plog-reports.zip");
     }
 
     @Test

@@ -22,6 +22,7 @@ public final class ReportLlmSchemas {
                   "type": "object",
                   "properties": {
                     "headline": { "type": "string" },
+                    "teamMemberHeadline": { "type": "string" },
                     "strengths": {
                       "type": "array",
                       "minItems": 3,
@@ -66,7 +67,7 @@ public final class ReportLlmSchemas {
                       "required": ["coverLetter", "portfolio"]
                     }
                   },
-                  "required": ["headline"]
+                  "required": ["headline", "teamMemberHeadline"]
                 }
                 """;
     }

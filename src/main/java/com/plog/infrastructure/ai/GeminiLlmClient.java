@@ -90,7 +90,11 @@ public class GeminiLlmClient implements LlmClient {
                 .put("text", request.userPrompt());
 
         ObjectNode generationConfig = root.putObject("generationConfig");
-        generationConfig.put("temperature", request.temperature());
+        // 샘플링 파라미터 지원을 확인한 Gemini 2.x에만 전송한다. 미래 모델은 지원 여부를
+        // 확인하기 전까지 보수적으로 생략해 새 모델명이 추가돼도 400으로 막히지 않게 한다.
+        if (properties.model().startsWith("gemini-2.")) {
+            generationConfig.put("temperature", request.temperature());
+        }
         generationConfig.put("maxOutputTokens", request.maxOutputTokens());
         if (request.hasResponseSchema()) {
             // 구조화 출력. 이게 있으면 코드펜스·설명문이 섞여 나오는 파싱 실패가 구조적으로 사라진다.

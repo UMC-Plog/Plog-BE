@@ -85,6 +85,14 @@ class ReportMemberResultRepositoryIntegrationTest {
         aliasedResult.applyTeamAnalysis(new BigDecimal("30.00"), null, null, null, null, null);
         ReportMemberResult topResult = saveResult(report, blankAlias, new BigDecimal("82.50"));
         topResult.applyTeamAnalysis(new BigDecimal("70.00"), null, null, null, null, null);
+        topResult.applyTaskStatistics(4, 3, 2, 3, 0.75, 2.0 / 3.0);
+        topResult.applyPeerBreakdown(new BigDecimal("4.25"),
+                java.util.Map.of(com.plog.domain.report.entity.CompetencyCategory.COLLABORATION,
+                        new BigDecimal("4.40")),
+                List.of("책임감"));
+        topResult.applyLlmText(new ReportMemberResult.LlmTextPayload(
+                "개인 리포트용 평가", "팀 카드용 활동 요약",
+                null, null, null, null, "{}", "stub"));
         saveResult(report, unscored, null);
         entityManager.flush();
         entityManager.clear();
@@ -97,6 +105,16 @@ class ReportMemberResultRepositoryIntegrationTest {
         assertThat(summaries.getFirst().getContributionRate()).isEqualByComparingTo("70.00");
         assertThat(summaries.get(1).getContributionRate()).isEqualByComparingTo("30.00");
         assertThat(summaries.getFirst().getReliabilityTier()).isEqualTo(ReliabilityTier.P1);
+        assertThat(summaries.getFirst().getTotalTaskCount()).isEqualTo(4);
+        assertThat(summaries.getFirst().getCompletedTaskCount()).isEqualTo(3);
+        assertThat(summaries.getFirst().getDeadlineMetTaskCount()).isEqualTo(2);
+        assertThat(summaries.getFirst().getDeadlineTargetTaskCount()).isEqualTo(3);
+        assertThat(summaries.getFirst().getPeerAverage()).isEqualByComparingTo("4.25");
+        assertThat(summaries.getFirst().getCompetencyScores())
+                .containsEntry(com.plog.domain.report.entity.CompetencyCategory.COLLABORATION,
+                        new BigDecimal("4.40"));
+        assertThat(summaries.getFirst().getPeerKeywords()).containsExactly("책임감");
+        assertThat(summaries.getFirst().getHeadline()).isEqualTo("팀 카드용 활동 요약");
         assertThat(summaries.getLast().getFinalScore()).isNull();
     }
 

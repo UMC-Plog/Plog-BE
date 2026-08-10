@@ -1,10 +1,13 @@
 package com.plog.domain.report.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.plog.domain.report.entity.CompetencyCategory;
 import com.plog.domain.report.entity.ReliabilityTier;
 import com.plog.domain.report.llm.MemberReportText;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -30,7 +33,7 @@ public record ReportMemberResultResponse(
         BigDecimal peerPercentile,
         @Schema(description = "역량별 평균(5점 척도). LEADERSHIP 은 주도성 점수. 근거 없으면 빈 객체",
                 example = "{\"COLLABORATION\":4.4,\"LEADERSHIP\":4.2,\"COMMUNICATION\":4.0,\"OUTPUT\":4.4}")
-        Map<CompetencyCategory, BigDecimal> competencyScores,
+        Map<CompetencyCategory, BigDecimal> peerCompetencyScores,
         @Schema(description = "동료 평가 키워드(태그 칩). 근거 없으면 빈 배열", example = "[\"리더십\",\"책임감\"]")
         List<String> peerKeywords,
         @Schema(description = "자기 피드백 일치도 점수", example = "70.00")
@@ -77,12 +80,28 @@ public record ReportMemberResultResponse(
         @Schema(description = "AI 개인 성장 인사이트. 근거 부족 시 null")
         MemberReportText.GrowthInsight growth,
         @Schema(description = "AI 문장 변환(자기소개서/포트폴리오). 근거 부족 시 null")
-        MemberReportText.WritingSuggestion writing
+        MemberReportText.WritingSuggestion writing,
+        @Schema(description = "리포트 표시 코드") String reportCode,
+        @Schema(description = "프로젝트 이름") String projectName,
+        @Schema(description = "리포트 발행 시각") Instant completedAt,
+        @Schema(description = "프로젝트 시작일") LocalDate projectStartDate,
+        @Schema(description = "프로젝트 종료일") LocalDate projectEndDate,
+        @Schema(description = "개인 기여도 상세 그래프용 역량 점수(0~100). Peer 역량 5점 평균을 20배 환산")
+        Map<CompetencyCategory, BigDecimal> competencyScores100
 ) {
     public ReportMemberResultResponse {
         strengths = strengths == null ? List.of() : List.copyOf(strengths);
-        competencyScores = competencyScores == null ? Map.of() : Map.copyOf(competencyScores);
+        peerCompetencyScores = peerCompetencyScores == null ? Map.of() : Map.copyOf(peerCompetencyScores);
         peerKeywords = peerKeywords == null ? List.of() : List.copyOf(peerKeywords);
+        competencyScores100 = competencyScores100 == null ? Map.of() : Map.copyOf(competencyScores100);
+    }
+
+    /** 기존 클라이언트 호환용 5점 척도 alias. 신규 연동은 peerCompetencyScores를 사용한다. */
+    @Deprecated
+    @JsonProperty("competencyScores")
+    @Schema(description = "Deprecated: peerCompetencyScores와 동일한 5점 척도 값", deprecated = true)
+    public Map<CompetencyCategory, BigDecimal> competencyScores() {
+        return peerCompetencyScores;
     }
 
     public ReportMemberResultResponse(
@@ -93,7 +112,7 @@ public record ReportMemberResultResponse(
             BigDecimal externalScore,
             BigDecimal peerScore,
             BigDecimal peerAverage,
-            Map<CompetencyCategory, BigDecimal> competencyScores,
+            Map<CompetencyCategory, BigDecimal> peerCompetencyScores,
             List<String> peerKeywords,
             BigDecimal selfFeedbackScore,
             BigDecimal finalScore,
@@ -110,9 +129,10 @@ public record ReportMemberResultResponse(
             MemberReportText.WritingSuggestion writing
     ) {
         this(reportId, projectMemberId, memberName, internalScore, externalScore, peerScore,
-                peerAverage, null, null, competencyScores, peerKeywords, selfFeedbackScore,
+                peerAverage, null, null, peerCompetencyScores, peerKeywords, selfFeedbackScore,
                 finalScore, null, externalToolConnected, reliabilityTier, cautionText,
                 totalTaskCount, completedTaskCount, deadlineMetTaskCount, totalTaskCount,
-                null, null, null, null, null, headline, strengths, weakness, growth, writing);
+                null, null, null, null, null, headline, strengths, weakness, growth, writing,
+                null, null, null, null, null, Map.of());
     }
 }

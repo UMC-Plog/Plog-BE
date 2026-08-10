@@ -2,6 +2,7 @@ package com.plog.domain.report.entity;
 
 import com.plog.domain.project.entity.Project;
 import com.plog.global.common.BaseEntity;
+import com.plog.global.util.TimeUtil;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -51,6 +52,9 @@ public class Report extends BaseEntity {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    @Column(name = "snapshot_at", nullable = false)
+    private LocalDateTime snapshotAt;
+
     @Column(name = "pdf_object_key", length = 1024)
     private String pdfObjectKey;
 
@@ -77,6 +81,7 @@ public class Report extends BaseEntity {
         }
         this.project = project;
         this.status = ReportStatus.GENERATING;
+        this.snapshotAt = TimeUtil.nowUtc();
     }
 
     public static Report start(Project project) {
@@ -166,8 +171,8 @@ public class Report extends BaseEntity {
         }
         String trimmed = fileName.trim();
         if (trimmed.contains("/") || trimmed.contains("\\") || trimmed.contains("..")
-                || !trimmed.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
-            throw new IllegalArgumentException("PDF file name must be a safe .pdf name");
+                || !trimmed.toLowerCase(Locale.ROOT).endsWith(".zip")) {
+            throw new IllegalArgumentException("report archive file name must be a safe .zip name");
         }
         return trimmed;
     }

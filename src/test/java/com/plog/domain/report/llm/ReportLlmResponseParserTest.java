@@ -20,6 +20,7 @@ class ReportLlmResponseParserTest {
         TeamReportText team = parser.parseTeam(raw);
 
         assertThat(member.headline()).contains("리더십");
+        assertThat(member.teamMemberHeadline()).isNotBlank().isNotEqualTo(member.headline());
         assertThat(member.strengths()).hasSize(3);
         assertThat(member.strengths().getFirst().title()).isEqualTo("주도성");
         assertThat(member.weakness().suggestions()).hasSize(3);

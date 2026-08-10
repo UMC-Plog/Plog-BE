@@ -2,6 +2,7 @@ package com.plog.domain.report.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -28,6 +29,7 @@ import com.plog.domain.task.entity.TaskStatus;
 import com.plog.domain.user.entity.User;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,7 +92,8 @@ class ReportMemberDataCollectorTest {
                 3, 2, 2 / 3.0, 1 / 3.0,
                 List.of(), Map.of(), Map.of(), null
         );
-        when(internalProvider.provide(PROJECT_ID, member.getId())).thenReturn(internal);
+        when(internalProvider.provide(
+                eq(PROJECT_ID), eq(member.getId()), any(LocalDateTime.class))).thenReturn(internal);
         when(evaluationProvider.peer(PROJECT_ID, member.getId())).thenReturn(PeerEvaluationSummary.none());
         when(evaluationProvider.self(PROJECT_ID, member.getId())).thenReturn(SelfFeedbackMatchSummary.notSubmitted());
 
@@ -120,7 +123,8 @@ class ReportMemberDataCollectorTest {
                 ReliabilityTier.P2,
                 "점수화 가능한 외부 활동이 부족해요"
         );
-        when(internalProvider.provide(PROJECT_ID, member.getId())).thenReturn(internal);
+        when(internalProvider.provide(
+                eq(PROJECT_ID), eq(member.getId()), any(LocalDateTime.class))).thenReturn(internal);
         when(evaluationProvider.peer(PROJECT_ID, member.getId()))
                 .thenReturn(new PeerEvaluationSummary(
                         new BigDecimal("4.0"), Map.of(), 1, List.of(), new BigDecimal("70")));

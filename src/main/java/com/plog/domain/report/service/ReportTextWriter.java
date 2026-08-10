@@ -37,6 +37,7 @@ public class ReportTextWriter {
         MemberReportText text = generated.text();
         result.applyLlmText(new ReportMemberResult.LlmTextPayload(
                 text.headline(),
+                text.teamMemberHeadline(),
                 toJson(text.strengths()),
                 toJson(text.weakness()),
                 toJson(text.growth()),
@@ -67,6 +68,13 @@ public class ReportTextWriter {
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
         report.fail();
+    }
+
+    @Transactional
+    public void attachPdfArchive(Long reportId, String objectKey, String fileName) {
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
+        report.attachPdf(objectKey, fileName);
     }
 
     private String toJson(Object value) {

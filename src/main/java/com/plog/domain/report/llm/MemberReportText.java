@@ -8,7 +8,8 @@ import java.util.List;
  * 호출을 한 번으로 묶고 결과를 여기서 나눠 쓴다.
  *
  * <pre>
- *   headline    → 팀 리포트 멤버 카드 "AI 한줄 평가" (2줄) + 개인 리포트 상단 "AI 한줄 평가"
+ *   headline           → 개인 리포트 상단 "AI 한줄 평가"
+ *   teamMemberHeadline → 팀 리포트 멤버 카드 "AI 한줄 평가" (2줄)
  *   strengths   → 개인 리포트 ② 강점 분석 (카드 3개)
  *   weakness    → 개인 리포트 ③ 취약점 진단
  *   growth      → 개인 리포트 ④ AI 개인 성장 인사이트
@@ -21,13 +22,27 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record MemberReportText(
         String headline,
+        String teamMemberHeadline,
         List<StrengthCard> strengths,
         Weakness weakness,
         GrowthInsight growth,
         WritingSuggestion writing
 ) {
     public MemberReportText {
+        // 과거 저장 응답이나 스키마 미지원 Stub도 읽을 수 있게 하되, 최신 프롬프트는 두 문장을 따로 생성한다.
+        teamMemberHeadline = teamMemberHeadline == null || teamMemberHeadline.isBlank()
+                ? headline : teamMemberHeadline;
         strengths = strengths == null ? List.of() : List.copyOf(strengths);
+    }
+
+    public MemberReportText(
+            String headline,
+            List<StrengthCard> strengths,
+            Weakness weakness,
+            GrowthInsight growth,
+            WritingSuggestion writing
+    ) {
+        this(headline, headline, strengths, weakness, growth, writing);
     }
 
     /** 개인 리포트 ② 강점 카드. 시안은 3개 고정이다. */

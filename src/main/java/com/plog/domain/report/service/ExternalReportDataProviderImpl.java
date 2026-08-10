@@ -20,6 +20,7 @@ import com.plog.domain.report.repository.ReportActivityLogRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -66,6 +67,13 @@ public class ExternalReportDataProviderImpl implements ExternalReportDataProvide
     @Override
     @Transactional(readOnly = true)
     public Map<Long, ExternalReportData> provide(Long projectId, Collection<Long> projectMemberIds) {
+        return provide(projectId, projectMemberIds, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, ExternalReportData> provide(
+            Long projectId, Collection<Long> projectMemberIds, LocalDateTime snapshotAt) {
         List<Long> requestedMemberIds = projectMemberIds == null ? List.of() : projectMemberIds.stream()
                 .filter(id -> id != null)
                 .distinct()
@@ -109,8 +117,11 @@ public class ExternalReportDataProviderImpl implements ExternalReportDataProvide
             return results;
         }
 
-        List<ReportActivityLog> logs = reportActivityLogRepository.findExternalLogsForActiveProjectMembers(
-                new ArrayList<>(mappedTypesByMember.keySet()), EXTERNAL_DOMAINS);
+        List<ReportActivityLog> logs = snapshotAt == null
+                ? reportActivityLogRepository.findExternalLogsForActiveProjectMembers(
+                        new ArrayList<>(mappedTypesByMember.keySet()), EXTERNAL_DOMAINS)
+                : reportActivityLogRepository.findExternalLogsForActiveProjectMembersAt(
+                        new ArrayList<>(mappedTypesByMember.keySet()), EXTERNAL_DOMAINS, snapshotAt);
 
         Map<Long, MemberAccumulator> accumulators = new LinkedHashMap<>();
         for (Map.Entry<Long, Set<LinkType>> entry : mappedTypesByMember.entrySet()) {

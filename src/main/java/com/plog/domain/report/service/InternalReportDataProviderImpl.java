@@ -48,8 +48,19 @@ public class InternalReportDataProviderImpl implements InternalReportDataProvide
     @Override
     @Transactional(readOnly = true)
     public InternalReportData provide(Long projectId, Long projectMemberId) {
-        List<Task> tasks = taskRepository.findAllByProjectMember_IdOrderByCreatedAtAsc(projectMemberId);
-        List<ReportActivityLog> activities = activityLogRepository.findByProjectMember_Id(projectMemberId);
+        return provide(projectId, projectMemberId, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InternalReportData provide(Long projectId, Long projectMemberId, java.time.LocalDateTime snapshotAt) {
+        List<Task> tasks = snapshotAt == null
+                ? taskRepository.findAllByProjectMember_IdOrderByCreatedAtAsc(projectMemberId)
+                : taskRepository.findAllByProjectMember_IdAndCreatedAtLessThanEqualOrderByCreatedAtAsc(
+                        projectMemberId, snapshotAt);
+        List<ReportActivityLog> activities = snapshotAt == null
+                ? activityLogRepository.findByProjectMember_Id(projectMemberId)
+                : activityLogRepository.findByProjectMember_IdAndOccurredAtLessThanEqual(projectMemberId, snapshotAt);
 
         if (tasks.isEmpty() && activities.isEmpty()) {
             return InternalReportData.empty();
@@ -88,7 +99,7 @@ public class InternalReportDataProviderImpl implements InternalReportDataProvide
                 deadlineTargetTaskCount,
                 completionRate,
                 deadlineComplianceRate,
-                summarizeAttachments(tasks),
+                summarizeAttachments(tasks, snapshotAt),
                 activityTypeSummary,
                 extractCompetencyEvidence(activities),
                 internalScore
@@ -119,9 +130,12 @@ public class InternalReportDataProviderImpl implements InternalReportDataProvide
      * TaskAttachment(업무카드 산출물)만 다루고 활동 로그(채팅/게시글) 산출물과는 성격이 달라
      * 고도화는 별도 이슈로 남긴다.
      */
-    private List<String> summarizeAttachments(List<Task> tasks) {
+    private List<String> summarizeAttachments(List<Task> tasks, java.time.LocalDateTime snapshotAt) {
         List<Long> taskIds = tasks.stream().map(Task::getId).toList();
-        long totalAttachments = taskAttachmentRepository.countByTaskIds(taskIds).stream()
+        var counts = snapshotAt == null
+                ? taskAttachmentRepository.countByTaskIds(taskIds)
+                : taskAttachmentRepository.countByTaskIdsAt(taskIds, snapshotAt);
+        long totalAttachments = counts.stream()
                 .mapToLong(TaskAttachmentRepository.TaskAttachmentCount::getCount)
                 .sum();
         return totalAttachments == 0 ? List.of() : List.of("산출물 " + totalAttachments + "건 첨부");

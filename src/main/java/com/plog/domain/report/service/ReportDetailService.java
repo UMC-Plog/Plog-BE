@@ -3,12 +3,13 @@ package com.plog.domain.report.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plog.domain.project.service.ProjectAccessService;
-import com.plog.domain.report.llm.MemberReportText;
 import com.plog.domain.report.dto.response.ReportDetailResponse;
 import com.plog.domain.report.dto.response.ReportMemberResultResponse;
 import com.plog.domain.report.dto.response.ReportMemberSummaryResponse;
+import com.plog.domain.report.entity.CompetencyCategory;
 import com.plog.domain.report.entity.Report;
 import com.plog.domain.report.entity.ReportMemberResult;
+import com.plog.domain.report.llm.MemberReportText;
 import com.plog.domain.report.repository.ReportMemberResultRepository;
 import com.plog.domain.report.repository.ReportRepository;
 import com.plog.domain.report.repository.projection.ReportMemberSummary;
@@ -16,7 +17,10 @@ import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.error.ReportErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
+import java.math.BigDecimal;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -58,11 +62,11 @@ public class ReportDetailService {
      */
     @Transactional(readOnly = true)
     public ReportMemberResultResponse getMemberResult(Long userId, Long reportId, Long projectMemberId) {
-        requireAccessibleReport(userId, reportId);
+        Report report = requireAccessibleReport(userId, reportId);
         ReportMemberResult result = memberResultRepository
                 .findWithMemberByReportIdAndProjectMemberId(reportId, projectMemberId)
                 .orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_MEMBER_RESULT_NOT_FOUND));
-        return toMemberResultResponse(reportId, result);
+        return toMemberResultResponse(report, result);
     }
 
     /**
@@ -80,6 +84,10 @@ public class ReportDetailService {
     }
 
     private ReportDetailResponse toDetailResponse(Report report, List<ReportMemberSummaryResponse> members) {
+        int totalTaskCount = members.stream().mapToInt(ReportMemberSummaryResponse::totalTaskCount).sum();
+        int completedTaskCount = members.stream().mapToInt(ReportMemberSummaryResponse::completedTaskCount).sum();
+        int deadlineMetTaskCount = members.stream().mapToInt(ReportMemberSummaryResponse::deadlineMetTaskCount).sum();
+        int deadlineTargetTaskCount = members.stream().mapToInt(ReportMemberSummaryResponse::deadlineTargetTaskCount).sum();
         return new ReportDetailResponse(
                 report.getId(),
                 report.getReportCode(),
@@ -92,7 +100,14 @@ public class ReportDetailService {
                 report.getTeamSuggestion(),
                 report.getTeamCompletionRate(),
                 report.getTeamDeadlineComplianceRate(),
-                members
+                members,
+                report.getProject().getStartDay(),
+                report.getProject().getEndDay(),
+                members.size(),
+                totalTaskCount,
+                completedTaskCount,
+                deadlineMetTaskCount,
+                deadlineTargetTaskCount
         );
     }
 
@@ -110,13 +125,23 @@ public class ReportDetailService {
                 summary.getFinalScore(),
                 summary.getContributionRate(),
                 summary.getReliabilityTier(),
-                summary.getHeadline()
+                summary.getHeadline(),
+                summary.getProfilePreset(),
+                summary.getTotalTaskCount(),
+                summary.getCompletedTaskCount(),
+                summary.getDeadlineMetTaskCount(),
+                summary.getDeadlineTargetTaskCount(),
+                summary.getCompletionRate(),
+                summary.getDeadlineComplianceRate(),
+                summary.getPeerAverage(),
+                summary.getCompetencyScores(),
+                summary.getPeerKeywords()
         );
     }
 
-    private ReportMemberResultResponse toMemberResultResponse(Long reportId, ReportMemberResult result) {
+    private ReportMemberResultResponse toMemberResultResponse(Report report, ReportMemberResult result) {
         return new ReportMemberResultResponse(
-                reportId,
+                report.getId(),
                 result.getProjectMember().getId(),
                 result.getProjectMember().getDisplayNickname(),
                 result.getInternalScore(),
@@ -146,8 +171,30 @@ public class ReportDetailService {
                 readJson(result.getStrengths(), STRENGTH_LIST),
                 readJson(result.getWeakness(), MemberReportText.Weakness.class),
                 readJson(result.getGrowth(), MemberReportText.GrowthInsight.class),
-                readJson(result.getWriting(), MemberReportText.WritingSuggestion.class)
+                readJson(result.getWriting(), MemberReportText.WritingSuggestion.class),
+                report.getReportCode(),
+                report.getProject().getProjectName(),
+                TimeUtil.toInstant(report.getCompletedAt()),
+                report.getProject().getStartDay(),
+                report.getProject().getEndDay(),
+                normalizeCompetencyScores(result.getCompetencyScores())
         );
+    }
+
+    private Map<CompetencyCategory, BigDecimal> normalizeCompetencyScores(
+            Map<CompetencyCategory, BigDecimal> scores
+    ) {
+        Map<CompetencyCategory, BigDecimal> normalized = new EnumMap<>(CompetencyCategory.class);
+        if (scores == null) {
+            return normalized;
+        }
+        scores.forEach((category, score) -> {
+            if (category != null && score != null) {
+                normalized.put(category, score.multiply(new BigDecimal("20"))
+                        .setScale(2, java.math.RoundingMode.HALF_UP));
+            }
+        });
+        return normalized;
     }
 
     /**

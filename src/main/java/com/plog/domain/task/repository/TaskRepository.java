@@ -4,6 +4,7 @@ import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskStatus;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -51,6 +52,9 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     // 특정 담당자(ProjectMember) 기준 업무카드 조회
     @EntityGraph(attributePaths = {"projectMember", "projectMember.user"})
     List<Task> findAllByProjectMember_IdOrderByCreatedAtAsc(Long projectMemberId);
+
+    List<Task> findAllByProjectMember_IdAndCreatedAtLessThanEqualOrderByCreatedAtAsc(
+            Long projectMemberId, LocalDateTime snapshotAt);
 
     // 마감일이 지났고 완료(DONE)가 아닌 업무카드만 조회. 가장 오래전에 지난 카드부터 보여준다.
     @EntityGraph(attributePaths = {"projectMember", "projectMember.user"})
