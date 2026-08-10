@@ -18,6 +18,7 @@ import com.plog.domain.integration.repository.*;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.util.List;
@@ -52,6 +53,9 @@ class ProjectIntegrationServiceTest {
 
     @Mock
     private ProjectRepository projectRepository;
+
+    @Mock
+    private IntegrationActivityReportLogAdapter reportLogAdapter;
 
     @Test
     void rejectsStartingWorkspaceIntegrationAfterProjectCompletion() {
@@ -153,6 +157,7 @@ class ProjectIntegrationServiceTest {
         } else {
             verify(notionWebhookEventRepository, never()).deleteAllByNotionIntegrationId(any());
         }
+        verify(reportLogAdapter).deleteProjectProjection(1L, linkType);
         verify(integrationActivityRepository).deleteAllByIntegrationResourceProjectIntegrationId(10L);
         verify(integrationResourceRepository).deleteAllByProjectIntegrationId(10L);
         verify(projectIntegrationRepository).delete(integration);
@@ -171,6 +176,7 @@ class ProjectIntegrationServiceTest {
 
         service.disconnect(1L, LinkType.GOOGLE_DOCS);
 
+        verify(reportLogAdapter).deleteProjectProjection(1L, LinkType.GOOGLE_DOCS);
         verify(integrationActivityRepository).deleteAllByIntegrationResourceProjectIntegrationId(10L);
         verify(integrationResourceRepository).deleteAllByProjectIntegrationId(10L);
         verify(integrationCollectionRunRepository).deleteByProjectId(1L);
@@ -218,6 +224,7 @@ class ProjectIntegrationServiceTest {
 
         service.disconnect(1L, LinkType.GITHUB);
 
+        verify(reportLogAdapter).deleteProjectProjection(1L, LinkType.GITHUB);
         verify(integrationActivityRepository).deleteAllByIntegrationResourceProjectIntegrationId(10L);
         verify(integrationResourceRepository).deleteAllByProjectIntegrationId(10L);
         verify(projectIntegrationRepository).delete(targetIntegration);
@@ -235,7 +242,8 @@ class ProjectIntegrationServiceTest {
                 integrationCollectionRunRepository,
                 integrationResourceRepository,
                 credentialCipher,
-                projectRepository
+                projectRepository,
+                reportLogAdapter
         );
     }
 }

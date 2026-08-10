@@ -11,12 +11,15 @@ import com.plog.domain.report.entity.ReportStatus;
 import com.plog.domain.report.llm.ReportLlmGateway;
 import com.plog.domain.report.llm.TeamLlmInput;
 import com.plog.domain.report.llm.TeamReportText;
+import com.plog.domain.report.port.ExternalReportData;
+import com.plog.domain.report.port.ExternalReportDataProvider;
 import com.plog.domain.report.repository.ReportRepository;
 import com.plog.global.api.error.ReportErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -47,6 +50,7 @@ public class ReportGenerationService {
 
     private final ReportRepository reportRepository;
     private final ProjectMemberRepository projectMemberRepository;
+    private final ExternalReportDataProvider externalDataProvider;
     private final ReportMemberDataCollector dataCollector;
     private final ReportTextWriter textWriter;
     private final ReportLlmGateway llmGateway;
@@ -82,12 +86,25 @@ public class ReportGenerationService {
         double complianceRateSum = 0.0;
         boolean externalConnected = false;
         int succeeded = 0;
+        Map<Long, ExternalReportData> externalDataByMember;
+        try {
+            externalDataByMember = externalDataProvider.provide(
+                    target.projectId(),
+                    target.members().stream().map(ProjectMember::getId).toList()
+            );
+            validateExternalData(target.members(), externalDataByMember);
+        } catch (RuntimeException e) {
+            log.error("외부 활동 집계 실패로 리포트를 실패 처리합니다: reportId={}", reportId, e);
+            textWriter.markFailed(reportId);
+            return new ReportGenerationResult(reportId, target.members().size(), 0, false);
+        }
 
         for (ProjectMember member : target.members()) {
             ReportMemberDataCollector.CollectedMember collected;
             try {
+                ExternalReportData external = externalDataByMember.get(member.getId());
                 collected = dataCollector.collect(
-                        reportId, target.projectId(), target.projectType(), member, target.members().size());
+                        reportId, target.projectId(), target.projectType(), member, external, target.members().size());
             } catch (RuntimeException e) {
                 // 점수 수집 실패는 텍스트 실패보다 무겁지만, 여기서도 멤버 단위로 격리한다.
                 log.error("리포트 멤버 데이터 수집 실패: reportId={}, projectMemberId={}",
@@ -157,6 +174,17 @@ public class ReportGenerationService {
             textWriter.writeTeamInsight(reportId, teamText);
         } catch (RuntimeException e) {
             log.error("팀 인사이트 생성 실패(리포트는 계속 발행합니다): reportId={}", reportId, e);
+        }
+    }
+
+    private void validateExternalData(List<ProjectMember> members, Map<Long, ExternalReportData> externalDataByMember) {
+        if (externalDataByMember == null) {
+            throw new IllegalStateException("externalDataProvider returned null");
+        }
+        for (ProjectMember member : members) {
+            if (!externalDataByMember.containsKey(member.getId()) || externalDataByMember.get(member.getId()) == null) {
+                throw new IllegalStateException("externalDataProvider omitted projectMemberId=" + member.getId());
+            }
         }
     }
 

@@ -27,6 +27,7 @@ import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import com.plog.domain.user.entity.User;
 import com.plog.global.api.error.IntegrationErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -56,6 +57,8 @@ class IntegrationActorMappingManagementServiceTest {
     private IntegrationActivityRepository activityRepository;
     @Mock
     private ProjectAccessService projectAccessService;
+    @Mock
+    private IntegrationActivityReportLogAdapter reportLogAdapter;
 
     private IntegrationActorMappingManagementService service;
     private ProjectMember currentMember;
@@ -70,7 +73,8 @@ class IntegrationActorMappingManagementServiceTest {
                 identityRepository,
                 aliasRepository,
                 activityRepository,
-                projectAccessService
+                projectAccessService,
+                reportLogAdapter
         );
         User user = mock(User.class);
         currentMember = ProjectMember.builder().id(3L).user(user).build();
@@ -171,6 +175,8 @@ class IntegrationActorMappingManagementServiceTest {
         verify(activityRepository).assignProjectMemberByProviderId(5L, currentMember, "123");
         verify(activityRepository).assignProjectMemberByEmail(5L, currentMember, "vana@example.com");
         verify(activityRepository).assignProjectMemberByLogin(5L, currentMember, "wantkdd");
+        verify(reportLogAdapter).deleteProjectMemberProjection(1L, LinkType.GITHUB, 3L);
+        verify(reportLogAdapter).synchronizeProjectMemberActivities(5L, 3L);
     }
 
     @Test
@@ -204,6 +210,8 @@ class IntegrationActorMappingManagementServiceTest {
         verify(activityRepository).assignProjectMemberByProviderId(
                 5L, currentMember, "figma-user-1");
         verify(activityRepository, never()).assignProjectMemberByLogin(any(), any(), any());
+        verify(reportLogAdapter).deleteProjectMemberProjection(1L, LinkType.FIGMA, 3L);
+        verify(reportLogAdapter).synchronizeProjectMemberActivities(5L, 3L);
         verify(aliasRepository).saveAll(List.of());
     }
 
@@ -293,6 +301,8 @@ class IntegrationActorMappingManagementServiceTest {
         verify(activityRepository).findActorObservations(20L);
         verify(activityRepository).assignProjectMemberByProviderId(20L, currentMember, "google-user-1");
         verify(activityRepository).assignProjectMemberByEmail(20L, currentMember, "shared@example.com");
+        verify(reportLogAdapter).deleteProjectMemberProjection(1L, LinkType.GOOGLE_DOCS, 3L);
+        verify(reportLogAdapter).synchronizeProjectMemberActivities(20L, 3L);
         verifyNoMoreInteractions(activityRepository);
     }
 
@@ -321,6 +331,7 @@ class IntegrationActorMappingManagementServiceTest {
         verify(identityRepository).delete(identity);
         verify(activityRepository).clearProjectMemberByProviderId(20L, currentMember, "google-user-1");
         verify(activityRepository).clearProjectMemberByEmail(20L, currentMember, "shared@example.com");
+        verify(reportLogAdapter).deleteProjectMemberProjection(1L, LinkType.GOOGLE_DOCS, 3L);
         verifyNoMoreInteractions(activityRepository);
     }
 
@@ -484,6 +495,7 @@ class IntegrationActorMappingManagementServiceTest {
         verify(activityRepository).clearProjectMemberByEmail(
                 5L, currentMember, "vana@example.com");
         verify(activityRepository).clearProjectMemberByLogin(5L, currentMember, "wantkdd");
+        verify(reportLogAdapter).deleteProjectMemberProjection(1L, LinkType.GITHUB, 3L);
     }
 
     @Test

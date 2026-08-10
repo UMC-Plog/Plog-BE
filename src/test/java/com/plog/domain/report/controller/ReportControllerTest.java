@@ -317,11 +317,19 @@ class ReportControllerTest {
                 new BigDecimal("88.00"),
                 null,
                 new BigDecimal("80.00"),
+                new BigDecimal("4.25"),
+                java.util.Map.of(
+                        com.plog.domain.report.entity.CompetencyCategory.COLLABORATION, new BigDecimal("4.4"),
+                        com.plog.domain.report.entity.CompetencyCategory.LEADERSHIP, new BigDecimal("4.2")),
+                List.of("리더십", "책임감"),
                 new BigDecimal("70.00"),
                 new BigDecimal("82.50"),
-                false,
+                true,
                 ReliabilityTier.P2,
-                "Notion이 연동되지 않아 일부 작업 과정은 반영되지 않았을 수 있습니다.",
+                "외부 도구는 연동됐지만 이 멤버의 점수화 가능한 활동이 부족합니다.",
+                13,
+                12,
+                11,
                 "적극적인 리더십으로 팀의 방향을 잡았어요",
                 List.of(new MemberReportText.StrengthCard("주도성", "일정을 주도적으로 관리하고 실행해요")),
                 new MemberReportText.Weakness("의견 제시 빈도가 낮음", List.of("의견 제시를 늘려보세요")),
@@ -335,10 +343,17 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$.result.projectMemberId").value(7L))
                 .andExpect(jsonPath("$.result.memberName").value("창훈"))
                 .andExpect(jsonPath("$.result.finalScore").value(82.50))
-                .andExpect(jsonPath("$.result.externalToolConnected").value(false))
+                .andExpect(jsonPath("$.result.externalToolConnected").value(true))
                 .andExpect(jsonPath("$.result.reliabilityTier").value("P2"))
-                // 미연동이면 externalScore 는 아예 내려가지 않는다 (0점으로 오해되면 안 된다)
+                // 5점 척도 Peer 집계 — 화면의 역량 점수/태그 칩에 대응한다(peerScore 100점 척도와 별개).
+                .andExpect(jsonPath("$.result.peerAverage").value(4.25))
+                .andExpect(jsonPath("$.result.competencyScores.LEADERSHIP").value(4.2))
+                .andExpect(jsonPath("$.result.peerKeywords[0]").value("리더십"))
+                // 프로젝트 연동 여부와 멤버 점수 가용성은 별개다 — 점수가 없으면 null(응답에서는 생략)이다.
                 .andExpect(jsonPath("$.result.externalScore").doesNotExist())
+                .andExpect(jsonPath("$.result.totalTaskCount").value(13))
+                .andExpect(jsonPath("$.result.completedTaskCount").value(12))
+                .andExpect(jsonPath("$.result.deadlineMetTaskCount").value(11))
                 // 개인 리포트 ②③④⑤ — 이스케이프된 문자열이 아니라 객체로 나가야 한다
                 .andExpect(jsonPath("$.result.headline").value("적극적인 리더십으로 팀의 방향을 잡았어요"))
                 .andExpect(jsonPath("$.result.strengths[0].title").value("주도성"))

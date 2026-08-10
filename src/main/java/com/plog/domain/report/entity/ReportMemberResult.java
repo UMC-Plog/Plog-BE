@@ -15,6 +15,9 @@ import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import java.math.BigDecimal;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
@@ -71,6 +74,40 @@ public class ReportMemberResult extends BaseEntity {
 
     @Column(name = "caution_text", columnDefinition = "TEXT")
     private String cautionText;
+
+    // ── 팀 리포트 표 표시용 업무 집계. InternalReportData 조립 시점(0~1단계)에 함께 채워진다. ──
+    /** 부여된 전체 업무 수. 팀 리포트 표의 "전체". */
+    @Column(name = "total_task_count", nullable = false, columnDefinition = "integer default 0")
+    private int totalTaskCount;
+
+    /** 완료한 업무 수. 팀 리포트 표의 "완료". */
+    @Column(name = "completed_task_count", nullable = false, columnDefinition = "integer default 0")
+    private int completedTaskCount;
+
+    /** 기한 내 완료한 업무 수. 화면 "12/13건" 표기의 앞 숫자(분모는 totalTaskCount). */
+    @Column(name = "deadline_met_task_count", nullable = false, columnDefinition = "integer default 0")
+    private int deadlineMetTaskCount;
+
+    // ── 팀 리포트 시안의 역량점수/태그 표시용 Peer 집계. 점수 확정 시점에 함께 채워진다. ──
+    // 기존 peer_score(0~100, Z-score 보정)는 그대로 두고, 아래는 화면 표기와 같은 5점 척도다.
+    // 근거가 없는 멤버(none())는 null/빈 값으로 남고, 화면은 빈 섹션을 숨긴다.
+
+    /** 종합 Peer 평균 (0.00~5.00, 5점 척도). 개인 리포트의 역량 종합 점수. */
+    @Column(name = "peer_average", precision = 3, scale = 2)
+    private BigDecimal peerAverage;
+
+    /**
+     * 역량별 평균 (5점 척도). 예: {@code {"COLLABORATION":4.4,"LEADERSHIP":4.2,...}}.
+     * LEADERSHIP 은 PeerEvaluation.initiativeScore(주도성) 에 대응한다 — 저장 컬럼명과 화면 라벨이 다르다.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "competency_scores", columnDefinition = "jsonb")
+    private Map<CompetencyCategory, BigDecimal> competencyScores;
+
+    /** 평가자들이 고른 키워드(태그 칩). 예: {@code ["리더십","책임감"]}. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "peer_keywords", columnDefinition = "jsonb")
+    private List<String> peerKeywords;
 
     // ── 5단계(LLM) 산출물. 컬럼 하나가 화면 섹션 하나에 대응한다. ──
     // 중첩 구조인 것들은 jsonb 에 직렬화해 넣는다(ReportActivityLog.metadata 와 같은 방식).
@@ -133,6 +170,40 @@ public class ReportMemberResult extends BaseEntity {
         this.externalToolConnected = externalToolConnected;
         this.reliabilityTier = reliabilityTier;
         this.cautionText = cautionText;
+    }
+
+    /**
+     * 업무 완료/마감 준수 건수 기록. InternalReportData 조립 시점에 함께 저장한다 —
+     * 팀 리포트 표의 완료율·마감 준수율(멤버별 컬럼을 합산해서 계산)과
+     * 멤버 상세의 "12/13건" 표기에 쓰인다.
+     */
+    public void applyTaskCounts(int totalTaskCount, int completedTaskCount, int deadlineMetTaskCount) {
+        this.totalTaskCount = totalTaskCount;
+        this.completedTaskCount = completedTaskCount;
+        this.deadlineMetTaskCount = deadlineMetTaskCount;
+    }
+
+    /**
+     * 팀 리포트 표시용 Peer 집계(5점 척도) 기록. 점수 확정과 같은 시점에 함께 저장한다 —
+     * 화면의 역량 점수/태그 칩이 이 값으로 그려진다.
+     * <p>
+     * 받은 평가가 없는 멤버(none())도 리포트에는 나와야 하므로 예외를 던지지 않는다.
+     * null/빈 값을 그대로 받아 저장하고(평균은 null, 나머지는 빈 컬렉션), 화면이 빈 섹션을 숨긴다.
+     */
+    public void applyPeerBreakdown(
+            BigDecimal peerAverage,
+            Map<CompetencyCategory, BigDecimal> competencyScores,
+            List<String> peerKeywords
+    ) {
+        this.peerAverage = peerAverage;
+        // EnumMap 의 copy 생성자는 인자가 비어 있고 EnumMap 이 아니면 예외를 던진다(none() 은 빈 Map).
+        // putAll 은 빈 Map 도 안전하다.
+        Map<CompetencyCategory, BigDecimal> copy = new EnumMap<>(CompetencyCategory.class);
+        if (competencyScores != null) {
+            copy.putAll(competencyScores);
+        }
+        this.competencyScores = copy;
+        this.peerKeywords = peerKeywords == null ? List.of() : List.copyOf(peerKeywords);
     }
 
     /**
