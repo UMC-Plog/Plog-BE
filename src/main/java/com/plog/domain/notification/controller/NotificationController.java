@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Notification", description = "알림 센터 API")
+@Validated
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/notifications")
@@ -44,13 +46,12 @@ public class NotificationController {
     @GetMapping
     public ApiResponse<SliceResponse<NotificationResponse>> getNotifications(
             @AuthenticationPrincipal Long userId,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) int size
     ) {
         SliceResponse<NotificationResponse> response = notificationQueryService.getNotifications(userId, page, size);
         return ApiResponse.success(NotificationSuccessCode.NOTIFICATION_LIST_RETRIEVED, response);
     }
-
     @Operation(summary = "알림 단건 읽음 처리", description = "로그인 사용자의 지정한 알림을 읽음 처리합니다.")
     @PatchMapping("/{notificationId}/read")
     public ApiResponse<Void> markAsRead(
