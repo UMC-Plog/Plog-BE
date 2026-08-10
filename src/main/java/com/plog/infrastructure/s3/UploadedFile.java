@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
 
 /**
  * 업로드된 S3 객체의 레지스트리. 도메인 첨부 테이블은 이 행을 FK로 참조한다.
@@ -90,7 +91,8 @@ public class UploadedFile extends BaseEntity {
      */
     @Enumerated(EnumType.STRING)
     @Column(name = "thumbnail_status", nullable = false, length = 16,
-            columnDefinition = "varchar(16) default 'NONE'")
+            columnDefinition = "varchar(16)")
+    @ColumnDefault("'NONE'")
     private ThumbnailStatus thumbnailStatus = ThumbnailStatus.NONE;
 
     /**
@@ -106,7 +108,8 @@ public class UploadedFile extends BaseEntity {
 
     /** 운영 DDL 과 타입·기본값을 맞춘다(thumbnailStatus 의 columnDefinition 주석 참조). */
     @Column(name = "thumbnail_attempts", nullable = false,
-            columnDefinition = "smallint default 0")
+            columnDefinition = "smallint")
+    @ColumnDefault("0")
     private int thumbnailAttempts;
 
     public static UploadedFile issue(String fileKey, Long ownerId, AttachmentUsage purpose,

@@ -1,7 +1,11 @@
 package com.plog.domain.report.repository.projection;
 
+import com.plog.domain.report.entity.CompetencyCategory;
 import com.plog.domain.report.entity.ReliabilityTier;
+import com.plog.domain.user.entity.ProfilePreset;
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 리포트 상세의 멤버 목록 한 줄. 엔티티를 로딩하면 멤버 수만큼 projectMember/user 를 타고 들어가
@@ -20,6 +24,26 @@ public interface ReportMemberSummary {
 
     ReliabilityTier getReliabilityTier();
 
-    /** 팀 리포트 멤버 카드의 AI 한줄 평가. LLM 생성이 실패한 멤버는 null 이다. */
+    ProfilePreset getProfilePreset();
+
+    int getTotalTaskCount();
+
+    int getCompletedTaskCount();
+
+    int getDeadlineMetTaskCount();
+
+    int getDeadlineTargetTaskCount();
+
+    BigDecimal getCompletionRate();
+
+    BigDecimal getDeadlineComplianceRate();
+
+    BigDecimal getPeerAverage();
+
+    Map<CompetencyCategory, BigDecimal> getCompetencyScores();
+
+    List<String> getPeerKeywords();
+
+    /** 팀 리포트 멤버 카드 전용 AI 활동 요약. */
     String getHeadline();
 }

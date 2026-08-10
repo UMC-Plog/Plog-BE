@@ -169,6 +169,8 @@ class ReportGenerationServiceTest {
         verify(llmGateway).generateTeamText(captor.capture());
         assertThat(captor.getValue().teamCompletionRate()).isNull();
         assertThat(captor.getValue().teamDeadlineComplianceRate()).isNull();
+        assertThat(captor.getValue().memberFinalScores()).isEmpty();
+        assertThat(captor.getValue().memberHeadlines()).isEmpty();
     }
 
     @Test

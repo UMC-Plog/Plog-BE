@@ -144,9 +144,13 @@ public class ReportMemberResult extends BaseEntity {
     // 중첩 구조인 것들은 jsonb 에 직렬화해 넣는다(ReportActivityLog.metadata 와 같은 방식).
     // 근거가 부족하면 LLM 이 비워 보내므로 전부 nullable 이고, 화면은 빈 섹션을 숨긴다.
 
-    /** 팀 리포트 멤버 카드 + 개인 리포트 상단의 "AI 한줄 평가". 목록 조회에서도 쓰여 별도 컬럼이다. */
+    /** 개인 리포트 상단의 "AI 한줄 평가". */
     @Column(name = "headline", columnDefinition = "TEXT")
     private String headline;
+
+    /** 팀 리포트 멤버 카드용 활동 요약. 개인 리포트 headline과 목적·문체를 분리한다. */
+    @Column(name = "team_member_headline", columnDefinition = "TEXT")
+    private String teamMemberHeadline;
 
     /** 개인 리포트 ② 강점 분석 — MemberReportText.StrengthCard 3개. */
     @JdbcTypeCode(SqlTypes.JSON)
@@ -296,6 +300,7 @@ public class ReportMemberResult extends BaseEntity {
             throw new IllegalArgumentException("payload must not be null");
         }
         this.headline = payload.headline();
+        this.teamMemberHeadline = payload.teamMemberHeadline();
         this.strengths = payload.strengths();
         this.weakness = payload.weakness();
         this.growth = payload.growth();
@@ -315,6 +320,7 @@ public class ReportMemberResult extends BaseEntity {
      */
     public record LlmTextPayload(
             String headline,
+            String teamMemberHeadline,
             String strengths,
             String weakness,
             String growth,
@@ -322,5 +328,11 @@ public class ReportMemberResult extends BaseEntity {
             String rawResponse,
             String llmModel
     ) {
+        public LlmTextPayload(
+                String headline, String strengths, String weakness, String growth, String writing,
+                String rawResponse, String llmModel
+        ) {
+            this(headline, headline, strengths, weakness, growth, writing, rawResponse, llmModel);
+        }
     }
 }

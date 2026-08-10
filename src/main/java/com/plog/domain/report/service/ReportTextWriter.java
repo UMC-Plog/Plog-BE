@@ -37,6 +37,7 @@ public class ReportTextWriter {
         MemberReportText text = generated.text();
         result.applyLlmText(new ReportMemberResult.LlmTextPayload(
                 text.headline(),
+                text.teamMemberHeadline(),
                 toJson(text.strengths()),
                 toJson(text.weakness()),
                 toJson(text.growth()),

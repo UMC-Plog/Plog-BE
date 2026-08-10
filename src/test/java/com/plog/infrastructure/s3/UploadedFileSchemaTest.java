@@ -25,12 +25,12 @@ class UploadedFileSchemaTest {
 
     @Test
     void NOT_NULL_썸네일_컬럼은_DB_기본값을_갖는다() {
-        assertThat(sqlTypeOf("thumbnail_status"))
+        assertThat(defaultValueOf("thumbnail_status"))
                 .as("필드 초기화는 DDL 에 안 실린다. DEFAULT 가 없으면 raw INSERT 가 깨진다.")
-                .contains("default 'none'");
+                .isEqualToIgnoringCase("'none'");
         assertThat(nullableOf("thumbnail_status")).isFalse();
 
-        assertThat(sqlTypeOf("thumbnail_attempts")).contains("default 0");
+        assertThat(defaultValueOf("thumbnail_attempts")).isEqualTo("0");
         assertThat(nullableOf("thumbnail_attempts")).isFalse();
     }
 
@@ -57,6 +57,10 @@ class UploadedFileSchemaTest {
 
     private boolean nullableOf(String columnName) {
         return column(columnName).isNullable();
+    }
+
+    private String defaultValueOf(String columnName) {
+        return column(columnName).getDefaultValue();
     }
 
     private Column column(String columnName) {

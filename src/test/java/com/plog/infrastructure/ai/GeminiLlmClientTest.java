@@ -81,6 +81,20 @@ class GeminiLlmClientTest {
         assertThat(root.at("/generationConfig").has("responseSchema")).isFalse();
     }
 
+    @Test
+    void omitsDeprecatedTemperatureForGemini3() throws Exception {
+        GeminiLlmClient gemini3 = new GeminiLlmClient(
+                properties("gemini-3.5-flash-lite"), objectMapper, RestClient.builder());
+
+        String body = (String) ReflectionTestUtils.invokeMethod(
+                gemini3, "buildRequestBody",
+                new LlmRequest("system", "user", null, 1024, 0.3));
+
+        JsonNode root = objectMapper.readTree(body);
+        assertThat(root.at("/generationConfig").has("temperature")).isFalse();
+        assertThat(root.at("/generationConfig/maxOutputTokens").asInt()).isEqualTo(1024);
+    }
+
     // 5xx 는 일시적일 수 있으므로 1회 재시도한다.
     @Test
     void retriesOnceOnServerError() {
@@ -164,10 +178,14 @@ class GeminiLlmClientTest {
     }
 
     private LlmProperties properties() {
+        return properties("gemini-2.5-flash");
+    }
+
+    private LlmProperties properties(String model) {
         return new LlmProperties(
                 "gemini",
                 "key-123",
-                "gemini-2.5-flash",
+                model,
                 "https://generativelanguage.googleapis.com",
                 Duration.ofSeconds(5),
                 Duration.ofSeconds(60),

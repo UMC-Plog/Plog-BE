@@ -90,7 +90,11 @@ public class GeminiLlmClient implements LlmClient {
                 .put("text", request.userPrompt());
 
         ObjectNode generationConfig = root.putObject("generationConfig");
-        generationConfig.put("temperature", request.temperature());
+        // Gemini 3 계열부터 temperature/top_p/top_k가 폐기됐다. 그대로 보내면 모델명은
+        // 유효해도 400으로 거절되므로, 구형 모델 호환용 설정은 2.x에만 전송한다.
+        if (!properties.model().startsWith("gemini-3")) {
+            generationConfig.put("temperature", request.temperature());
+        }
         generationConfig.put("maxOutputTokens", request.maxOutputTokens());
         if (request.hasResponseSchema()) {
             // 구조화 출력. 이게 있으면 코드펜스·설명문이 섞여 나오는 파싱 실패가 구조적으로 사라진다.

@@ -166,7 +166,7 @@ plog:
   llm:
     provider: ${LLM_PROVIDER:stub}
     api-key: ${GEMINI_API_KEY:}
-    model: ${GEMINI_MODEL:gemini-2.5-flash}
+    model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
     base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
     connect-timeout: 5s
     read-timeout: 60s

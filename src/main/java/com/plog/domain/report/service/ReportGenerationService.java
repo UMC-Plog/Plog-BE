@@ -169,7 +169,7 @@ public class ReportGenerationService {
                 ReportLlmGateway.GeneratedMemberText generated =
                         llmGateway.generateMemberText(llmInput);
                 textWriter.writeMemberText(reportId, collected.projectMemberId(), generated);
-                headlines.add(generated.text().headline());
+                headlines.add(generated.text().teamMemberHeadline());
                 succeeded++;
             } catch (RuntimeException e) {
                 // 텍스트만 비고 점수는 남는다 — 이 멤버 카드는 점수만 나온다.
@@ -227,8 +227,8 @@ public class ReportGenerationService {
                             ? null : completionRateSum / completionRateCount * 100.0,
                     !completePopulation || complianceRateCount == 0
                             ? null : complianceRateSum / complianceRateCount * 100.0,
-                    finalScores,
-                    headlines,
+                    completePopulation ? finalScores : List.of(),
+                    headlines.size() == memberCount ? headlines : List.of(),
                     externalConnected
             ));
             textWriter.writeTeamInsight(reportId, teamText);
