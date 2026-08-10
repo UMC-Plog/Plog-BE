@@ -1,6 +1,7 @@
 package com.plog.domain.notification.controller;
 
 import com.plog.domain.notification.dto.response.NotificationResponse;
+import com.plog.domain.notification.service.NotificationCommandService;
 import com.plog.domain.notification.service.NotificationQueryService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.NotificationSuccessCode;
@@ -12,6 +13,8 @@ import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,6 +29,7 @@ public class NotificationController {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final NotificationQueryService notificationQueryService;
+    private final NotificationCommandService notificationCommandService;
 
     @Operation(
             summary = "알림 센터 목록 조회",
@@ -45,5 +49,22 @@ public class NotificationController {
     ) {
         SliceResponse<NotificationResponse> response = notificationQueryService.getNotifications(userId, page, size);
         return ApiResponse.success(NotificationSuccessCode.NOTIFICATION_LIST_RETRIEVED, response);
+    }
+
+    @Operation(summary = "알림 단건 읽음 처리", description = "로그인 사용자의 지정한 알림을 읽음 처리합니다.")
+    @PatchMapping("/{notificationId}/read")
+    public ApiResponse<Void> markAsRead(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long notificationId
+    ) {
+        notificationCommandService.markAsRead(userId, notificationId);
+        return ApiResponse.success(null);
+    }
+
+    @Operation(summary = "알림 전체 읽음 처리", description = "로그인 사용자의 읽지 않은 모든 알림을 읽음 처리합니다.")
+    @PatchMapping("/read-all")
+    public ApiResponse<Void> markAllAsRead(@AuthenticationPrincipal Long userId) {
+        notificationCommandService.markAllAsRead(userId);
+        return ApiResponse.success(null);
     }
 }
