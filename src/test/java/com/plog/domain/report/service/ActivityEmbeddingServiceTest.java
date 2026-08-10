@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.plog.domain.chat.entity.ChatMessage;
+import com.plog.domain.chat.repository.ChatMessageRepository;
 import com.plog.domain.report.entity.RawActivityType;
 import com.plog.domain.report.entity.ReportActivityLog;
 import com.plog.domain.report.entity.SourceDomain;
@@ -46,13 +48,38 @@ class ActivityEmbeddingServiceTest {
 
     @Mock private ReportActivityLogRepository activityLogRepository;
     @Mock private EmbeddingClient embeddingClient;
+    @Mock private ChatMessageRepository chatMessageRepository;
 
     private ActivityEmbeddingService service;
 
     @BeforeEach
     void setUp() {
         service = new ActivityEmbeddingService(
-                activityLogRepository, embeddingClient, new ObjectMapper(), noopTransactionManager());
+                activityLogRepository, chatMessageRepository,
+                embeddingClient, new ObjectMapper(), noopTransactionManager());
+    }
+
+    @Test
+    void 채팅_원문은_로그가_아니라_원본_엔티티에서_처리중에만_읽는다() {
+        EmbeddingClaimProjection claim = new EmbeddingClaimProjection() {
+            public Long getId() { return 1L; }
+            public String getContent() { return null; }
+            public String getSourceDomain() { return SourceDomain.CHAT.name(); }
+            public String getSourceRefId() { return "chat:15"; }
+        };
+        stubClaim(List.of(claim));
+        ChatMessage message = org.mockito.Mockito.mock(ChatMessage.class);
+        when(message.getMessage()).thenReturn("업무 관련 의견입니다");
+        when(chatMessageRepository.findById(15L)).thenReturn(Optional.of(message));
+        when(embeddingClient.embed("업무 관련 의견입니다"))
+                .thenReturn(new EmbeddingResponse(List.of(0.2f), "gemini-embedding-001"));
+        ReportActivityLog log = refinedChatLog(null);
+        when(activityLogRepository.findById(1L)).thenReturn(Optional.of(log));
+        int embedded = service.embedBatch();
+
+        assertThat(embedded).isEqualTo(1);
+        assertThat(log.getContent()).isNull();
+        assertThat(log.hasEmbedding()).isTrue();
     }
 
     private static PlatformTransactionManager noopTransactionManager() {
@@ -72,6 +99,16 @@ class ActivityEmbeddingServiceTest {
             @Override
             public String getContent() {
                 return content;
+            }
+
+            @Override
+            public String getSourceDomain() {
+                return null;
+            }
+
+            @Override
+            public String getSourceRefId() {
+                return null;
             }
         };
     }

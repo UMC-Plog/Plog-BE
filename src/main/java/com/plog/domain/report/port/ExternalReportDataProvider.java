@@ -2,6 +2,7 @@ package com.plog.domain.report.port;
 
 import java.util.Collection;
 import java.util.Map;
+import java.time.LocalDateTime;
 
 /**
  * 담당: 상완 (외부 연동 집계 · 신뢰도 등급 · 분석 한계 문구).
@@ -20,4 +21,9 @@ public interface ExternalReportDataProvider {
      * @return null 이 아닌 집계 결과
      */
     Map<Long, ExternalReportData> provide(Long projectId, Collection<Long> projectMemberIds);
+
+    default Map<Long, ExternalReportData> provide(
+            Long projectId, Collection<Long> projectMemberIds, LocalDateTime snapshotAt) {
+        return provide(projectId, projectMemberIds);
+    }
 }

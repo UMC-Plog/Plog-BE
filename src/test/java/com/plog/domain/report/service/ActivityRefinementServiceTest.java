@@ -3,8 +3,11 @@ package com.plog.domain.report.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.plog.domain.chat.entity.ChatMessage;
+import com.plog.domain.chat.repository.ChatMessageRepository;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.report.entity.RawActivityType;
 import com.plog.domain.report.entity.ReportActivityLog;
@@ -25,12 +28,13 @@ import org.springframework.data.domain.Limit;
 class ActivityRefinementServiceTest {
 
     @Mock private ReportActivityLogRepository activityLogRepository;
+    @Mock private ChatMessageRepository chatMessageRepository;
 
     private ActivityRefinementService service;
 
     @BeforeEach
     void setUp() {
-        service = new ActivityRefinementService(activityLogRepository);
+        service = new ActivityRefinementService(activityLogRepository, chatMessageRepository);
     }
 
     private ReportActivityLog chatLog(ProjectMember member, String content, LocalDateTime occurredAt) {
@@ -87,6 +91,24 @@ class ActivityRefinementServiceTest {
         service.refineNoiseBatch();
 
         assertThat(log.isNoise()).isFalse();
+    }
+
+    @Test
+    void 채팅_원문을_로그에_저장하지_않고_원본에서_읽어_정제한다() {
+        ProjectMember member = ProjectMember.builder().id(1L).build();
+        ReportActivityLog log = ReportActivityLog.create(
+                member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE, null,
+                LocalDateTime.now(), null, "chat:77");
+        assignId(log, 102L);
+        ChatMessage message = mock(ChatMessage.class);
+        when(message.getMessage()).thenReturn("인증 오류 원인을 분석하고 해결 방안을 공유했습니다");
+        when(chatMessageRepository.findById(77L)).thenReturn(java.util.Optional.of(message));
+        stubFetch(List.of(log));
+
+        service.refineNoiseBatch();
+
+        assertThat(log.isNoise()).isFalse();
+        assertThat(log.getContent()).isNull();
     }
 
     @Test

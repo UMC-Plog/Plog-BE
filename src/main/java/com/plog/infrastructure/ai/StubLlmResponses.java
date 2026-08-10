@@ -19,6 +19,7 @@ public final class StubLlmResponses {
         return """
                 {
                   "headline": "적극적인 리더십으로 팀의 방향을 잡고, 구성원들이 원활하게 협업할 수 있도록 분위기를 주도했어요",
+                  "teamMemberHeadline": "일정 조율과 의견 공유를 주도해 협업 흐름을 안정적으로 이끌었습니다",
                   "strengths": [
                     { "title": "주도성", "description": "일정을 주도적으로 관리하고 실행해요" },
                     { "title": "전문성", "description": "기술 역량으로 팀의 완성도를 높여요" },

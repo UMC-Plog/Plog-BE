@@ -11,12 +11,17 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.report.service.ReportLifecycleService;
+import com.plog.domain.report.entity.Report;
+import com.plog.domain.report.event.ReportGenerationRequestedEvent;
+import com.plog.domain.report.repository.ReportRepository;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -33,6 +38,8 @@ public class ProjectStatusService {
     private final ProjectIntegrationRepository projectIntegrationRepository;
     private final IntegrationActivityRepository integrationActivityRepository;
     private final ReportLifecycleService reportLifecycleService;
+    private final ReportRepository reportRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public ProjectStatusDto.Response checkAndUpdateStatus(
@@ -64,10 +71,38 @@ public class ProjectStatusService {
             projectRepository.saveAndFlush(project);
             // 평가가 닫히는 유일한 지점이라 리포트도 여기서 시작한다. 같은 트랜잭션이므로
             // "완료됐는데 리포트가 없는 프로젝트"가 생기지 않는다. 재호출은 멱등이다.
-            reportLifecycleService.startFor(project);
+            reportLifecycleService.startFor(project).ifPresent(this::requestGeneration);
         }
 
         return toResponse(project, timeoutApplied && project.isCompleted());
+    }
+
+    /** 마지막 Peer 제출 이벤트가 평가를 닫은 경우에만 새 리포트 ID를 반환한다. */
+    @Transactional
+    public Optional<Long> completeAndStartReportIfAllEvaluationsSubmitted(Long projectId) {
+        Project project = projectRepository.findByIdForUpdate(projectId)
+                .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_ACCESS_DENIED_OR_NOT_FOUND));
+        if (project.isCompleted()) {
+            return Optional.empty();
+        }
+        long activeMemberCount = projectMemberRepository.countByProjectIdAndStatus(projectId, MemberStatus.ACTIVE);
+        if (!isAllEvaluationSubmitted(projectId, activeMemberCount)) {
+            return Optional.empty();
+        }
+        if (hasUnmappedActivityActors(projectId)) {
+            throw new ApiException(ProjectErrorCode.ACTOR_MAPPING_REQUIRED);
+        }
+        project.complete();
+        projectRepository.saveAndFlush(project);
+        return reportLifecycleService.startFor(project)
+                .map(report -> {
+                    requestGeneration(report);
+                    return report.getId();
+                });
+    }
+
+    private void requestGeneration(Report report) {
+        eventPublisher.publishEvent(new ReportGenerationRequestedEvent(report.getId()));
     }
 
     private void validateRequestedStatus(ProjectStatusDto.Request request) {
@@ -97,11 +132,14 @@ public class ProjectStatusService {
     }
 
     private ProjectStatusDto.Response toResponse(Project project, boolean timeoutApplied) {
+        Report report = reportRepository.findFirstByProjectIdOrderByIdDesc(project.getId()).orElse(null);
         return new ProjectStatusDto.Response(
                 project.getId(),
                 project.getStatus(),
                 timeoutApplied,
-                project.isCompleted()
+                project.isCompleted(),
+                report == null ? null : report.getId(),
+                report == null ? null : report.getStatus()
         );
     }
 }

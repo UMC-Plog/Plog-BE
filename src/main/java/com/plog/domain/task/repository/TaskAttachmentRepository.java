@@ -5,6 +5,7 @@ import com.plog.domain.task.entity.TaskAttachment;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -26,6 +27,13 @@ public interface TaskAttachmentRepository extends JpaRepository<TaskAttachment, 
             + "group by ta.task.id")
 
     List<TaskAttachmentCount> countByTaskIds(@Param("taskIds") List<Long> taskIds);
+
+    @Query("select ta.task.id as taskId, count(ta) as count "
+            + "from TaskAttachment ta where ta.task.id in :taskIds and ta.createdAt <= :snapshotAt "
+            + "group by ta.task.id")
+    List<TaskAttachmentCount> countByTaskIdsAt(
+            @Param("taskIds") List<Long> taskIds,
+            @Param("snapshotAt") LocalDateTime snapshotAt);
 
     // 전체 목록을 안 가져오고 개수만 센다 (COUNT(*) 쿼리 1번)
     long countByTaskId(Long taskId);

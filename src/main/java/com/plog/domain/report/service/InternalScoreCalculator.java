@@ -48,41 +48,57 @@ final class InternalScoreCalculator {
     /**
      * @param activityTypeSummary    2단계 분류 유형별 건수 ({@code InternalReportData.activityTypeSummary()}와 동일한 값)
      * @param totalTaskCount         부여된 전체 업무 수. 0이면 taskComponent를 제외하고 activityComponent 100%로 계산한다
-     * @param completionRate         업무 완료율 0.0~1.0
-     * @param deadlineComplianceRate 마감 준수율 0.0~1.0
-     * @return 0~100, scale 2. 입력이 전부 비어 있어도(업무·활동 모두 0건) 예외 대신 0을 돌려준다 — 절대 null이 아니다
+     * @param completionRate         업무 완료율 0.0~1.0. 업무가 없으면 null
+     * @param deadlineComplianceRate 마감 준수율 0.0~1.0. 마감 대상 업무가 없으면 null
+     * @return 0~100, scale 2. 계산 가능한 업무·활동 축이 모두 없으면 null
      */
     static BigDecimal calculate(
             Map<ActivityCategory, Integer> activityTypeSummary,
             int totalTaskCount,
-            double completionRate,
-            double deadlineComplianceRate
+            Double completionRate,
+            Double deadlineComplianceRate
     ) {
         BigDecimal activityComponent = activityComponent(activityTypeSummary);
-        if (totalTaskCount == 0) {
-            return clampAndScale(activityComponent);
-        }
-        BigDecimal taskComponent = taskComponent(completionRate, deadlineComplianceRate);
-        BigDecimal combined = taskComponent.multiply(TASK_WEIGHT)
-                .add(activityComponent.multiply(ACTIVITY_WEIGHT));
-        return clampAndScale(combined);
+        BigDecimal taskComponent = totalTaskCount == 0
+                ? null : taskComponent(completionRate, deadlineComplianceRate);
+        return weightedAverage(taskComponent, TASK_WEIGHT, activityComponent, ACTIVITY_WEIGHT);
     }
 
-    private static BigDecimal taskComponent(double completionRate, double deadlineComplianceRate) {
-        BigDecimal blendedRate = BigDecimal.valueOf(completionRate).multiply(COMPLETION_RATE_WEIGHT)
-                .add(BigDecimal.valueOf(deadlineComplianceRate).multiply(DEADLINE_RATE_WEIGHT));
-        return blendedRate.multiply(HUNDRED);
+    private static BigDecimal taskComponent(Double completionRate, Double deadlineComplianceRate) {
+        BigDecimal completion = completionRate == null ? null : BigDecimal.valueOf(completionRate).multiply(HUNDRED);
+        BigDecimal deadline = deadlineComplianceRate == null
+                ? null : BigDecimal.valueOf(deadlineComplianceRate).multiply(HUNDRED);
+        return weightedAverage(completion, COMPLETION_RATE_WEIGHT, deadline, DEADLINE_RATE_WEIGHT);
     }
 
     private static BigDecimal activityComponent(Map<ActivityCategory, Integer> activityTypeSummary) {
         BigDecimal weightedSum = weightedActivitySum(activityTypeSummary);
         if (weightedSum.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO;
+            return null;
         }
         // 100 * weightedSum / (weightedSum + K) — Michaelis-Menten 형태의 포화곡선.
         // weightedSum이 커질수록 완만해지며 K를 아무리 넘어서도 이론상 100을 넘지 않는다(점근).
         return weightedSum.multiply(HUNDRED)
                 .divide(weightedSum.add(ACTIVITY_HALF_POINT), INTERMEDIATE_SCALE, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal weightedAverage(
+            BigDecimal first, BigDecimal firstWeight, BigDecimal second, BigDecimal secondWeight
+    ) {
+        BigDecimal numerator = BigDecimal.ZERO;
+        BigDecimal denominator = BigDecimal.ZERO;
+        if (first != null) {
+            numerator = numerator.add(first.multiply(firstWeight));
+            denominator = denominator.add(firstWeight);
+        }
+        if (second != null) {
+            numerator = numerator.add(second.multiply(secondWeight));
+            denominator = denominator.add(secondWeight);
+        }
+        if (denominator.signum() == 0) {
+            return null;
+        }
+        return clampAndScale(numerator.divide(denominator, INTERMEDIATE_SCALE, RoundingMode.HALF_UP));
     }
 
     private static BigDecimal weightedActivitySum(Map<ActivityCategory, Integer> activityTypeSummary) {

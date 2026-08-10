@@ -2,6 +2,7 @@ package com.plog.domain.report.service;
 
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.report.dto.response.ReportSearchResponse;
+import com.plog.domain.report.entity.ReportCodeFormatter;
 import com.plog.domain.report.repository.ReportRepository;
 import com.plog.domain.report.repository.projection.ReportSummary;
 import com.plog.global.api.error.AuthErrorCode;
@@ -107,6 +108,7 @@ public class ReportSearchService {
                 summary.getProjectId(),
                 summary.getProjectName(),
                 summary.getReportId(),
+                ReportCodeFormatter.format(summary.getReportId(), summary.getCreatedAt()),
                 summary.getReportStatus(),
                 TimeUtil.toInstant(summary.getCompletedAt())
         );

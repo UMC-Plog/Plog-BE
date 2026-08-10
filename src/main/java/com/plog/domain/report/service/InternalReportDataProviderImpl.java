@@ -39,7 +39,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class InternalReportDataProviderImpl implements InternalReportDataProvider {
 
     private static final int MAX_EVIDENCE_PER_COMPETENCY = 3;
-    private static final int EVIDENCE_CONTENT_TRUNCATE_LENGTH = 30;
     private static final DateTimeFormatter EVIDENCE_DATE_FORMAT = DateTimeFormatter.ofPattern("M/d");
 
     private final TaskRepository taskRepository;
@@ -49,8 +48,19 @@ public class InternalReportDataProviderImpl implements InternalReportDataProvide
     @Override
     @Transactional(readOnly = true)
     public InternalReportData provide(Long projectId, Long projectMemberId) {
-        List<Task> tasks = taskRepository.findAllByProjectMember_IdOrderByCreatedAtAsc(projectMemberId);
-        List<ReportActivityLog> activities = activityLogRepository.findByProjectMember_Id(projectMemberId);
+        return provide(projectId, projectMemberId, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InternalReportData provide(Long projectId, Long projectMemberId, java.time.LocalDateTime snapshotAt) {
+        List<Task> tasks = snapshotAt == null
+                ? taskRepository.findAllByProjectMember_IdOrderByCreatedAtAsc(projectMemberId)
+                : taskRepository.findAllByProjectMember_IdAndCreatedAtLessThanEqualOrderByCreatedAtAsc(
+                        projectMemberId, snapshotAt);
+        List<ReportActivityLog> activities = snapshotAt == null
+                ? activityLogRepository.findByProjectMember_Id(projectMemberId)
+                : activityLogRepository.findByProjectMember_IdAndOccurredAtLessThanEqual(projectMemberId, snapshotAt);
 
         if (tasks.isEmpty() && activities.isEmpty()) {
             return InternalReportData.empty();
@@ -67,11 +77,15 @@ public class InternalReportDataProviderImpl implements InternalReportDataProvide
         int deadlineMetTaskCount = (int) taskCardSummary.stream()
                 .filter(TaskSummary::metDeadline)
                 .count();
+        int deadlineTargetTaskCount = (int) tasks.stream()
+                .filter(task -> task.getEndDate() != null)
+                .count();
 
         // totalTaskCount=0(업무카드는 없지만 채팅 등 활동만 있는 멤버)인 경우 0으로 나누면 NaN이
         // 되므로 방어. 이전에는 tasks.isEmpty()에서 이미 early return 했기 때문에 없던 케이스다.
-        double completionRate = totalTaskCount == 0 ? 0.0 : completedTaskCount / (double) totalTaskCount;
-        double deadlineComplianceRate = totalTaskCount == 0 ? 0.0 : deadlineMetTaskCount / (double) totalTaskCount;
+        Double completionRate = totalTaskCount == 0 ? null : completedTaskCount / (double) totalTaskCount;
+        Double deadlineComplianceRate = deadlineTargetTaskCount == 0
+                ? null : deadlineMetTaskCount / (double) deadlineTargetTaskCount;
 
         Map<ActivityCategory, Integer> activityTypeSummary = summarizeActivityTypes(activities);
         BigDecimal internalScore = InternalScoreCalculator.calculate(
@@ -81,9 +95,11 @@ public class InternalReportDataProviderImpl implements InternalReportDataProvide
                 taskCardSummary,
                 totalTaskCount,
                 completedTaskCount,
+                deadlineMetTaskCount,
+                deadlineTargetTaskCount,
                 completionRate,
                 deadlineComplianceRate,
-                summarizeAttachments(tasks),
+                summarizeAttachments(tasks, snapshotAt),
                 activityTypeSummary,
                 extractCompetencyEvidence(activities),
                 internalScore
@@ -114,18 +130,30 @@ public class InternalReportDataProviderImpl implements InternalReportDataProvide
      * TaskAttachment(업무카드 산출물)만 다루고 활동 로그(채팅/게시글) 산출물과는 성격이 달라
      * 고도화는 별도 이슈로 남긴다.
      */
-    private List<String> summarizeAttachments(List<Task> tasks) {
+    private List<String> summarizeAttachments(List<Task> tasks, java.time.LocalDateTime snapshotAt) {
         List<Long> taskIds = tasks.stream().map(Task::getId).toList();
-        long totalAttachments = taskAttachmentRepository.countByTaskIds(taskIds).stream()
+        var counts = snapshotAt == null
+                ? taskAttachmentRepository.countByTaskIds(taskIds)
+                : taskAttachmentRepository.countByTaskIdsAt(taskIds, snapshotAt);
+        long totalAttachments = counts.stream()
                 .mapToLong(TaskAttachmentRepository.TaskAttachmentCount::getCount)
                 .sum();
         return totalAttachments == 0 ? List.of() : List.of("산출물 " + totalAttachments + "건 첨부");
     }
 
-    /** 카테고리별 분류된 활동 건수. classifiedType이 없는(2단계 미처리) 행은 집계에서 제외한다. */
+    /**
+     * 카테고리별 분류된 활동 건수. classifiedType이 없는(2단계 미처리) 행은 집계에서 제외한다.
+     * TASK_STATUS_CHANGE도 제외한다 — 상태 변경 로그는 감사·이력용으로 ReportActivityLog에
+     * 남기지만 점수에는 반영하지 않는다: IN_PROGRESS 전환은 일정 조율의 증거가 아니고, 상태를
+     * 여러 번 바꾸면 활동 점수가 부풀려질 수 있으며, 무엇보다 completionRate/deadlineComplianceRate에
+     * 이미 업무 상태가 반영돼 있어 activityComponent에서 또 세면 이중 계산이 된다.
+     */
     private Map<ActivityCategory, Integer> summarizeActivityTypes(List<ReportActivityLog> activities) {
         Map<ActivityCategory, Integer> summary = new EnumMap<>(ActivityCategory.class);
         for (ReportActivityLog activity : activities) {
+            if (activity.getRawActivityType() == RawActivityType.TASK_STATUS_CHANGE) {
+                continue;
+            }
             ActivityCategory category = activity.getClassifiedType();
             if (category == null) {
                 continue;
@@ -136,9 +164,8 @@ public class InternalReportDataProviderImpl implements InternalReportDataProvide
     }
 
     /**
-     * 역량별 대표 근거 최대 3개, 최신순. TASK_STATUS_CHANGE는 "업무카드 상태가 바뀌었다"는
-     * 사실만 있고 사람이 읽을 근거 문장으로 삼기엔 정보가 빈약해 근거 후보에서 제외한다
-     * (activityTypeSummary 집계에는 포함되지만 근거로는 노출하지 않는다).
+     * 역량별 대표 근거 최대 3개. 분류 정보량, 업무 연결, 출처 검증 가능성과 출처/유형 다양성을
+     * 우선하고 발생 시각은 동점 기준으로만 사용한다.
      */
     private Map<CompetencyCategory, List<String>> extractCompetencyEvidence(List<ReportActivityLog> activities) {
         Map<CompetencyCategory, List<ReportActivityLog>> byCompetency = new EnumMap<>(CompetencyCategory.class);
@@ -159,14 +186,69 @@ public class InternalReportDataProviderImpl implements InternalReportDataProvide
 
         Map<CompetencyCategory, List<String>> evidence = new EnumMap<>(CompetencyCategory.class);
         for (Map.Entry<CompetencyCategory, List<ReportActivityLog>> entry : byCompetency.entrySet()) {
-            List<String> lines = entry.getValue().stream()
-                    .sorted(Comparator.comparing(ReportActivityLog::getOccurredAt).reversed())
-                    .limit(MAX_EVIDENCE_PER_COMPETENCY)
+            List<String> lines = selectRepresentativeEvidence(entry.getValue()).stream()
                     .map(this::toEvidenceLine)
                     .toList();
             evidence.put(entry.getKey(), lines);
         }
         return evidence;
+    }
+
+    private List<ReportActivityLog> selectRepresentativeEvidence(List<ReportActivityLog> candidates) {
+        List<ReportActivityLog> remaining = new ArrayList<>();
+        java.util.Set<String> seenSourceRefs = new java.util.HashSet<>();
+        for (ReportActivityLog candidate : candidates) {
+            String ref = candidate.getSourceRefId();
+            if (ref == null || ref.isBlank() || seenSourceRefs.add(candidate.getSourceDomain() + ":" + ref)) {
+                remaining.add(candidate);
+            }
+        }
+
+        List<ReportActivityLog> selected = new ArrayList<>();
+        java.util.Set<com.plog.domain.report.entity.SourceDomain> usedDomains = new java.util.HashSet<>();
+        java.util.Set<RawActivityType> usedTypes = new java.util.HashSet<>();
+        while (!remaining.isEmpty() && selected.size() < MAX_EVIDENCE_PER_COMPETENCY) {
+            ReportActivityLog best = remaining.stream()
+                    .max(Comparator.comparingInt((ReportActivityLog activity) ->
+                                    evidenceScore(activity, usedDomains, usedTypes))
+                            .thenComparing(ReportActivityLog::getOccurredAt)
+                            .thenComparing(activity -> activity.getSourceDomain().name(), Comparator.reverseOrder())
+                            .thenComparing(activity -> activity.getRawActivityType().name(), Comparator.reverseOrder())
+                            .thenComparing(activity -> java.util.Objects.toString(activity.getSourceRefId(), ""),
+                                    Comparator.reverseOrder()))
+                    .orElseThrow();
+            selected.add(best);
+            remaining.remove(best);
+            usedDomains.add(best.getSourceDomain());
+            usedTypes.add(best.getRawActivityType());
+        }
+        return selected;
+    }
+
+    private int evidenceScore(
+            ReportActivityLog activity,
+            java.util.Set<com.plog.domain.report.entity.SourceDomain> usedDomains,
+            java.util.Set<RawActivityType> usedTypes
+    ) {
+        int score = switch (activity.getClassifiedType()) {
+            case DECISION, PROBLEM_SOLVING -> 5;
+            case DELIVERABLE_SUBMIT -> 4;
+            case FEEDBACK, SCHEDULE_COORDINATION -> 3;
+            case SIMPLE_RESPONSE -> 0;
+        };
+        if (activity.getLinkedTask() != null) {
+            score += 3;
+        }
+        if (activity.getSourceRefId() != null && !activity.getSourceRefId().isBlank()) {
+            score += 1;
+        }
+        if (!usedDomains.contains(activity.getSourceDomain())) {
+            score += 2;
+        }
+        if (!usedTypes.contains(activity.getRawActivityType())) {
+            score += 1;
+        }
+        return score;
     }
 
     private String toEvidenceLine(ReportActivityLog activity) {
@@ -186,17 +268,15 @@ public class InternalReportDataProviderImpl implements InternalReportDataProvide
         };
     }
 
-    /**
-     * 원문 30자 truncate. content가 없는 유형(TASK_ATTACHMENT_ADD)은 원문 자체가 없으므로
-     * 고정 설명으로 대체한다 — 실측 없이 잡은 가정이라 리포트 확인 후 문구를 다듬을 수 있다.
-     */
     private String evidenceText(ReportActivityLog activity) {
-        String content = activity.getContent();
-        if (content == null || content.isBlank()) {
-            return "산출물 첨부";
-        }
-        return content.length() <= EVIDENCE_CONTENT_TRUNCATE_LENGTH
-                ? content
-                : content.substring(0, EVIDENCE_CONTENT_TRUNCATE_LENGTH);
+        return switch (activity.getClassifiedType()) {
+            case DECISION -> "업무 관련 의사결정을 공유함";
+            case PROBLEM_SOLVING -> "업무 진행 중 문제 해결에 기여함";
+            case FEEDBACK -> "업무 진행에 필요한 피드백을 제공함";
+            case DELIVERABLE_SUBMIT -> activity.getRawActivityType() == RawActivityType.TASK_ATTACHMENT_ADD
+                    ? "산출물을 제출함" : "프로젝트 관련 자료를 공유함";
+            case SCHEDULE_COORDINATION -> "업무 일정과 진행 방향을 조율함";
+            case SIMPLE_RESPONSE -> "업무 관련 의견을 공유함";
+        };
     }
 }

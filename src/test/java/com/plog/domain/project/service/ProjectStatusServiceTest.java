@@ -18,6 +18,7 @@ import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.report.service.ReportLifecycleService;
+import com.plog.domain.report.repository.ReportRepository;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectStatusServiceTest {
@@ -55,6 +57,12 @@ class ProjectStatusServiceTest {
 
     @Mock
     private ReportLifecycleService reportLifecycleService;
+
+    @Mock
+    private ReportRepository reportRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private ProjectStatusService projectStatusService;

@@ -24,22 +24,28 @@ public class FakeInternalReportDataProvider implements InternalReportDataProvide
     public InternalReportData provide(Long projectId, Long projectMemberId) {
         log.warn("FakeInternalReportDataProvider 사용 중 — 실제 내부 활동 집계가 아닙니다. "
                 + "projectId={}, projectMemberId={}", projectId, projectMemberId);
-        int seed = (int) (projectMemberId == null ? 0 : projectMemberId % 3);
-        int total = 4;
-        int completed = 4 - seed;
+        List<TaskSummary> tasks = List.of(
+                new TaskSummary("로그인 API 구현", TaskCategory.DEVELOP,
+                        TaskStatus.DONE, LocalDate.of(2026, 6, 5), true),
+                new TaskSummary("리포트 화면 기획", TaskCategory.PLANNING,
+                        TaskStatus.DONE, LocalDate.of(2026, 6, 8), true),
+                new TaskSummary("배포 파이프라인 점검", TaskCategory.ETC,
+                        TaskStatus.IN_PROGRESS, LocalDate.of(2026, 6, 12), false)
+        );
+        int total = tasks.size();
+        int completed = (int) tasks.stream()
+                .filter(task -> task.status() == TaskStatus.DONE)
+                .count();
+        int deadlineMet = (int) tasks.stream().filter(TaskSummary::metDeadline).count();
+        int deadlineTarget = (int) tasks.stream().filter(task -> task.deadline() != null).count();
         return new InternalReportData(
-                List.of(
-                        new TaskSummary("로그인 API 구현", TaskCategory.DEVELOP,
-                                TaskStatus.DONE, LocalDate.of(2026, 6, 5), true),
-                        new TaskSummary("리포트 화면 기획", TaskCategory.PLANNING,
-                                TaskStatus.DONE, LocalDate.of(2026, 6, 8), true),
-                        new TaskSummary("배포 파이프라인 점검", TaskCategory.ETC,
-                                TaskStatus.IN_PROGRESS, LocalDate.of(2026, 6, 12), false)
-                ),
+                tasks,
                 total,
                 completed,
+                deadlineMet,
+                deadlineTarget,
                 completed / (double) total,
-                0.75 + seed * 0.05,
+                deadlineMet / (double) deadlineTarget,
                 List.of("발표자료 1건 첨부", "회의록 2건 첨부"),
                 Map.of(
                         ActivityCategory.DECISION, 5,

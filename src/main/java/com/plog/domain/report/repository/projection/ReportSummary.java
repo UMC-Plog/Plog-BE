@@ -14,4 +14,6 @@ public interface ReportSummary {
     ReportStatus getReportStatus();
 
     LocalDateTime getCompletedAt();
+
+    LocalDateTime getCreatedAt();
 }

@@ -3,6 +3,7 @@ package com.plog.domain.report.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.plog.domain.task.entity.Task;
 import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
@@ -111,5 +112,26 @@ class ReportActivityLogTest {
         assertThat(log.getEmbeddingModel()).isEqualTo("N/A");
         assertThat(log.getEmbedding()).isNull();
         assertThat(log.hasEmbedding()).isFalse();
+    }
+
+    @Test
+    void linkedTask를_받는_오버로드는_생성_시점에_바로_연결한다() {
+        Task task = Task.builder().id(1L).build();
+
+        ReportActivityLog log = ReportActivityLog.create(
+                null, SourceDomain.TASK, RawActivityType.TASK_STATUS_CHANGE,
+                null, LocalDateTime.now(), null, null, task);
+
+        // noiseFiltered가 아직 확정 전(null)이라 linkTask()는 IllegalStateException을 던지는 상태지만,
+        // 생성 시점에 바로 채운 값이라 그 제약과 무관하게 이미 연결돼 있어야 한다.
+        assertThat(log.getLinkedTask()).isSameAs(task);
+        assertThat(log.getNoiseFiltered()).isNull();
+    }
+
+    @Test
+    void linkedTask를_생략하면_null로_생성된다() {
+        ReportActivityLog log = refinedChatLog();
+
+        assertThat(log.getLinkedTask()).isNull();
     }
 }

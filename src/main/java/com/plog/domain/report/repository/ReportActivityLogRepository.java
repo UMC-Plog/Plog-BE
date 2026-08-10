@@ -3,7 +3,11 @@ package com.plog.domain.report.repository;
 import com.plog.domain.report.entity.ReportActivityLog;
 import com.plog.domain.report.entity.SourceDomain;
 import com.plog.domain.report.repository.projection.EmbeddingClaimProjection;
+import com.plog.domain.report.repository.projection.PostLogRecoveryTarget;
+import com.plog.domain.report.repository.projection.CommentLogRecoveryTarget;
 import com.plog.domain.report.repository.projection.EvaluationLogRecoveryTarget;
+import com.plog.domain.report.repository.projection.TaskAttachmentLogRecoveryTarget;
+import com.plog.domain.report.repository.projection.TaskStatusLogRecoveryTarget;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.data.domain.Limit;
@@ -128,6 +132,72 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
     List<EvaluationLogRecoveryTarget> findSelfFeedbacksMissingActivityLog(
             @Param("threshold") LocalDateTime threshold, Limit limit);
 
+    @Query("""
+            select post.id as postId, post.projectMember.id as memberId,
+                   post.content as content, post.createdAt as occurredAt
+            from Post post
+            where post.createdAt < :threshold
+              and not exists (select 1 from ReportActivityLog log
+                where log.sourceDomain = com.plog.domain.report.entity.SourceDomain.POST
+                  and log.sourceRefId = concat('post:', cast(post.id as string)))
+            """)
+    List<PostLogRecoveryTarget> findPostsMissingActivityLog(
+            @Param("threshold") LocalDateTime threshold, Limit limit);
+
+    @Query("""
+            select comment.id as commentId, comment.post.id as postId,
+                   comment.projectMember.id as memberId, comment.content as content,
+                   comment.createdAt as occurredAt
+            from Comment comment
+            where comment.createdAt < :threshold
+              and not exists (select 1 from ReportActivityLog log
+                where log.sourceDomain = com.plog.domain.report.entity.SourceDomain.POST
+                  and log.sourceRefId = concat('comment:', cast(comment.id as string)))
+            """)
+    List<CommentLogRecoveryTarget> findCommentsMissingActivityLog(
+            @Param("threshold") LocalDateTime threshold, Limit limit);
+
+    // Task 상태변경(DONE 전이) 안전망 재수집 대상 조회.
+    // TASK_STATUS_CHANGE의 sourceRefId엔 occurredAt이 문자열로 포함돼 있다(같은 카드가
+    // DONE↔해제를 오가면 taskId만으로는 유니크하지 않아 시각까지 넣었다). 그래서 Evaluation
+    // 재수집처럼 sourceRefId를 JPQL에서 문자열로 재구성하면 DB 타임스탬프 포맷과 Java
+    // LocalDateTime#toString()이 어긋날 위험이 있다 — 대신 sourceRefId를 재구성하지 않고
+    // linkedTask+occurredAt 값 자체로 "이미 적재됐는지"를 판정한다.
+    // TaskStatusService가 DONE 전이 시 completedAt을 그대로 이벤트의 occurredAt으로 재사용하므로
+    // (별도로 TimeUtil.nowUtc()를 다시 부르지 않음) 이 값이 정확히 일치한다.
+    // 비-DONE 전이(TODO↔IN_PROGRESS)는 Task에 전이 시각을 담는 컬럼이 없어 재수집 대상에서
+    // 제외한다 — updatedAt은 상태 변경이 아닌 다른 필드 수정에도 갱신돼 신뢰할 수 없다.
+    @Query("""
+            select t.id as taskId, t.projectMember.id as memberId, t.completedAt as occurredAt
+            from Task t
+            where t.cardStatus = com.plog.domain.task.entity.TaskStatus.DONE
+              and t.completedAt is not null
+              and t.completedAt < :threshold
+              and not exists (
+                select 1 from ReportActivityLog r
+                where r.sourceDomain = com.plog.domain.report.entity.SourceDomain.TASK
+                  and r.rawActivityType = com.plog.domain.report.entity.RawActivityType.TASK_STATUS_CHANGE
+                  and r.linkedTask = t
+                  and r.occurredAt = t.completedAt)
+            """)
+    List<TaskStatusLogRecoveryTarget> findDoneTasksMissingActivityLog(
+            @Param("threshold") LocalDateTime threshold, Limit limit);
+
+    // Task 첨부 안전망 재수집 대상 조회. sourceRefId가 attachmentId만으로 구성돼(타임스탬프 없음)
+    // Evaluation 재수집과 동일하게 JPQL에서 안전하게 재구성할 수 있다.
+    @Query("""
+            select ta.id as attachmentId, ta.task.id as taskId, ta.task.projectMember.id as memberId,
+                   ta.createdAt as occurredAt
+            from TaskAttachment ta
+            where ta.createdAt < :threshold
+              and not exists (
+                select 1 from ReportActivityLog r
+                where r.sourceDomain = com.plog.domain.report.entity.SourceDomain.TASK
+                  and r.sourceRefId = concat('task-attachment:', cast(ta.id as string)))
+            """)
+    List<TaskAttachmentLogRecoveryTarget> findAttachmentsMissingActivityLog(
+            @Param("threshold") LocalDateTime threshold, Limit limit);
+
     // 1단계 정제 대상 조회용 — 아직 정제를 거치지 않은 내부 도메인 행.
     // limit은 ActivityRefinementService가 한 배치에서 처리할 상한(EvaluationActivityLogRecoveryScheduler와 동일한 관례).
     // occurredAt만으로는 동시각 행 사이의 순서가 불안정해 id를 안정적인 tie-breaker로 더한다 —
@@ -147,7 +217,10 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
     // 즉 처리 중 앱이 죽어도 리스가 풀리면 자동으로 다시 선점 대상이 된다(복구 가능).
     // 엔티티 전체가 아니라 id/content만 반환해서 이 시점엔 커넥션을 짧게만 잡는다.
     @Query(value = """
-            SELECT report_activity_log_id AS id, content AS content
+            SELECT report_activity_log_id AS id,
+                   content AS content,
+                   source_domain AS "sourceDomain",
+                   source_ref_id AS "sourceRefId"
             FROM report_activity_log
             WHERE noise_filtered = false
               AND embedding_model IS NULL
@@ -234,5 +307,36 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
             @Param("sourceDomains") List<SourceDomain> sourceDomains
     );
 
+    @Query("""
+            select log from ReportActivityLog log join fetch log.projectMember member
+            where member.id in :projectMemberIds
+              and member.status = com.plog.domain.project.entity.MemberStatus.ACTIVE
+              and log.sourceDomain in :sourceDomains
+              and log.occurredAt <= :snapshotAt
+            order by log.occurredAt desc, log.id desc
+            """)
+    List<ReportActivityLog> findExternalLogsForActiveProjectMembersAt(
+            @Param("projectMemberIds") List<Long> projectMemberIds,
+            @Param("sourceDomains") List<SourceDomain> sourceDomains,
+            @Param("snapshotAt") LocalDateTime snapshotAt);
+
     List<ReportActivityLog> findByProjectMember_Id(Long projectMemberId);
+
+    List<ReportActivityLog> findByProjectMember_IdAndOccurredAtLessThanEqual(
+            Long projectMemberId, LocalDateTime snapshotAt);
+
+    @Query("""
+            select count(log) from ReportActivityLog log
+            where log.projectMember.project.id = :projectId
+              and log.occurredAt <= :snapshotAt
+              and log.sourceDomain in :sourceDomains
+              and (log.noiseFiltered is null
+                or (log.noiseFiltered = false and log.embeddingModel is null)
+                or (log.noiseFiltered = false and log.embeddingModel is not null
+                    and log.classifiedType is null and log.classificationFailed = false))
+            """)
+    long countPendingReportActivities(
+            @Param("projectId") Long projectId,
+            @Param("snapshotAt") LocalDateTime snapshotAt,
+            @Param("sourceDomains") List<SourceDomain> sourceDomains);
 }

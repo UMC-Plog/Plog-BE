@@ -14,6 +14,7 @@ import com.plog.domain.report.entity.ActivityCategory;
 import com.plog.domain.report.entity.RawActivityType;
 import com.plog.domain.report.entity.ReportActivityLog;
 import com.plog.domain.report.entity.SourceDomain;
+import com.plog.domain.report.repository.projection.EmbeddingClaimProjection;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.UserRepository;
 import java.time.LocalDate;
@@ -67,6 +68,28 @@ class ReportActivityLogClassificationQueryIntegrationTest {
 
     private static final List<SourceDomain> CLASSIFIABLE_DOMAINS =
             List.of(SourceDomain.TASK, SourceDomain.CHAT, SourceDomain.POST);
+
+    @Test
+    void 임베딩_선점_projection에_출처와_참조_ID를_매핑한다() {
+        Project project = saveProject();
+        ProjectMember member = saveMember(project);
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        ReportActivityLog chat = ReportActivityLog.create(
+                member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE, null,
+                now.minusMinutes(1), "{\"chatMessageId\":321}", "chat:321");
+        activityLogRepository.save(chat);
+        chat.applyNoiseFilter(false);
+        activityLogRepository.flush();
+
+        List<EmbeddingClaimProjection> claims =
+                activityLogRepository.selectClaimableEmbeddingActivities(now, 10);
+
+        assertThat(claims).hasSize(1);
+        assertThat(claims.getFirst().getId()).isEqualTo(chat.getId());
+        assertThat(claims.getFirst().getContent()).isNull();
+        assertThat(claims.getFirst().getSourceDomain()).isEqualTo(SourceDomain.CHAT.name());
+        assertThat(claims.getFirst().getSourceRefId()).isEqualTo("chat:321");
+    }
 
     @Test
     void 정제_통과_임베딩_완료_미분류_행만_대상으로_조회한다() {

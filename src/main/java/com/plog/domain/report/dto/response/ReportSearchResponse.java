@@ -12,9 +12,17 @@ public record ReportSearchResponse(
         String projectName,
         @Schema(description = "리포트 ID", example = "20")
         Long reportId,
+        @Schema(description = "리포트 표시 코드", example = "PLOG-2026-07-00000020")
+        String reportCode,
         @Schema(description = "리포트 상태", example = "COMPLETED")
         ReportStatus reportStatus,
         @Schema(description = "리포트 완료 시각", example = "2026-07-24T13:30:00Z")
         Instant completedAt
 ) {
+    public ReportSearchResponse(
+            Long projectId, String projectName, Long reportId,
+            ReportStatus reportStatus, Instant completedAt
+    ) {
+        this(projectId, projectName, reportId, null, reportStatus, completedAt);
+    }
 }

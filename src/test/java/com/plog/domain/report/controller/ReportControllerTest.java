@@ -347,6 +347,7 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$.result.reliabilityTier").value("P2"))
                 // 5점 척도 Peer 집계 — 화면의 역량 점수/태그 칩에 대응한다(peerScore 100점 척도와 별개).
                 .andExpect(jsonPath("$.result.peerAverage").value(4.25))
+                .andExpect(jsonPath("$.result.peerCompetencyScores.LEADERSHIP").value(4.2))
                 .andExpect(jsonPath("$.result.competencyScores.LEADERSHIP").value(4.2))
                 .andExpect(jsonPath("$.result.peerKeywords[0]").value("리더십"))
                 // 프로젝트 연동 여부와 멤버 점수 가용성은 별개다 — 점수가 없으면 null(응답에서는 생략)이다.
