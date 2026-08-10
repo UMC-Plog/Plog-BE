@@ -19,6 +19,9 @@ import org.springframework.data.domain.Slice;
 
 public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Long> {
 
+    @Query("select member.project.id from ProjectMember member where member.id = :memberId")
+    Optional<Long> findProjectIdByMemberId(@Param("memberId") Long memberId);
+
     List<ProjectMember> findAllByProjectId(Long projectId);
 
     /** 탈퇴 처리용 — 해당 유저의 모든 프로젝트 멤버십(상태 무관). */

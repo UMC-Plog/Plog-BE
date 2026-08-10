@@ -3,6 +3,8 @@ package com.plog.domain.report.repository;
 import com.plog.domain.report.entity.ReportActivityLog;
 import com.plog.domain.report.entity.SourceDomain;
 import com.plog.domain.report.repository.projection.EmbeddingClaimProjection;
+import com.plog.domain.report.repository.projection.PostLogRecoveryTarget;
+import com.plog.domain.report.repository.projection.CommentLogRecoveryTarget;
 import com.plog.domain.report.repository.projection.EvaluationLogRecoveryTarget;
 import com.plog.domain.report.repository.projection.TaskAttachmentLogRecoveryTarget;
 import com.plog.domain.report.repository.projection.TaskStatusLogRecoveryTarget;
@@ -128,6 +130,31 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
                   and r.sourceRefId = concat('self-feedback:', cast(sf.id as string)))
             """)
     List<EvaluationLogRecoveryTarget> findSelfFeedbacksMissingActivityLog(
+            @Param("threshold") LocalDateTime threshold, Limit limit);
+
+    @Query("""
+            select post.id as postId, post.projectMember.id as memberId,
+                   post.content as content, post.createdAt as occurredAt
+            from Post post
+            where post.createdAt < :threshold
+              and not exists (select 1 from ReportActivityLog log
+                where log.sourceDomain = com.plog.domain.report.entity.SourceDomain.POST
+                  and log.sourceRefId = concat('post:', cast(post.id as string)))
+            """)
+    List<PostLogRecoveryTarget> findPostsMissingActivityLog(
+            @Param("threshold") LocalDateTime threshold, Limit limit);
+
+    @Query("""
+            select comment.id as commentId, comment.post.id as postId,
+                   comment.projectMember.id as memberId, comment.content as content,
+                   comment.createdAt as occurredAt
+            from Comment comment
+            where comment.createdAt < :threshold
+              and not exists (select 1 from ReportActivityLog log
+                where log.sourceDomain = com.plog.domain.report.entity.SourceDomain.POST
+                  and log.sourceRefId = concat('comment:', cast(comment.id as string)))
+            """)
+    List<CommentLogRecoveryTarget> findCommentsMissingActivityLog(
             @Param("threshold") LocalDateTime threshold, Limit limit);
 
     // Task 상태변경(DONE 전이) 안전망 재수집 대상 조회.
@@ -280,5 +307,36 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
             @Param("sourceDomains") List<SourceDomain> sourceDomains
     );
 
+    @Query("""
+            select log from ReportActivityLog log join fetch log.projectMember member
+            where member.id in :projectMemberIds
+              and member.status = com.plog.domain.project.entity.MemberStatus.ACTIVE
+              and log.sourceDomain in :sourceDomains
+              and log.occurredAt <= :snapshotAt
+            order by log.occurredAt desc, log.id desc
+            """)
+    List<ReportActivityLog> findExternalLogsForActiveProjectMembersAt(
+            @Param("projectMemberIds") List<Long> projectMemberIds,
+            @Param("sourceDomains") List<SourceDomain> sourceDomains,
+            @Param("snapshotAt") LocalDateTime snapshotAt);
+
     List<ReportActivityLog> findByProjectMember_Id(Long projectMemberId);
+
+    List<ReportActivityLog> findByProjectMember_IdAndOccurredAtLessThanEqual(
+            Long projectMemberId, LocalDateTime snapshotAt);
+
+    @Query("""
+            select count(log) from ReportActivityLog log
+            where log.projectMember.project.id = :projectId
+              and log.occurredAt <= :snapshotAt
+              and log.sourceDomain in :sourceDomains
+              and (log.noiseFiltered is null
+                or (log.noiseFiltered = false and log.embeddingModel is null)
+                or (log.noiseFiltered = false and log.embeddingModel is not null
+                    and log.classifiedType is null and log.classificationFailed = false))
+            """)
+    long countPendingReportActivities(
+            @Param("projectId") Long projectId,
+            @Param("snapshotAt") LocalDateTime snapshotAt,
+            @Param("sourceDomains") List<SourceDomain> sourceDomains);
 }

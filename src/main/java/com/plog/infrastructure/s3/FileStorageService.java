@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriUtils;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
@@ -88,6 +89,21 @@ public class FileStorageService {
         }
         String safeName = fileName.trim().replaceAll("[^a-zA-Z0-9._-]", "_");
         return usage.keySegment() + "/users/" + userId + "/" + UUID.randomUUID() + "/" + safeName;
+    }
+
+    /** 서버가 생성한 리포트 산출물처럼 사용자 presigned 업로드를 거치지 않는 객체를 저장한다. */
+    public void putGeneratedObject(String fileKey, String contentType, byte[] bytes) {
+        ensureEnabled();
+        if (fileKey == null || fileKey.isBlank() || contentType == null || contentType.isBlank() || bytes == null) {
+            throw new IllegalArgumentException("generated object key, content type and bytes are required");
+        }
+        s3Client.putObject(PutObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(fileKey)
+                        .contentType(contentType)
+                        .contentLength((long) bytes.length)
+                        .build(),
+                RequestBody.fromBytes(bytes));
     }
 
     public FileStorageDto.PresignedUploadResponse createUploadUrl(

@@ -69,6 +69,13 @@ public class ReportTextWriter {
         report.fail();
     }
 
+    @Transactional
+    public void attachPdfArchive(Long reportId, String objectKey, String fileName) {
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
+        report.attachPdf(objectKey, fileName);
+    }
+
     private String toJson(Object value) {
         if (value == null) {
             return null;

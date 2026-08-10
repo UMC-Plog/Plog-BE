@@ -68,6 +68,10 @@ class ReportGenerationServiceTest {
     @Mock
     private ReportLlmGateway llmGateway;
     @Mock
+    private ReportPdfArchiveService pdfArchiveService;
+    @Mock
+    private ReportActivityPreparationService activityPreparationService;
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
@@ -91,7 +95,7 @@ class ReportGenerationServiceTest {
         verify(textWriter).writeTeamInsight(eq(REPORT_ID), any(TeamReportText.class));
         verify(textWriter).publish(REPORT_ID);
         verify(eventPublisher).publishEvent(new ReportPublishedEvent(PROJECT_ID, REPORT_ID));
-        verify(externalDataProvider).provide(eq(PROJECT_ID), eq(List.of(1L, 2L)));
+        verify(externalDataProvider).provide(eq(PROJECT_ID), eq(List.of(1L, 2L)), any());
     }
 
     // 승인된 실패 정책 — 멤버 1명 LLM 실패는 그 멤버 텍스트만 비우고 리포트는 발행한다.
@@ -148,7 +152,7 @@ class ReportGenerationServiceTest {
     @Test
     void skipsMembersWhoseDataCollectionFails() {
         givenReportWithMembers(1L, 2L);
-        when(dataCollector.collect(anyLong(), anyLong(), any(), any(), any(), anyInt()))
+        when(dataCollector.collect(anyLong(), anyLong(), any(), any(), any(), anyInt(), any()))
                 .thenThrow(new IllegalStateException("포트 실패"))
                 .thenReturn(collected(2L, internalWithRates()));
         when(llmGateway.generateMemberText(any())).thenReturn(generatedText("두 번째"));
@@ -200,7 +204,7 @@ class ReportGenerationServiceTest {
     @Test
     void failsTheReportWhenExternalBatchCollectionFails() {
         givenReportWithMembers(1L, 2L);
-        when(externalDataProvider.provide(eq(PROJECT_ID), any()))
+        when(externalDataProvider.provide(eq(PROJECT_ID), any(), any()))
                 .thenThrow(new IllegalStateException("외부 집계 실패"));
 
         ReportGenerationResult result = service.generate(REPORT_ID);
@@ -215,7 +219,7 @@ class ReportGenerationServiceTest {
     @Test
     void failsTheReportWhenExternalBatchOmitsRequestedMember() {
         givenReportWithMembers(1L, 2L);
-        when(externalDataProvider.provide(eq(PROJECT_ID), any()))
+        when(externalDataProvider.provide(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Map.of(1L, com.plog.domain.report.port.ExternalReportData.notConnected()));
 
         ReportGenerationResult result = service.generate(REPORT_ID);
@@ -297,13 +301,13 @@ class ReportGenerationServiceTest {
         when(reportRepository.findWithProjectById(REPORT_ID)).thenReturn(Optional.of(report()));
         when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(PROJECT_ID, MemberStatus.ACTIVE))
                 .thenReturn(java.util.Arrays.stream(memberIds).map(this::member).toList());
-        when(externalDataProvider.provide(eq(PROJECT_ID), any()))
+        when(externalDataProvider.provide(eq(PROJECT_ID), any(), any()))
                 .thenReturn(java.util.Arrays.stream(memberIds)
                         .collect(java.util.stream.Collectors.toMap(id -> id, id -> com.plog.domain.report.port.ExternalReportData.notConnected())));
     }
 
     private void givenCollectionSucceeds() {
-        when(dataCollector.collect(anyLong(), anyLong(), any(), any(), any(), anyInt()))
+        when(dataCollector.collect(anyLong(), anyLong(), any(), any(), any(), anyInt(), any()))
                 .thenAnswer(invocation -> collected(
                         ((ProjectMember) invocation.getArgument(3)).getId()));
     }

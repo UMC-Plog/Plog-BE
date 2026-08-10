@@ -13,6 +13,7 @@ import com.plog.domain.report.port.SelfFeedbackMatchSummary;
 import com.plog.domain.report.entity.Report;
 import com.plog.domain.report.repository.ReportRepository;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,10 +49,19 @@ public class ReportMemberDataCollector {
             ExternalReportData external,
             int teamSize
     ) {
+        return collect(reportId, projectId, projectType, member, external, teamSize,
+                com.plog.global.util.TimeUtil.nowUtc());
+    }
+
+    @Transactional
+    public CollectedMember collect(
+            Long reportId, Long projectId, ProjectType projectType, ProjectMember member,
+            ExternalReportData external, int teamSize, LocalDateTime snapshotAt
+    ) {
         Report report = reportRepository.getReferenceById(reportId);
         Long memberId = member.getId();
 
-        InternalReportData internal = internalProvider.provide(projectId, memberId);
+        InternalReportData internal = internalProvider.provide(projectId, memberId, snapshotAt);
         PeerEvaluationSummary peer = evaluationProvider.peer(projectId, memberId);
         SelfFeedbackMatchSummary self = evaluationProvider.self(projectId, memberId);
 

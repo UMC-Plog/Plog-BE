@@ -30,7 +30,7 @@ public enum ReportStatus {
         return this != GENERATING;
     }
 
-    /** 발행 완료 — 멤버 결과와 PDF 가 갖춰졌다고 보장되는 유일한 상태. */
+    /** 발행 완료 — 멤버 결과가 확정된 상태. PDF ZIP은 별도 저장소 실패 시 없을 수 있다. */
     public boolean isPublished() {
         return this == COMPLETED;
     }

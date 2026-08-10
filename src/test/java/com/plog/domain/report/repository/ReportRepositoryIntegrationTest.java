@@ -87,7 +87,7 @@ class ReportRepositoryIntegrationTest {
     void databaseDefaultKeepsLegacyStyleRowsInGeneratingState() {
         Project project = saveProject("Legacy");
         jdbcTemplate.update(
-                "insert into reports(project_id, created_at, updated_at) values (?, now(), now())",
+                "insert into reports(project_id, snapshot_at, created_at, updated_at) values (?, now(), now(), now())",
                 project.getId()
         );
         entityManager.clear();

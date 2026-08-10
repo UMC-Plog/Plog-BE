@@ -250,7 +250,7 @@ class ReportDetailServiceTest {
         Report report = Report.start(project());
         ReflectionTestUtils.setField(report, "id", REPORT_ID);
         report.complete(LocalDateTime.of(2026, 7, 20, 12, 0));
-        report.attachPdf("reports/20/report.pdf", "Plog-report.pdf");
+        report.attachPdf("reports/20/reports.zip", "Plog-reports.zip");
         return report;
     }
 

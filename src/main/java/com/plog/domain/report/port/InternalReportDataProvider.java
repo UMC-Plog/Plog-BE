@@ -1,5 +1,7 @@
 package com.plog.domain.report.port;
 
+import java.time.LocalDateTime;
+
 /**
  * 담당: 송민 (0~4단계 내부 도메인 — 수집 · 정제 · 분류 · 연결 · 내부 점수).
  * <p>
@@ -18,4 +20,8 @@ public interface InternalReportDataProvider {
      * @return null 이 아닌 집계 결과
      */
     InternalReportData provide(Long projectId, Long projectMemberId);
+
+    default InternalReportData provide(Long projectId, Long projectMemberId, LocalDateTime snapshotAt) {
+        return provide(projectId, projectMemberId);
+    }
 }

@@ -94,7 +94,7 @@ public interface ReportControllerDoc {
                     아직 발행되지 않은 리포트(status=GENERATING/FAILED)도 404가 아니라 200으로 상태를 내려줍니다 —
                     프론트는 status로 "생성 중" 화면을 그리고 폴링하면 됩니다. 이때 members는 항상 빈 배열입니다.
                     멤버별 점수 상세는 members[].projectMemberId로 멤버 결과 API를 호출하세요.
-                    pdfAvailable이 true일 때만 PDF 다운로드 URL 발급이 성공합니다.
+                    pdfAvailable이 true일 때만 팀 PDF와 개인 PDF를 묶은 ZIP 다운로드 URL 발급이 성공합니다.
                     """
     )
     @ApiResponses({
@@ -219,9 +219,11 @@ public interface ReportControllerDoc {
     );
 
     @Operation(
-            summary = "리포트 PDF 다운로드 URL 발급",
+            summary = "리포트 PDF ZIP 다운로드 URL 발급",
             description = """
-                    ACTIVE 프로젝트 멤버에게 완료된 리포트 PDF의 임시 다운로드 URL을 발급합니다.
+                    ACTIVE 프로젝트 멤버에게 팀 리포트 PDF 1개와 멤버별 개인 리포트 PDF 전체를
+                    함께 담은 ZIP 파일의 임시 다운로드 URL을 발급합니다. 기존 경로 호환을 위해
+                    엔드포인트는 /pdf를 유지합니다.
                     응답의 downloadUrl을 브라우저 이동/새 창 열기로 사용하면 파일 다운로드가 시작됩니다.
                     URL 만료 시간은 expiresInSeconds로 내려갑니다.
                     """
@@ -251,7 +253,7 @@ public interface ReportControllerDoc {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "404",
-                    description = "리포트 또는 PDF 없음",
+                    description = "리포트 또는 PDF ZIP 없음",
                     content = @Content(mediaType = "application/json",
                             schema = @Schema(implementation = ApiResponse.class))
             ),

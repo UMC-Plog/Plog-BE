@@ -13,7 +13,7 @@ public interface ReportMemberResultRepository extends JpaRepository<ReportMember
 
     Optional<ReportMemberResult> findByReportIdAndProjectMemberId(Long reportId, Long projectMemberId);
 
-    @EntityGraph(attributePaths = {"projectMember"})
+    @EntityGraph(attributePaths = {"projectMember", "projectMember.user"})
     List<ReportMemberResult> findAllByReportIdOrderByProjectMemberIdAsc(Long reportId);
 
     /**
