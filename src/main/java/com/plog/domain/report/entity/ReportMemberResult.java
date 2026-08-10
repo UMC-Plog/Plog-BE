@@ -311,7 +311,8 @@ public class ReportMemberResult extends BaseEntity {
 
     /** 텍스트 생성이 끝났는지. 발행 전 "전원 완료" 판정의 기준이다. */
     public boolean hasLlmText() {
-        return headline != null && !headline.isBlank();
+        return headline != null && !headline.isBlank()
+                && teamMemberHeadline != null && !teamMemberHeadline.isBlank();
     }
 
     /**

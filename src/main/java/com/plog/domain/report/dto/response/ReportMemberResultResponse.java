@@ -1,5 +1,6 @@
 package com.plog.domain.report.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.plog.domain.report.entity.CompetencyCategory;
 import com.plog.domain.report.entity.ReliabilityTier;
 import com.plog.domain.report.llm.MemberReportText;
@@ -93,6 +94,14 @@ public record ReportMemberResultResponse(
         peerCompetencyScores = peerCompetencyScores == null ? Map.of() : Map.copyOf(peerCompetencyScores);
         peerKeywords = peerKeywords == null ? List.of() : List.copyOf(peerKeywords);
         competencyScores100 = competencyScores100 == null ? Map.of() : Map.copyOf(competencyScores100);
+    }
+
+    /** 기존 클라이언트 호환용 5점 척도 alias. 신규 연동은 peerCompetencyScores를 사용한다. */
+    @Deprecated
+    @JsonProperty("competencyScores")
+    @Schema(description = "Deprecated: peerCompetencyScores와 동일한 5점 척도 값", deprecated = true)
+    public Map<CompetencyCategory, BigDecimal> competencyScores() {
+        return peerCompetencyScores;
     }
 
     public ReportMemberResultResponse(

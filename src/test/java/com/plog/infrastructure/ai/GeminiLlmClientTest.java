@@ -95,6 +95,29 @@ class GeminiLlmClientTest {
         assertThat(root.at("/generationConfig/maxOutputTokens").asInt()).isEqualTo(1024);
     }
 
+    @Test
+    void omitsSamplingParametersForFutureGeminiModels() throws Exception {
+        GeminiLlmClient futureModel = new GeminiLlmClient(
+                properties("gemini-4-flash"), objectMapper, RestClient.builder());
+
+        String body = (String) ReflectionTestUtils.invokeMethod(
+                futureModel, "buildRequestBody",
+                new LlmRequest("system", "user", null, 1024, 0.3));
+
+        JsonNode root = objectMapper.readTree(body);
+        assertThat(root.at("/generationConfig").has("temperature")).isFalse();
+    }
+
+    @Test
+    void includesTemperatureOnlyForVerifiedGemini2Models() throws Exception {
+        String body = (String) ReflectionTestUtils.invokeMethod(
+                client, "buildRequestBody",
+                new LlmRequest("system", "user", null, 1024, 0.3));
+
+        JsonNode root = objectMapper.readTree(body);
+        assertThat(root.at("/generationConfig/temperature").asDouble()).isEqualTo(0.3);
+    }
+
     // 5xx 는 일시적일 수 있으므로 1회 재시도한다.
     @Test
     void retriesOnceOnServerError() {

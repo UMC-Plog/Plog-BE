@@ -11,7 +11,6 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.service.ProjectAccessService;
-import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.report.dto.response.ReportDetailResponse;
 import com.plog.domain.report.dto.response.ReportMemberResultResponse;
 import com.plog.domain.report.entity.ReliabilityTier;
@@ -58,9 +57,6 @@ class ReportDetailServiceTest {
     @Mock
     private ProjectAccessService projectAccessService;
 
-    @Mock
-    private ProjectMemberRepository projectMemberRepository;
-
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
@@ -73,7 +69,6 @@ class ReportDetailServiceTest {
         when(reportRepository.findWithProjectById(REPORT_ID)).thenReturn(Optional.of(report));
         when(memberResultRepository.findMemberSummaries(REPORT_ID))
                 .thenReturn(List.of(memberSummary(PROJECT_MEMBER_ID, "창훈", new BigDecimal("82.50"))));
-        when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(1L);
 
         ReportDetailResponse response = reportDetailService.getReport(USER_ID, REPORT_ID);
 
@@ -119,7 +114,6 @@ class ReportDetailServiceTest {
         report.complete(LocalDateTime.of(2026, 7, 20, 12, 0));
         when(reportRepository.findWithProjectById(REPORT_ID)).thenReturn(Optional.of(report));
         when(memberResultRepository.findMemberSummaries(REPORT_ID)).thenReturn(List.of());
-        when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(1L);
 
         ReportDetailResponse response = reportDetailService.getReport(USER_ID, REPORT_ID);
 
@@ -225,7 +219,6 @@ class ReportDetailServiceTest {
         report.complete(LocalDateTime.of(2026, 7, 20, 12, 0));
         when(reportRepository.findWithProjectById(REPORT_ID)).thenReturn(Optional.of(report));
         when(memberResultRepository.findMemberSummaries(REPORT_ID)).thenReturn(List.of());
-        when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(1L);
 
         ReportDetailResponse response = reportDetailService.getReport(USER_ID, REPORT_ID);
 

@@ -2,8 +2,6 @@ package com.plog.domain.report.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.plog.domain.project.entity.MemberStatus;
-import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.domain.report.dto.response.ReportDetailResponse;
 import com.plog.domain.report.dto.response.ReportMemberResultResponse;
@@ -40,7 +38,6 @@ public class ReportDetailService {
     private final ReportRepository reportRepository;
     private final ReportMemberResultRepository memberResultRepository;
     private final ProjectAccessService projectAccessService;
-    private final ProjectMemberRepository projectMemberRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -106,8 +103,7 @@ public class ReportDetailService {
                 members,
                 report.getProject().getStartDay(),
                 report.getProject().getEndDay(),
-                Math.toIntExact(projectMemberRepository.countByProjectIdAndStatus(
-                        report.getProject().getId(), MemberStatus.ACTIVE)),
+                members.size(),
                 totalTaskCount,
                 completedTaskCount,
                 deadlineMetTaskCount,

@@ -90,9 +90,9 @@ public class GeminiLlmClient implements LlmClient {
                 .put("text", request.userPrompt());
 
         ObjectNode generationConfig = root.putObject("generationConfig");
-        // Gemini 3 계열부터 temperature/top_p/top_k가 폐기됐다. 그대로 보내면 모델명은
-        // 유효해도 400으로 거절되므로, 구형 모델 호환용 설정은 2.x에만 전송한다.
-        if (!properties.model().startsWith("gemini-3")) {
+        // 샘플링 파라미터 지원을 확인한 Gemini 2.x에만 전송한다. 미래 모델은 지원 여부를
+        // 확인하기 전까지 보수적으로 생략해 새 모델명이 추가돼도 400으로 막히지 않게 한다.
+        if (properties.model().startsWith("gemini-2.")) {
             generationConfig.put("temperature", request.temperature());
         }
         generationConfig.put("maxOutputTokens", request.maxOutputTokens());
