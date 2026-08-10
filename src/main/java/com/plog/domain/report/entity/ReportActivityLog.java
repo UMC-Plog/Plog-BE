@@ -166,6 +166,26 @@ public class ReportActivityLog extends BaseEntity {
             String metadata,
             String sourceRefId
     ) {
+        return create(projectMember, sourceDomain, rawActivityType, content, occurredAt, metadata, sourceRefId, null);
+    }
+
+    /**
+     * {@link #linkedTask}까지 0단계에서 바로 채우는 오버로드. TASK 도메인 이벤트는 애초에 어느
+     * 업무카드에서 발생했는지 확실히 알고 있어(예: 상태변경/첨부 이벤트가 taskId를 직접 들고 옴)
+     * 3단계 {@link #linkTask} 의 매칭 추론이 필요 없다 — 그래서 생성 시점에 바로 확정한다.
+     * Chat/Post/Evaluation처럼 원천이 어느 업무카드인지 모르는 도메인은 기존 7-파라미터
+     * {@code create}(linkedTask=null)를 그대로 쓰면 된다.
+     */
+    public static ReportActivityLog create(
+            ProjectMember projectMember,
+            SourceDomain sourceDomain,
+            RawActivityType rawActivityType,
+            String content,
+            LocalDateTime occurredAt,
+            String metadata,
+            String sourceRefId,
+            Task linkedTask
+    ) {
         if (sourceDomain == null || rawActivityType == null || occurredAt == null) {
             throw new IllegalArgumentException("sourceDomain, rawActivityType, occurredAt은 필수입니다.");
         }
@@ -183,6 +203,7 @@ public class ReportActivityLog extends BaseEntity {
                 .occurredAt(occurredAt)
                 .metadata(metadata)
                 .sourceRefId(sourceRefId)
+                .linkedTask(linkedTask)
                 .build();
     }
 

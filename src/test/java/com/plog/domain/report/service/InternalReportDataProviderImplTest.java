@@ -242,7 +242,7 @@ class InternalReportDataProviderImplTest {
     }
 
     @Test
-    void TASK_STATUS_CHANGE는_활동_유형_집계에는_포함되지만_근거_후보에서는_제외된다() {
+    void TASK_STATUS_CHANGE는_감사_이력용으로만_남고_활동_유형_집계와_근거_후보_모두에서_제외된다() {
         provider = newProvider();
         stubNoTasks();
         List<ReportActivityLog> logs = List.of(
@@ -255,7 +255,9 @@ class InternalReportDataProviderImplTest {
 
         InternalReportData result = provider.provide(PROJECT_ID, PROJECT_MEMBER_ID);
 
-        assertThat(result.activityTypeSummary()).containsEntry(ActivityCategory.DELIVERABLE_SUBMIT, 2);
+        // 완료율/마감준수율에 이미 업무 상태가 반영돼 있어 activityComponent에서 또 세면
+        // 이중 계산이 된다 — TASK_STATUS_CHANGE는 집계 건수(2가 아니라 1)에서 빠져야 한다.
+        assertThat(result.activityTypeSummary()).containsEntry(ActivityCategory.DELIVERABLE_SUBMIT, 1);
         List<String> evidence = result.competencyEvidence().get(CompetencyCategory.OUTPUT);
         assertThat(evidence).hasSize(1);
         assertThat(evidence.get(0)).contains("산출물 공유드려요");

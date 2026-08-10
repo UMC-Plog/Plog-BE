@@ -12,17 +12,21 @@ import com.plog.domain.task.dto.response.*;
 import com.plog.domain.task.entity.AttachmentType;
 import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskAttachment;
+import com.plog.domain.task.event.TaskAttachmentAddedEvent;
 import com.plog.domain.task.repository.TaskAttachmentRepository;
 import com.plog.domain.task.repository.TaskRepository;
 import com.plog.global.api.error.TaskErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.util.TimeUtil;
 import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.AttachmentUsage;
 import com.plog.infrastructure.s3.UploadedFile;
 import com.plog.infrastructure.s3.UploadedFileService;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +41,7 @@ public class TaskCommandService {
     private final AttachmentPolicy attachmentPolicy;
     private final UploadedFileService uploadedFileService;
     private final TaskAttachmentUrlResolver urlResolver;
+    private final ApplicationEventPublisher eventPublisher;
 
     public TaskCommandService(TaskRepository taskRepository,
                               TaskAttachmentRepository taskAttachmentRepository,
@@ -44,7 +49,8 @@ public class TaskCommandService {
                               ProjectAccessService projectAccessService,
                               AttachmentPolicy attachmentPolicy,
                               UploadedFileService uploadedFileService,
-                              TaskAttachmentUrlResolver urlResolver) {
+                              TaskAttachmentUrlResolver urlResolver,
+                              ApplicationEventPublisher eventPublisher) {
         this.taskRepository = taskRepository;
         this.taskAttachmentRepository = taskAttachmentRepository;
         this.projectMemberRepository = projectMemberRepository;
@@ -52,6 +58,7 @@ public class TaskCommandService {
         this.attachmentPolicy = attachmentPolicy;
         this.uploadedFileService = uploadedFileService;
         this.urlResolver = urlResolver;
+        this.eventPublisher = eventPublisher;
     }
 
     // 업무 카드 생성
@@ -181,6 +188,7 @@ public class TaskCommandService {
                     null, request.linkUrl(), request.fileName());
         }
         taskAttachmentRepository.save(attachment);
+        publishAttachmentAdded(task, attachment);
 
         return TaskAttachmentAddResponse.of(attachment, urlResolver.resolveDownloadUrlApi(projectId, attachment));
     }
@@ -229,6 +237,14 @@ public class TaskCommandService {
                     file, null, null);
         }).toList();
         taskAttachmentRepository.saveAll(attachments);
+        attachments.forEach(attachment -> publishAttachmentAdded(task, attachment));
         return attachments;
+    }
+
+    // report 0단계 수집용 — 카드 생성 시 동봉 첨부/기존 카드 추가 첨부 모두 여기를 거친다.
+    private void publishAttachmentAdded(Task task, TaskAttachment attachment) {
+        LocalDateTime occurredAt = TimeUtil.nowUtc();
+        eventPublisher.publishEvent(new TaskAttachmentAddedEvent(
+                attachment.getId(), task.getId(), task.getProjectMember().getId(), occurredAt));
     }
 }

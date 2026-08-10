@@ -1,6 +1,7 @@
 package com.plog.domain.report.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import com.plog.domain.evaluation.entity.PeerEvaluation;
 import com.plog.domain.evaluation.entity.SelfFeedback;
@@ -18,11 +19,21 @@ import com.plog.domain.report.entity.RawActivityType;
 import com.plog.domain.report.entity.ReportActivityLog;
 import com.plog.domain.report.entity.SourceDomain;
 import com.plog.domain.report.repository.projection.EvaluationLogRecoveryTarget;
+import com.plog.domain.report.repository.projection.TaskAttachmentLogRecoveryTarget;
+import com.plog.domain.report.repository.projection.TaskStatusLogRecoveryTarget;
+import com.plog.domain.task.entity.AttachmentType;
+import com.plog.domain.task.entity.Task;
+import com.plog.domain.task.entity.TaskAttachment;
+import com.plog.domain.task.entity.TaskCategory;
+import com.plog.domain.task.entity.TaskStatus;
+import com.plog.domain.task.repository.TaskAttachmentRepository;
+import com.plog.domain.task.repository.TaskRepository;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.UserRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -70,6 +81,10 @@ class ReportActivityLogRecoveryQueryIntegrationTest {
     private ProjectMemberRepository projectMemberRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private TaskRepository taskRepository;
+    @Autowired
+    private TaskAttachmentRepository taskAttachmentRepository;
 
     @Test
     void findsPeerEvaluationsWithoutActivityLogAndExcludesLoggedOnes() {
@@ -110,6 +125,82 @@ class ReportActivityLogRecoveryQueryIntegrationTest {
 
         assertThat(targets).extracting(EvaluationLogRecoveryTarget::getId)
                 .containsExactly(missing.getId());
+    }
+
+    @Test
+    void findsDoneTasksWithoutActivityLogAndExcludesLoggedOnes() {
+        Project project = saveProject("task-status");
+        ProjectMember member = saveMember(project, "task-status", ProjectRole.MEMBER);
+
+        Task logged = saveDoneTask(member, "logged");
+        Task missing = saveDoneTask(member, "missing");
+        activityLogRepository.save(ReportActivityLog.create(
+                member, SourceDomain.TASK, RawActivityType.TASK_STATUS_CHANGE,
+                null, logged.getCompletedAt(), "{}",
+                "task-status:" + logged.getId() + ":" + logged.getCompletedAt(), logged));
+
+        List<TaskStatusLogRecoveryTarget> targets = activityLogRepository
+                .findDoneTasksMissingActivityLog(future(), Limit.of(200));
+
+        assertThat(targets).extracting(TaskStatusLogRecoveryTarget::getTaskId)
+                .containsExactly(missing.getId());
+        assertThat(targets.get(0).getMemberId()).isEqualTo(member.getId());
+        // PostgreSQL timestamp는 마이크로초까지만 저장하고 반올림 방식도 Java의 truncatedTo와
+        // 완전히 같다는 보장이 없다 — missing.getCompletedAt()은 아직 DB를 거치지 않은 나노초
+        // 정밀도 in-memory 값이라 정확한 동등 비교 대신 근접 비교로 검증한다. 운영에서는 두 컬럼
+        // (tasks.completed_at, report_activity_logs.occurred_at) 다 이미 DB에 저장된 값끼리
+        // 비교하니 이 정밀도 이슈와 무관하다.
+        assertThat(targets.get(0).getOccurredAt())
+                .isCloseTo(missing.getCompletedAt(), within(1, ChronoUnit.SECONDS));
+    }
+
+    @Test
+    void excludesTasksThatAreNotDone() {
+        Project project = saveProject("task-status-not-done");
+        ProjectMember member = saveMember(project, "task-status-not-done", ProjectRole.MEMBER);
+        taskRepository.save(Task.create(
+                member, "in progress", TaskCategory.DEVELOP, TaskStatus.IN_PROGRESS,
+                LocalDate.now(ZoneOffset.UTC).plusDays(3)));
+
+        List<TaskStatusLogRecoveryTarget> targets = activityLogRepository
+                .findDoneTasksMissingActivityLog(future(), Limit.of(200));
+
+        assertThat(targets).isEmpty();
+    }
+
+    @Test
+    void findsTaskAttachmentsWithoutActivityLogAndExcludesLoggedOnes() {
+        Project project = saveProject("task-attachment");
+        ProjectMember member = saveMember(project, "task-attachment", ProjectRole.MEMBER);
+        Task task = taskRepository.save(Task.create(
+                member, "카드", TaskCategory.DEVELOP, TaskStatus.TODO,
+                LocalDate.now(ZoneOffset.UTC).plusDays(3)));
+
+        TaskAttachment logged = saveLinkAttachment(task);
+        TaskAttachment missing = saveLinkAttachment(task);
+        activityLogRepository.save(ReportActivityLog.create(
+                member, SourceDomain.TASK, RawActivityType.TASK_ATTACHMENT_ADD,
+                null, logged.getCreatedAt(), "{}", "task-attachment:" + logged.getId(), task));
+
+        List<TaskAttachmentLogRecoveryTarget> targets = activityLogRepository
+                .findAttachmentsMissingActivityLog(future(), Limit.of(200));
+
+        assertThat(targets).extracting(TaskAttachmentLogRecoveryTarget::getAttachmentId)
+                .containsExactly(missing.getId());
+        assertThat(targets.get(0).getTaskId()).isEqualTo(task.getId());
+        assertThat(targets.get(0).getMemberId()).isEqualTo(member.getId());
+    }
+
+    private Task saveDoneTask(ProjectMember member, String suffix) {
+        Task task = Task.create(member, "업무 " + suffix, TaskCategory.DEVELOP, TaskStatus.TODO,
+                LocalDate.now(ZoneOffset.UTC).plusDays(3));
+        task.changeStatus(TaskStatus.DONE);
+        return taskRepository.save(task);
+    }
+
+    private TaskAttachment saveLinkAttachment(Task task) {
+        return taskAttachmentRepository.save(TaskAttachment.create(
+                task, AttachmentType.LINK, null, null, "https://example.com/doc", "문서"));
     }
 
     private LocalDateTime future() {
