@@ -47,6 +47,30 @@ class PostControllerE2eTest extends E2eTestBase {
         }
 
         @Test
+        @DisplayName("ACTIVE 일반 멤버가 공지를 작성하면 201과 공지 게시글을 반환한다")
+        void activeMemberCreatesNotice() {
+            Long userId = saveUser("create-notice-member");
+            Long projectId = saveProject("create-notice-member");
+            saveMember(userId, projectId, "MEMBER", "ACTIVE", "공지 작성자");
+
+            ResponseEntity<JsonNode> response = request(HttpMethod.POST, posts(projectId), userId, Map.of(
+                    "title", "팀 공지",
+                    "content", "ACTIVE 일반 멤버가 작성한 공지입니다.",
+                    "isNotice", true,
+                    "attachments", List.of()
+            ));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+            assertThat(code(response)).isEqualTo("COMMON201");
+            assertThat(result(response).path("projectId").asLong()).isEqualTo(projectId);
+            assertThat(result(response).path("isNotice").asBoolean()).isTrue();
+            assertThat(jdbc.queryForObject(
+                    "select is_notice from posts where post_id = ?",
+                    Boolean.class,
+                    result(response).path("postId").asLong())).isTrue();
+        }
+
+        @Test
         @DisplayName("인증·ACTIVE 멤버·본문 정책을 적용한다")
         void policies() {
             Long activeUserId = saveUser("create-active");
@@ -63,7 +87,7 @@ class PostControllerE2eTest extends E2eTestBase {
 
             ResponseEntity<JsonNode> exited = request(
                     HttpMethod.POST, posts(projectId), exitedUserId,
-                    Map.of("title", "제목", "content", "본문", "isNotice", false));
+                    Map.of("title", "제목", "content", "본문", "isNotice", true));
             assertThat(exited.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             assertThat(code(exited)).isEqualTo("PROJECT_MEMBER_REQUIRED");
 

@@ -63,9 +63,6 @@ public class PostService {
     public PostDto.CreateResponse createPost(Long projectId, Long userId, PostDto.CreateRequest request) {
         requireProject(projectId);
         ProjectMember member = requireActiveMember(projectId, userId);
-        if (request.isNotice() && member.getRole() != ProjectRole.OWNER) {
-            throw new ApiException(PostErrorCode.NOTICE_PERMISSION_DENIED);
-        }
         String content = requireContent(request.content(), 5000);
         String title = requireContent(request.title(), 100);
         List<PostDto.AttachmentRequest> attachments = safeAttachments(request.attachments());
