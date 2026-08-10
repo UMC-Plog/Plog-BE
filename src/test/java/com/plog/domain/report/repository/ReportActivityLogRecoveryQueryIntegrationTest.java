@@ -1,6 +1,7 @@
 package com.plog.domain.report.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import com.plog.domain.evaluation.entity.PeerEvaluation;
 import com.plog.domain.evaluation.entity.SelfFeedback;
@@ -32,6 +33,7 @@ import com.plog.domain.user.repository.UserRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -143,7 +145,13 @@ class ReportActivityLogRecoveryQueryIntegrationTest {
         assertThat(targets).extracting(TaskStatusLogRecoveryTarget::getTaskId)
                 .containsExactly(missing.getId());
         assertThat(targets.get(0).getMemberId()).isEqualTo(member.getId());
-        assertThat(targets.get(0).getOccurredAt()).isEqualTo(missing.getCompletedAt());
+        // PostgreSQL timestamp는 마이크로초까지만 저장하고 반올림 방식도 Java의 truncatedTo와
+        // 완전히 같다는 보장이 없다 — missing.getCompletedAt()은 아직 DB를 거치지 않은 나노초
+        // 정밀도 in-memory 값이라 정확한 동등 비교 대신 근접 비교로 검증한다. 운영에서는 두 컬럼
+        // (tasks.completed_at, report_activity_logs.occurred_at) 다 이미 DB에 저장된 값끼리
+        // 비교하니 이 정밀도 이슈와 무관하다.
+        assertThat(targets.get(0).getOccurredAt())
+                .isCloseTo(missing.getCompletedAt(), within(1, ChronoUnit.SECONDS));
     }
 
     @Test
