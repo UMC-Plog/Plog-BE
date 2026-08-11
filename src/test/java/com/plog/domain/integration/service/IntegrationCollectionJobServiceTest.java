@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -122,10 +124,13 @@ class IntegrationCollectionJobServiceTest {
         assertThat(entity.getStatus()).isEqualTo(IntegrationCollectionJobStatus.SUCCEEDED);
     }
 
-    @Test
-    void 마감_최종_수집이_실패_상태여도_재수집_잡은_최종_수집으로_판단한다() {
+    @ParameterizedTest
+    @EnumSource(value = ProjectCollectionStatus.class, names = {"FAILED", "PARTIAL_FAILED"})
+    void 마감_최종_수집이_실패_상태여도_재수집_잡은_최종_수집으로_판단한다(
+            ProjectCollectionStatus collectionStatus
+    ) {
         Project project = mock(Project.class);
-        given(project.getExternalCollectionStatus()).willReturn(ProjectCollectionStatus.FAILED);
+        given(project.getExternalCollectionStatus()).willReturn(collectionStatus);
         given(projectRepository.findById(7L)).willReturn(Optional.of(project));
         IntegrationCollectionJobService.ClaimedJob claimed = new IntegrationCollectionJobService.ClaimedJob(
                 42L, 7L, "token", 1, false, CollectionCursor.start());
@@ -155,7 +160,7 @@ class IntegrationCollectionJobServiceTest {
         service.succeed(claimed, Instant.now(), 3, 3);
 
         verify(eventPublisher).publishEvent(
-                new ExternalCollectionFinishedEvent(7L, IntegrationCollectionJobStatus.SUCCEEDED));
+                new ExternalCollectionFinishedEvent(7L, 42L, IntegrationCollectionJobStatus.SUCCEEDED));
     }
 
     private IntegrationCollectionJobService service() {

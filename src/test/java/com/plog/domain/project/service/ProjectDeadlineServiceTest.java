@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.plog.domain.integration.entity.IntegrationCollectionJob;
 import com.plog.domain.integration.entity.IntegrationCollectionJobStatus;
 import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.integration.service.IntegrationCollectionJobService;
@@ -23,6 +24,8 @@ import java.time.LocalDate;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.context.ApplicationEventPublisher;
 
 class ProjectDeadlineServiceTest {
@@ -37,6 +40,9 @@ class ProjectDeadlineServiceTest {
     void setUp() {
         service = new ProjectDeadlineService(
                 projectRepository, integrationRepository, collectionJobService, eventPublisher);
+        IntegrationCollectionJob latestJob = mock(IntegrationCollectionJob.class);
+        given(latestJob.getId()).willReturn(42L);
+        given(collectionJobService.findLatest(1L)).willReturn(Optional.of(latestJob));
     }
 
     @Test
@@ -74,7 +80,7 @@ class ProjectDeadlineServiceTest {
         Project project = project();
         given(projectRepository.findByIdForUpdate(1L)).willReturn(Optional.of(project));
 
-        service.completeExternalCollection(1L, IntegrationCollectionJobStatus.SUCCEEDED);
+        service.completeExternalCollection(1L, 42L, IntegrationCollectionJobStatus.SUCCEEDED);
 
         assertThat(project.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.SUCCEEDED);
         assertThat(project.getPeerEvaluationStatus()).isEqualTo(PeerEvaluationStatus.OPEN);
@@ -86,8 +92,8 @@ class ProjectDeadlineServiceTest {
         Project project = project();
         given(projectRepository.findByIdForUpdate(1L)).willReturn(Optional.of(project));
 
-        service.completeExternalCollection(1L, IntegrationCollectionJobStatus.SUCCEEDED);
-        service.completeExternalCollection(1L, IntegrationCollectionJobStatus.SUCCEEDED);
+        service.completeExternalCollection(1L, 42L, IntegrationCollectionJobStatus.SUCCEEDED);
+        service.completeExternalCollection(1L, 42L, IntegrationCollectionJobStatus.SUCCEEDED);
 
         assertThat(project.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.SUCCEEDED);
         assertThat(project.getPeerEvaluationStatus()).isEqualTo(PeerEvaluationStatus.OPEN);
@@ -99,7 +105,7 @@ class ProjectDeadlineServiceTest {
         Project project = project();
         given(projectRepository.findByIdForUpdate(1L)).willReturn(Optional.of(project));
 
-        service.completeExternalCollection(1L, IntegrationCollectionJobStatus.PARTIAL_FAILED);
+        service.completeExternalCollection(1L, 42L, IntegrationCollectionJobStatus.PARTIAL_FAILED);
 
         assertThat(project.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.PARTIAL_FAILED);
         assertThat(project.getPeerEvaluationStatus()).isEqualTo(PeerEvaluationStatus.PENDING);
@@ -111,7 +117,7 @@ class ProjectDeadlineServiceTest {
         Project project = project();
         given(projectRepository.findByIdForUpdate(1L)).willReturn(Optional.of(project));
 
-        service.completeExternalCollection(1L, IntegrationCollectionJobStatus.FAILED);
+        service.completeExternalCollection(1L, 42L, IntegrationCollectionJobStatus.FAILED);
 
         assertThat(project.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.FAILED);
         assertThat(project.getPeerEvaluationStatus()).isEqualTo(PeerEvaluationStatus.PENDING);
@@ -170,6 +176,37 @@ class ProjectDeadlineServiceTest {
 
         assertThat(partialFailedProject.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.RUNNING);
         assertThat(failedProject.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.RUNNING);
+    }
+
+    @Test
+    void ignoresTerminalEventFromOlderCollectionJob() {
+        Project project = project(ProjectCollectionStatus.RUNNING);
+        given(projectRepository.findByIdForUpdate(1L)).willReturn(Optional.of(project));
+
+        service.completeExternalCollection(1L, 41L, IntegrationCollectionJobStatus.FAILED);
+
+        assertThat(project.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.RUNNING);
+        assertThat(project.getPeerEvaluationStatus()).isEqualTo(PeerEvaluationStatus.PENDING);
+        verify(eventPublisher, never()).publishEvent(new PeerEvaluationStartedEvent(1L, null));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IntegrationCollectionJobStatus.class,
+            names = {"FAILED", "PARTIAL_FAILED"}
+    )
+    void doesNotOverwriteSucceededCollectionWithLaterFailureEvent(
+            IntegrationCollectionJobStatus terminalStatus
+    ) {
+        Project project = project(ProjectCollectionStatus.SUCCEEDED);
+        project.openPeerEvaluation();
+        given(projectRepository.findByIdForUpdate(1L)).willReturn(Optional.of(project));
+
+        service.completeExternalCollection(1L, 42L, terminalStatus);
+
+        assertThat(project.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.SUCCEEDED);
+        assertThat(project.getPeerEvaluationStatus()).isEqualTo(PeerEvaluationStatus.OPEN);
+        verify(eventPublisher, never()).publishEvent(new PeerEvaluationStartedEvent(1L, null));
     }
 
     private Project project() {

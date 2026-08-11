@@ -58,10 +58,20 @@ public class ProjectDeadlineService {
     }
 
     @Transactional
-    public void completeExternalCollection(Long projectId, IntegrationCollectionJobStatus status) {
+    public void completeExternalCollection(
+            Long projectId,
+            Long jobId,
+            IntegrationCollectionJobStatus status
+    ) {
         Project project = projectRepository.findByIdForUpdate(projectId).orElse(null);
         if (project == null || project.isCompleted()
                 || TimeUtil.today().isBefore(project.getEndDay())) {
+            return;
+        }
+        boolean latestJob = jobId != null && integrationCollectionJobService.findLatest(projectId)
+                .map(job -> jobId.equals(job.getId()))
+                .orElse(false);
+        if (!latestJob || project.getExternalCollectionStatus() == ProjectCollectionStatus.SUCCEEDED) {
             return;
         }
         ProjectCollectionStatus terminalStatus = switch (status) {

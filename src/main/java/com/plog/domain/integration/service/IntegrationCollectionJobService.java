@@ -121,7 +121,7 @@ public class IntegrationCollectionJobService {
         entity.succeed(job.claimToken(), now, requestedCount, collectedCount);
         if (isFinalCollectionExpected(entity)) {
             eventPublisher.publishEvent(new ExternalCollectionFinishedEvent(
-                    entity.getProject().getId(), IntegrationCollectionJobStatus.SUCCEEDED));
+                    entity.getProject().getId(), entity.getId(), IntegrationCollectionJobStatus.SUCCEEDED));
         }
     }
 
@@ -132,7 +132,7 @@ public class IntegrationCollectionJobService {
         entity.partiallyFail(job.claimToken(), now, requestedCount, collectedCount, summary);
         if (isFinalCollectionExpected(entity)) {
             eventPublisher.publishEvent(new ExternalCollectionFinishedEvent(
-                    entity.getProject().getId(), IntegrationCollectionJobStatus.PARTIAL_FAILED));
+                    entity.getProject().getId(), entity.getId(), IntegrationCollectionJobStatus.PARTIAL_FAILED));
         }
     }
 
@@ -142,7 +142,7 @@ public class IntegrationCollectionJobService {
         entity.fail(job.claimToken(), now, summary);
         if (isFinalCollectionExpected(entity)) {
             eventPublisher.publishEvent(new ExternalCollectionFinishedEvent(
-                    entity.getProject().getId(), IntegrationCollectionJobStatus.FAILED));
+                    entity.getProject().getId(), entity.getId(), IntegrationCollectionJobStatus.FAILED));
         }
     }
 
