@@ -5,6 +5,7 @@ import com.plog.domain.project.service.ProjectLeaveService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.ProjectSuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/projects")
+@Tag(name = "Project", description = "프로젝트, 멤버 및 설정 관리 API")
 public class ProjectLeaveController {
 
     private final ProjectLeaveService projectLeaveService;

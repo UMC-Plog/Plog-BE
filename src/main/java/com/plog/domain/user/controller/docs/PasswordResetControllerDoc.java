@@ -13,12 +13,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 
-@Tag(name = "Password Reset",
-        description = """
-                비밀번호 찾기 / 재설정 API (로그인 전 사용, 인증 불필요).
-                회원가입용 이메일 인증은 Email Verification 태그의 /api/auth/email/** 를 사용하세요.
-                가입 인증과 재설정 인증은 서로의 코드를 사용할 수 없습니다.
-                """)
+@Tag(name = "Auth", description = "회원가입, 로그인, 소셜 인증, 이메일 인증 및 비밀번호 재설정 API")
 public interface PasswordResetControllerDoc {
 
     @Operation(

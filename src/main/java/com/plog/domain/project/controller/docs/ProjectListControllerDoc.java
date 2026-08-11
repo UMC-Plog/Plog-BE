@@ -14,7 +14,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.ResponseEntity;
 
-@Tag(name = "Project", description = "프로젝트 API")
+@Tag(name = "Project", description = "프로젝트, 멤버 및 설정 관리 API")
 public interface ProjectListControllerDoc {
 
     @Operation(
