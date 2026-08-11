@@ -80,9 +80,12 @@ public class EvaluationService {
                 .isPresent();
         boolean isAccountMappingCompleted = actorMappingStatusService
                 .isMyMappingCompleted(projectId, currentMember.getId());
+        // 자기 피드백은 선택 사항이므로 최종 제출 조건에서 제외한다.
+        // 단, 평가할 팀원이 없는 solo 프로젝트는 자기 피드백만이 유일한 평가이므로 그때는 요구한다.
+        boolean selfFeedbackRequirementMet = totalPeerEvaluationCount > 0 || isSelfFeedbackCompleted;
         boolean isFinalSubmissionAvailable = !project.isCompleted()
                 && completedPeerEvaluationCount == totalPeerEvaluationCount
-                && isSelfFeedbackCompleted
+                && selfFeedbackRequirementMet
                 && isAccountMappingCompleted;
 
         return new EvaluationTargetResponse(

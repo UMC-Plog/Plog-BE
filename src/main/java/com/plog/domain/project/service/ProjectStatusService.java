@@ -124,9 +124,13 @@ public class ProjectStatusService {
         if (submittedPeerEvaluationCount < requiredPeerEvaluationCount) {
             return false;
         }
-        long submittedSelfFeedbackCount = selfFeedbackRepository.countSubmittedByActiveProjectMembers(projectId);
-
-        return submittedSelfFeedbackCount >= activeMemberCount;
+        // 자기 피드백은 선택 사항이므로, 팀원 간 Peer 평가가 모두 제출되면 완료로 본다.
+        // 다만 팀원이 없는 solo 프로젝트는 Peer 평가가 애초에 불가능하므로 즉시 완료되지 않도록
+        // 자기 피드백 제출을 완료 기준으로 삼는다(미제출 시에는 평가 마감 timeout으로 닫힌다).
+        if (activeMemberCount == 1L) {
+            return selfFeedbackRepository.countSubmittedByActiveProjectMembers(projectId) >= 1L;
+        }
+        return true;
     }
 
     private Optional<Report> startReport(Project project) {
