@@ -208,7 +208,7 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
     }
 
     @Test
-    void upsertProviderPayloadIfChangedUpdatesGoogleDeletedStateWithoutDuplicatingActivity() {
+    void upsertProviderPayloadIfChangedUpdatesGoogleDeletedStateAndStrongActorSnapshot() {
         Project project = entityManager.persist(project());
         ProjectMember member = entityManager.persist(member(
                 project,
@@ -263,15 +263,56 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
         IntegrationActivity deleted = activityRepository.findById(activityId).orElseThrow();
         assertThat(unchanged).isZero();
         assertThat(updated).isOne();
-        assertThat(deletedUnchanged).isZero();
+        assertThat(deletedUnchanged).isOne();
         assertThat(activityCount(resource.getId(), "comment:comment-1")).isOne();
         assertThat(deleted.getProviderPayload()).contains("\"deleted\":true");
-        assertThat(deleted.getProjectMember().getId()).isEqualTo(member.getId());
-        assertThat(deleted.getActorProviderId()).isEqualTo("commenter-1");
-        assertThat(deleted.getActorLogin()).isEqualTo("Commenter");
-        assertThat(deleted.getActorEmail()).isEqualTo("commenter@example.com");
+        assertThat(deleted.getProjectMember()).isNull();
+        assertThat(deleted.getActorProviderId()).isEqualTo("changed-actor");
+        assertThat(deleted.getActorLogin()).isEqualTo("Changed");
+        assertThat(deleted.getActorEmail()).isEqualTo("changed@example.com");
         assertThat(deleted.getOccurredAt()).isEqualTo(Instant.parse("2026-08-01T12:00:00Z"));
         assertThat(deleted.getSourceUrl()).isEqualTo("https://docs.google.com/document/d/google-file-1/edit");
+    }
+
+    @Test
+    void upsertProviderPayloadIfChangedRepairsLegacyNameOnlyGoogleActorOnRecollection() {
+        Project project = entityManager.persist(project());
+        ProjectMember member = entityManager.persist(member(
+                project,
+                User.createLocal("google-repair@example.com", "encoded", "기존 댓글", "google-repair"),
+                ProjectRole.OWNER
+        ));
+        ProjectIntegration integration = entityManager.persist(integration(project, member));
+        IntegrationResource resource = entityManager.persist(resource(integration, member));
+        entityManager.flush();
+
+        activityRepository.upsertProviderPayloadIfChanged(
+                resource.getId(), member.getId(), IntegrationActivityType.GOOGLE_DRIVE_COMMENT.name(),
+                "comment:legacy-self", null, "유상완", null,
+                Instant.parse("2026-08-01T12:00:00Z"),
+                "https://docs.google.com/document/d/google-file-1/edit",
+                "{\"id\":\"legacy-self\",\"deleted\":false}"
+        );
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(activityRepository.upsertProviderPayloadIfChanged(
+                resource.getId(), null, IntegrationActivityType.GOOGLE_DRIVE_COMMENT.name(),
+                "comment:legacy-self", "google-account:google-sub-123", "유상완", "self@example.com",
+                Instant.parse("2026-08-01T12:00:00Z"),
+                "https://docs.google.com/document/d/google-file-1/edit",
+                "{\"id\":\"legacy-self\",\"deleted\":false}"
+        )).isOne();
+        entityManager.flush();
+        entityManager.clear();
+
+        IntegrationActivity repaired = activityRepository.findById(
+                activityId(resource.getId(), "comment:legacy-self")
+        ).orElseThrow();
+        assertThat(repaired.getProjectMember()).isNull();
+        assertThat(repaired.getActorProviderId()).isEqualTo("google-account:google-sub-123");
+        assertThat(repaired.getActorLogin()).isEqualTo("유상완");
+        assertThat(repaired.getActorEmail()).isEqualTo("self@example.com");
     }
 
     @Test

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
 import com.plog.domain.integration.entity.IntegrationIdentityAliasType;
+import com.plog.domain.integration.entity.LinkType;
 import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.entity.ProjectMemberIntegrationIdentity;
 import com.plog.domain.integration.entity.ProjectMemberIntegrationIdentityAlias;
@@ -103,7 +104,10 @@ class IntegrationActorMappingServiceTest {
     @Test
     void resolvesASelectedLoginOnlyActorWithoutRequiringAnAlias() {
         ProjectMember member = ProjectMember.builder().id(10L).build();
-        ProjectIntegration integration = ProjectIntegration.builder().id(2L).build();
+        ProjectIntegration integration = ProjectIntegration.builder()
+                .id(2L)
+                .linkType(LinkType.GITHUB)
+                .build();
         given(identityRepository.findByProjectIntegrationIdAndProviderActorId(2L, "login:display-name"))
                 .willReturn(Optional.of(ProjectMemberIntegrationIdentity.builder()
                         .projectMember(member)
@@ -111,6 +115,79 @@ class IntegrationActorMappingServiceTest {
 
         ProjectMember resolved = integrationActorMappingService.resolve(
                 integration, null, "display-name", null
+        );
+
+        assertThat(resolved).isSameAs(member);
+    }
+
+    @Test
+    void doesNotResolveGoogleNameOnlyActorByLogin() {
+        ProjectIntegration integration = ProjectIntegration.builder()
+                .id(2L)
+                .linkType(LinkType.GOOGLE_DOCS)
+                .build();
+
+        ProjectMember resolved = integrationActorMappingService.resolve(
+                integration, null, "유상완", null
+        );
+
+        assertThat(resolved).isNull();
+    }
+
+    @Test
+    void resolvesGoogleProviderActorByStrongEmailAliasWhenEndpointProviderIdDiffers() {
+        ProjectMember member = ProjectMember.builder().id(10L).build();
+        ProjectIntegration integration = ProjectIntegration.builder()
+                .id(2L)
+                .linkType(LinkType.GOOGLE_DOCS)
+                .build();
+        ProjectMemberIntegrationIdentity identity = ProjectMemberIntegrationIdentity.builder()
+                .projectMember(member)
+                .build();
+        given(identityRepository.findByProjectIntegrationIdAndProviderActorId(2L, "permission-1"))
+                .willReturn(Optional.empty());
+        given(aliasRepository.findAllByProjectIntegrationIdAndAliasTypeAndAliasValue(
+                2L,
+                IntegrationIdentityAliasType.LOGIN,
+                ProviderActorKey.googleProviderIdAlias("permission-1")
+        )).willReturn(List.of());
+        given(identityRepository.findByProjectIntegrationIdAndProviderActorId(2L, "email:self@example.com"))
+                .willReturn(Optional.empty());
+        given(aliasRepository.findAllByProjectIntegrationIdAndAliasTypeAndAliasValue(
+                2L, IntegrationIdentityAliasType.EMAIL, "self@example.com"
+        )).willReturn(List.of(ProjectMemberIntegrationIdentityAlias.builder()
+                .identity(identity)
+                .build()));
+
+        ProjectMember resolved = integrationActorMappingService.resolve(
+                integration, "permission-1", "유상완", "self@example.com"
+        );
+
+        assertThat(resolved).isSameAs(member);
+    }
+
+    @Test
+    void resolvesGoogleActorByPreviouslyClusteredProviderIdAliasWithoutEmail() {
+        ProjectMember member = ProjectMember.builder().id(10L).build();
+        ProjectIntegration integration = ProjectIntegration.builder()
+                .id(2L)
+                .linkType(LinkType.GOOGLE_DOCS)
+                .build();
+        ProjectMemberIntegrationIdentity identity = ProjectMemberIntegrationIdentity.builder()
+                .projectMember(member)
+                .build();
+        given(identityRepository.findByProjectIntegrationIdAndProviderActorId(2L, "permission-1"))
+                .willReturn(Optional.empty());
+        given(aliasRepository.findAllByProjectIntegrationIdAndAliasTypeAndAliasValue(
+                2L,
+                IntegrationIdentityAliasType.LOGIN,
+                ProviderActorKey.googleProviderIdAlias("permission-1")
+        )).willReturn(List.of(ProjectMemberIntegrationIdentityAlias.builder()
+                .identity(identity)
+                .build()));
+
+        ProjectMember resolved = integrationActorMappingService.resolve(
+                integration, "permission-1", "유상완", null
         );
 
         assertThat(resolved).isSameAs(member);
