@@ -18,6 +18,7 @@ import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.event.EvaluationCompletionCheckRequestedEvent;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -43,6 +44,9 @@ class SelfFeedbackServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private ReportActivityLogRepository reportActivityLogRepository;
+
     private SelfFeedbackService selfFeedbackService;
 
     @BeforeEach
@@ -52,6 +56,7 @@ class SelfFeedbackServiceTest {
                 new EvaluationParticipantResolver(
                         projectMemberRepository,
                         new ProjectAccessService(projectMemberRepository)),
+                reportActivityLogRepository,
                 eventPublisher
         );
     }
@@ -72,6 +77,8 @@ class SelfFeedbackServiceTest {
 
         assertThat(response.selfFeedbackId()).isEqualTo(12L);
         assertThat(selfFeedback.getContent()).isEqualTo("수정된 피드백");
+        verify(reportActivityLogRepository).refreshSourceSnapshot(
+                "EVALUATION", "self-feedback:12", "수정된 피드백", "{\"selfFeedbackId\":12}");
     }
 
     @Test

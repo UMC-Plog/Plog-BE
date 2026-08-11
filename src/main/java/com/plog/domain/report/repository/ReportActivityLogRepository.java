@@ -105,6 +105,54 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
             @Param("sourceRefPrefix") String sourceRefPrefix
     );
 
+    @Modifying(flushAutomatically = true)
+    @Query("delete from ReportActivityLog log where log.linkedTask.id = :taskId")
+    int deleteAllByLinkedTaskId(@Param("taskId") Long taskId);
+
+    @Modifying(flushAutomatically = true)
+    @Query("delete from ReportActivityLog log "
+            + "where log.sourceDomain = :sourceDomain and log.sourceRefId = :sourceRefId")
+    int deleteBySourceDomainAndSourceRefId(
+            @Param("sourceDomain") SourceDomain sourceDomain,
+            @Param("sourceRefId") String sourceRefId
+    );
+
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            DELETE FROM report_activity_log
+            WHERE source_domain = 'POST'
+              AND (source_ref_id = CONCAT('post:', CAST(:postId AS text))
+                   OR metadata ->> 'postId' = CAST(:postId AS text))
+            """, nativeQuery = true)
+    int deletePostAndCommentActivities(@Param("postId") Long postId);
+
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE report_activity_log
+            SET content = :content,
+                metadata = CAST(:metadata AS jsonb),
+                noise_filtered = NULL,
+                classified_type = NULL,
+                embedding_model = NULL,
+                embedding = NULL,
+                embedding_lease_until = NULL,
+                embedding_lease_token = NULL,
+                classification_retry_count = 0,
+                classification_next_retry_at = NULL,
+                classification_failed = false,
+                updated_at = current_timestamp
+            WHERE source_domain = :sourceDomain
+              AND source_ref_id = :sourceRefId
+              AND (content IS DISTINCT FROM :content
+                   OR metadata IS DISTINCT FROM CAST(:metadata AS jsonb))
+            """, nativeQuery = true)
+    int refreshSourceSnapshot(
+            @Param("sourceDomain") String sourceDomain,
+            @Param("sourceRefId") String sourceRefId,
+            @Param("content") String content,
+            @Param("metadata") String metadata
+    );
+
     // 안전망 재수집 대상 조회 — AFTER_COMMIT 리스너가 유실해 아직 활동 로그가 없는 제출.
     // sourceRefId 규칙("peer-evaluation:"+id, "self-feedback:"+id)은 EvaluationActivityLogService의
     // 적재 규칙과 짝을 이룬다. threshold보다 오래된 행만 잡아 정상 비동기 처리 중인 건과 겹치지 않게 한다.
