@@ -60,10 +60,14 @@ class NotificationSettingsServiceTest {
 
         NotificationSettingsDto.Response response = service.get(1L);
 
-        assertThat(response.global()).hasSize(5).allSatisfy((type, enabled) -> assertThat(enabled).isTrue());
+        assertThat(response.global()).hasSize(6)
+                .containsEntry(NotificationType.INTEGRATION_COLLECTION_COMPLETED, true)
+                .allSatisfy((type, enabled) -> assertThat(enabled).isTrue());
         assertThat(response.projects()).singleElement().satisfies(setting -> {
             assertThat(setting.projectId()).isEqualTo(10L);
-            assertThat(setting.settings()).hasSize(5).allSatisfy((type, enabled) -> assertThat(enabled).isTrue());
+            assertThat(setting.settings()).hasSize(6)
+                    .containsEntry(NotificationType.INTEGRATION_COLLECTION_COMPLETED, true)
+                    .allSatisfy((type, enabled) -> assertThat(enabled).isTrue());
         });
     }
 

@@ -43,4 +43,10 @@ public class ProjectNotificationListener {
     public void onReportPublished(ReportPublishedEvent event) {
         notificationService.sendReportPublished(event);
     }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onIntegrationCollectionCompleted(IntegrationCollectionCompletedEvent event) {
+        notificationService.sendIntegrationCollectionCompleted(event);
+    }
 }

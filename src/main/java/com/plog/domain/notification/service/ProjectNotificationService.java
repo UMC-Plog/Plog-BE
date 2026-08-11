@@ -4,6 +4,7 @@ import com.plog.domain.notification.entity.FcmToken;
 import com.plog.domain.notification.entity.Notification;
 import com.plog.domain.notification.entity.NotificationType;
 import com.plog.domain.notification.event.ChatMessageNotificationEvent;
+import com.plog.domain.notification.event.IntegrationCollectionCompletedEvent;
 import com.plog.domain.notification.event.NoticePublishedEvent;
 import com.plog.domain.notification.event.PeerEvaluationStartedEvent;
 import com.plog.domain.notification.event.ReportPublishedEvent;
@@ -144,6 +145,35 @@ public class ProjectNotificationService {
                         "projectId", event.projectId().toString(),
                         "resourceId", event.reportId().toString(),
                         "type", NotificationType.REPORT_PUBLISHED.name()));
+    }
+
+    @Transactional
+    public void sendIntegrationCollectionCompleted(IntegrationCollectionCompletedEvent event) {
+        if (event == null || event.projectId() == null || event.collectionJobId() == null
+                || event.requestedByProjectMemberId() == null) {
+            return;
+        }
+        NotificationType type = NotificationType.INTEGRATION_COLLECTION_COMPLETED;
+        notificationRepository.acquireDedupeLock(
+                event.projectId() + ":" + type.name() + ":" + event.collectionJobId());
+        if (notificationRepository.existsByProjectIdAndTypeAndResourceId(
+                event.projectId(), type, event.collectionJobId())) {
+            return;
+        }
+        ProjectMember target = projectMemberRepository.findAllByIdIn(
+                        List.of(event.requestedByProjectMemberId())).stream()
+                .filter(member -> isActiveProjectMember(member, event.projectId()))
+                .findFirst()
+                .orElse(null);
+        if (target == null) {
+            return;
+        }
+        deliver(List.of(target), target.getProject(), type,
+                "활동 로그 수집이 완료되었습니다. 이제 계정을 매핑할 수 있습니다.",
+                event.collectionJobId(), Map.of(
+                        "projectId", event.projectId().toString(),
+                        "resourceId", event.collectionJobId().toString(),
+                        "type", type.name()));
     }
 
     private List<ProjectMember> activeMembers(Long projectId) {
