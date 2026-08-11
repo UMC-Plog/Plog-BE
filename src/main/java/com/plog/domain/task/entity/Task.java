@@ -1,6 +1,7 @@
 package com.plog.domain.task.entity;
 
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.report.entity.CompetencyCategory;
 import com.plog.global.common.BaseEntity;
 import com.plog.global.util.TimeUtil;
 import jakarta.persistence.Column;
@@ -14,6 +15,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
@@ -61,6 +63,17 @@ public class Task extends BaseEntity {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "inferred_competency")
+    private CompetencyCategory inferredCompetency;
+
+    /** 확률이 아니라 선택된 역량 anchor centroid와 제목 임베딩의 clamp된 코사인 유사도다. */
+    @Column(name = "competency_confidence", precision = 5, scale = 4)
+    private BigDecimal competencyConfidence;
+
+    @Column(name = "competency_classifier_version", length = 64)
+    private String competencyClassifierVersion;
+
     // Project를 직접 참조하지 않고 ProjectMember를 통해서만 프로젝트와 연결한다.
     // (project_id 컬럼 없음 — projectId는 URL 검증용으로만 사용되고 저장되지 않음)
     public static Task create(ProjectMember projectMember, String title, TaskCategory category,
@@ -82,6 +95,20 @@ public class Task extends BaseEntity {
     // 부분 수정(PATCH)에서 값이 들어온 필드만 개별 호출한다.
     public void changeTitle(String title) {
         this.title = title;
+    }
+
+    /** 추후 재분류 작업에서도 같은 진입점을 사용할 수 있도록 결과 적용을 캡슐화한다. */
+    public void applyCompetencyClassification(TaskCompetencyClassification classification) {
+        this.inferredCompetency = classification.competency();
+        this.competencyConfidence = classification.confidence();
+        this.competencyClassifierVersion = classification.classifierVersion();
+    }
+
+    /** 임베딩 실패나 빈 제목이면 세 필드를 함께 지워 stale/부분 결과를 남기지 않는다. */
+    public void clearCompetencyClassification() {
+        this.inferredCompetency = null;
+        this.competencyConfidence = null;
+        this.competencyClassifierVersion = null;
     }
 
     public void changeAssignee(ProjectMember projectMember) {
