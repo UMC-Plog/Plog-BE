@@ -67,8 +67,8 @@ public class ProjectSettingsService {
         projectRepository.saveAndFlush(project);
         boolean endDayChanged = !Objects.equals(project.getEndDay(), previousEndDay);
         if (endDayChanged) {
-            projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId)
-                    .forEach(integration -> reportLogAdapter.synchronizeProjectIntegrationActivities(integration.getId()));
+            reportLogAdapter.synchronizeProjectActivitiesForEndDayChange(
+                    projectId, previousEndDay, project.getEndDay());
             if (!TimeUtil.todayUtc().isBefore(project.getEndDay())) {
                 projectDeadlineService.processDeadline(projectId);
             }

@@ -156,7 +156,7 @@ class IntegrationCollectionJobWorkerTest {
 
     private IntegrationCollectionJobService.ClaimedJob claim(int attemptCount) {
         return new IntegrationCollectionJobService.ClaimedJob(
-                42L, 7L, "token", attemptCount, CollectionCursor.start());
+                42L, 7L, "token", attemptCount, false, CollectionCursor.start());
     }
 
     private IntegrationCollectionJobWorker worker(int maxAttempts) {

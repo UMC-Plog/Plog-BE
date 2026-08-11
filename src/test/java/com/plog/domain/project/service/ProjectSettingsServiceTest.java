@@ -105,26 +105,18 @@ class ProjectSettingsServiceTest {
     @Test
     void endDayChangeResynchronizesExistingIntegrationActivities() {
         LocalDate newEndDay = LocalDate.now(java.time.ZoneOffset.UTC).plusDays(1);
+        LocalDate previousEndDay = LocalDate.of(2026, 8, 1);
         Project project = project();
         ProjectMember member = ProjectMember.builder()
                 .id(3L).role(ProjectRole.MEMBER).status(MemberStatus.ACTIVE).build();
-        ProjectIntegration integration = ProjectIntegration.builder()
-                .id(20L)
-                .linkType(LinkType.GITHUB)
-                .credentialType(IntegrationCredentialType.APP_INSTALLATION)
-                .externalAccountId("umc-plog")
-                .externalAccountName("UMC-Plog")
-                .providerConnectionId("1234")
-                .build();
         when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
                 .thenReturn(Optional.of(member));
-        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(1L))
-                .thenReturn(List.of(integration));
 
         service.updateSettings(1L, 7L, new ProjectSettingsDto.UpdateRequest(null, newEndDay, null));
 
-        verify(reportLogAdapter).synchronizeProjectIntegrationActivities(20L);
+        verify(reportLogAdapter).synchronizeProjectActivitiesForEndDayChange(1L, previousEndDay, newEndDay);
+        verify(projectIntegrationRepository, never()).findAllByProjectIdOrderByLinkTypeAsc(1L);
         verify(projectDeadlineService, never()).processDeadline(1L);
     }
 
