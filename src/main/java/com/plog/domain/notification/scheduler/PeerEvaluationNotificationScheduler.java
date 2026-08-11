@@ -6,6 +6,8 @@ import com.plog.global.util.TimeUtil;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -26,6 +28,15 @@ public class PeerEvaluationNotificationScheduler {
         projectIds.forEach(projectDeadlineService::processDeadline);
         if (!projectIds.isEmpty()) {
             log.info("project_deadline_processing_requested count={}", projectIds.size());
+        }
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void processDueProjectsOnStartup() {
+        try {
+            processDueProjects();
+        } catch (RuntimeException exception) {
+            log.warn("project_deadline_startup_catchup_failed", exception);
         }
     }
 }
