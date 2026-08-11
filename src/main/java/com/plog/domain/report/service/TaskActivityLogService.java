@@ -9,6 +9,7 @@ import com.plog.domain.report.entity.SourceDomain;
 import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskStatus;
+import com.plog.domain.task.repository.TaskAttachmentRepository;
 import com.plog.domain.task.repository.TaskRepository;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class TaskActivityLogService {
     private final ReportActivityLogRepository activityLogRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final TaskRepository taskRepository;
+    private final TaskAttachmentRepository taskAttachmentRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -53,7 +55,14 @@ public class TaskActivityLogService {
         if (metadata == null) {
             return;
         }
-        collect(memberId, taskId, RawActivityType.TASK_STATUS_CHANGE, occurredAt, sourceRefId, metadata);
+        activityLogRepository.acquireSourceLock(taskSourceKey(taskId));
+        activityLogRepository.acquireSourceLock(SourceDomain.TASK.name() + ":" + sourceRefId);
+        Task task = taskRepository.findById(taskId).orElse(null);
+        if (task == null) {
+            activityLogRepository.deleteBySourceDomainAndSourceRefId(SourceDomain.TASK, sourceRefId);
+            return;
+        }
+        collect(memberId, task, RawActivityType.TASK_STATUS_CHANGE, occurredAt, sourceRefId, metadata);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -63,26 +72,39 @@ public class TaskActivityLogService {
         if (metadata == null) {
             return;
         }
-        collect(memberId, taskId, RawActivityType.TASK_ATTACHMENT_ADD, occurredAt, sourceRefId, metadata);
+        activityLogRepository.acquireSourceLock(taskSourceKey(taskId));
+        activityLogRepository.acquireSourceLock(SourceDomain.TASK.name() + ":" + sourceRefId);
+        Task task = taskRepository.findById(taskId).orElse(null);
+        if (task == null) {
+            activityLogRepository.deleteBySourceDomainAndSourceRefId(SourceDomain.TASK, sourceRefId);
+            return;
+        }
+        if (!taskAttachmentRepository.existsById(attachmentId)) {
+            activityLogRepository.deleteBySourceDomainAndSourceRefId(SourceDomain.TASK, sourceRefId);
+            return;
+        }
+        collect(memberId, task, RawActivityType.TASK_ATTACHMENT_ADD, occurredAt, sourceRefId, metadata);
     }
 
     private void collect(
             Long memberId,
-            Long taskId,
+            Task task,
             RawActivityType activityType,
             LocalDateTime occurredAt,
             String sourceRefId,
             String metadata
     ) {
-        activityLogRepository.acquireSourceLock(SourceDomain.TASK.name() + ":" + sourceRefId);
         if (activityLogRepository.existsBySourceDomainAndSourceRefId(SourceDomain.TASK, sourceRefId)) {
             return;
         }
         ProjectMember member = projectMemberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalStateException("활동 로그의 프로젝트 멤버를 찾을 수 없습니다."));
-        Task task = taskRepository.getReferenceById(taskId);
         activityLogRepository.save(ReportActivityLog.create(
                 member, SourceDomain.TASK, activityType, null, occurredAt, metadata, sourceRefId, task));
+    }
+
+    private String taskSourceKey(Long taskId) {
+        return SourceDomain.TASK.name() + ":task:" + taskId;
     }
 
     /**

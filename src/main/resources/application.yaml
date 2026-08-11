@@ -75,6 +75,9 @@ app:
       - https://umc-plog.site
 
 plog:
+  # 통합 테스트처럼 스케줄러를 호출자가 직접 구동하는 환경에서는 전체 @Scheduled 등록을 끈다.
+  scheduling:
+    enabled: ${SCHEDULING_ENABLED:true}
   invite:
     # 32바이트 AES 키를 Base64로 인코딩한 값. 누락 시 애플리케이션 시작을 중단한다.
     encryption-key-base64: ${INVITE_TOKEN_ENCRYPTION_KEY_BASE64}
@@ -212,6 +215,10 @@ plog:
   # 끈 상태에서도 ReportBatchService.startDueReports() 는 살아 있다(스케줄러 빈만 사라진다) —
   # 통합 테스트는 그 메서드를 직접 호출해서 검증한다.
   report:
+    activity:
+      # 내부 활동은 프로젝트 마감 후 원본 데이터에서 일괄 수집한다.
+      realtime-collection:
+        enabled: ${REPORT_REALTIME_ACTIVITY_COLLECTION_ENABLED:false}
     pdf:
       font-path: ${REPORT_PDF_FONT_PATH:/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc}
     scheduler:
@@ -241,7 +248,8 @@ plog:
 
   notification:
     peer-evaluation:
-      # 프로젝트 종료일 당일 00:00 UTC부터 평가가 열리므로 매일 경계 시점에 확인한다.
+      # 마감 프로젝트의 내부 후처리와 외부 최종 수집을 시작한다. 연동 프로젝트의 평가는
+      # 외부 수집이 종료 상태에 도달한 뒤 열리며, 이 스케줄러가 직접 알림을 발송하지 않는다.
       cron: ${PEER_EVALUATION_NOTIFICATION_CRON:0 0 0 * * *}
   # 운영 환경에서만 활성화하며 인증은 Application Default Credentials를 사용한다.
   fcm:

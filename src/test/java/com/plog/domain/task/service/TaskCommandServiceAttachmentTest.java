@@ -2,6 +2,7 @@ package com.plog.domain.task.service;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -13,6 +14,7 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.domain.task.dto.request.TaskAttachmentAddRequest;
 import com.plog.domain.task.dto.request.TaskCreateRequest;
 import com.plog.domain.task.entity.AttachmentType;
@@ -34,6 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -51,6 +54,9 @@ class TaskCommandServiceAttachmentTest {
 
     @Mock
     private TaskAttachmentRepository taskAttachmentRepository;
+
+    @Mock
+    private ReportActivityLogRepository reportActivityLogRepository;
 
     @Mock
     private ProjectMemberRepository projectMemberRepository;
@@ -75,6 +81,7 @@ class TaskCommandServiceAttachmentTest {
     @BeforeEach
     void setUp() {
         service = new TaskCommandService(taskRepository, taskAttachmentRepository,
+                reportActivityLogRepository,
                 projectMemberRepository, projectAccessService,
                 attachmentPolicy, uploadedFileService, urlResolver, eventPublisher);
     }
@@ -181,5 +188,25 @@ class TaskCommandServiceAttachmentTest {
         TaskAttachmentAddedEvent event = captor.getValue();
         org.assertj.core.api.Assertions.assertThat(event.taskId()).isEqualTo(taskId);
         org.assertj.core.api.Assertions.assertThat(event.projectMemberId()).isEqualTo(ASSIGNEE_ID);
+    }
+
+    @Test
+    void 업무_삭제시_연결된_리포트_활동로그를_업무보다_먼저_삭제한다() {
+        Long taskId = 100L;
+        Project project = org.mockito.Mockito.mock(Project.class);
+        given(project.getId()).willReturn(PROJECT_ID);
+        ProjectMember assignee = ProjectMember.builder().project(project).build();
+        Task task = Task.builder().id(taskId).projectMember(assignee).build();
+        given(taskRepository.findByIdForUpdate(taskId)).willReturn(Optional.of(task));
+        given(taskAttachmentRepository.findAllByTaskId(taskId)).willReturn(List.of());
+        given(taskAttachmentRepository.findFileIdsByTaskId(taskId)).willReturn(List.of());
+
+        service.deleteTask(PROJECT_ID, taskId, USER_ID);
+
+        InOrder deletionOrder = inOrder(reportActivityLogRepository, taskRepository);
+        deletionOrder.verify(reportActivityLogRepository).acquireSourceLock("TASK:task:" + taskId);
+        deletionOrder.verify(taskRepository).findByIdForUpdate(taskId);
+        deletionOrder.verify(reportActivityLogRepository).deleteAllByLinkedTaskId(taskId);
+        deletionOrder.verify(taskRepository).delete(task);
     }
 }

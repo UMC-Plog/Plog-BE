@@ -5,8 +5,10 @@ import com.plog.domain.task.dto.request.TaskStatusUpdateRequest;
 import com.plog.domain.task.dto.response.TaskStatusUpdateResponse;
 import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskStatus;
+import com.plog.domain.task.entity.TaskStatusHistory;
 import com.plog.domain.task.event.TaskStatusChangedEvent;
 import com.plog.domain.task.repository.TaskRepository;
+import com.plog.domain.task.repository.TaskStatusHistoryRepository;
 import com.plog.global.api.error.TaskErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
@@ -25,15 +27,18 @@ public class TaskStatusService {
     private final TaskRepository taskRepository;
     private final ProjectAccessService projectAccessService;
     private final ApplicationEventPublisher eventPublisher;
+    private final TaskStatusHistoryRepository taskStatusHistoryRepository;
 
     public TaskStatusService(
             TaskRepository taskRepository,
             ProjectAccessService projectAccessService,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            TaskStatusHistoryRepository taskStatusHistoryRepository
     ) {
         this.taskRepository = taskRepository;
         this.projectAccessService = projectAccessService;
         this.eventPublisher = eventPublisher;
+        this.taskStatusHistoryRepository = taskStatusHistoryRepository;
     }
 
     // 업무카드 상태 변경 전용 API
@@ -50,9 +55,17 @@ public class TaskStatusService {
 
         // 같은 상태로의 PATCH는 "활동"으로 볼 근거가 없어 report 파이프라인에 신호를 보내지 않는다.
         if (previousStatus != request.cardStatus()) {
+            LocalDateTime occurredAt = occurredAt(task, request.cardStatus());
+            taskStatusHistoryRepository.save(TaskStatusHistory.builder()
+                    .task(task)
+                    .projectMember(task.getProjectMember())
+                    .previousStatus(previousStatus)
+                    .newStatus(request.cardStatus())
+                    .occurredAt(occurredAt)
+                    .build());
             eventPublisher.publishEvent(new TaskStatusChangedEvent(
                     task.getId(), task.getProjectMember().getId(), previousStatus, request.cardStatus(),
-                    occurredAt(task, request.cardStatus())));
+                    occurredAt));
         }
 
         return TaskStatusUpdateResponse.from(task);

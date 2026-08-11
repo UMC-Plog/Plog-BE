@@ -5,11 +5,13 @@ import com.plog.domain.task.event.TaskAttachmentAddedEvent;
 import com.plog.domain.task.event.TaskStatusChangedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
+@ConditionalOnProperty(name = "plog.report.activity.realtime-collection.enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class TaskActivityLogListener {
     private final TaskActivityLogService activityLogService;

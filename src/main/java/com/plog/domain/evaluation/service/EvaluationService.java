@@ -15,6 +15,8 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.domain.report.entity.SourceDomain;
+import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.global.api.code.ErrorCode;
 import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -40,12 +42,15 @@ public class EvaluationService {
     private final SelfFeedbackRepository selfFeedbackRepository;
     private final IntegrationActorMappingStatusService actorMappingStatusService;
     private final EvaluationParticipantResolver participantResolver;
+    private final ReportActivityLogRepository reportActivityLogRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     public EvaluationTargetResponse getEvaluationTargets(Long projectId, Long userId) {
 
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
+
+        requireEvaluationOpen(project);
 
         ProjectMember currentMember = participantResolver.requireEvaluator(projectId, userId);
 
@@ -95,6 +100,7 @@ public class EvaluationService {
     public PeerEvaluationDetailResponse getPeerEvaluationDetail(Long projectId, Long targetMemberId, Long userId) {
 
         ProjectMember evaluator = participantResolver.requireEvaluator(projectId, userId);
+        requireEvaluationOpen(evaluator.getProject());
         ProjectMember evaluatee = participantResolver.requireEvaluatee(projectId, targetMemberId);
 
         PeerEvaluation evaluation = peerEvaluationRepository.findByEvaluatorIdAndEvaluateeId(evaluator.getId(), targetMemberId)
@@ -113,9 +119,7 @@ public class EvaluationService {
         ProjectMember evaluator = participantResolver.requireEvaluator(projectId, userId);
         ProjectMember evaluatee = participantResolver.requireEvaluatee(projectId, targetMemberId);
 
-        if (!evaluatee.getProject().isEvaluatingState(TimeUtil.todayUtc())) {
-            throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
-        }
+        requireEvaluationOpen(evaluatee.getProject());
 
         if (evaluator.getId().equals(evaluatee.getId())) {
             throw new ApiException(EvaluationErrorCode.CANNOT_EVALUATE_SELF);
@@ -156,11 +160,14 @@ public class EvaluationService {
         if (evaluatee.getProject().isCompleted()) {
             throw new ApiException(EvaluationErrorCode.CANNOT_MODIFY_EVALUATION_AFTER_PUBLISH);
         }
+        requireEvaluationOpen(evaluatee.getProject());
 
         PeerEvaluation evaluation = peerEvaluationRepository
                 .findByEvaluatorIdAndEvaluateeId(evaluator.getId(), evaluatee.getId())
                 .orElseThrow(() -> new ApiException(EvaluationErrorCode.EVALUATION_NOT_FOUND));
 
+        reportActivityLogRepository.acquireSourceLock(
+                SourceDomain.EVALUATION.name() + ":peer-evaluation:" + evaluation.getId());
         evaluation.update(
                 request.collaborationScore(),
                 request.initiativeScore(),
@@ -170,7 +177,25 @@ public class EvaluationService {
                 request.feedback()
         );
 
+        String sourceRefId = "peer-evaluation:" + evaluation.getId();
+        reportActivityLogRepository.refreshSourceSnapshot(
+                SourceDomain.EVALUATION.name(), sourceRefId, evaluation.getFeedback(),
+                evaluationMetadata(evaluation));
+        eventPublisher.publishEvent(new PeerEvaluationSubmittedEvent(
+                evaluation.getId(), evaluator.getId(), evaluatee.getId(),
+                evaluation.getCreatedAt() != null ? evaluation.getCreatedAt() : TimeUtil.nowUtc()));
+
         return new PeerEvaluationCreateResponse(evaluation.getId(), hasUniformScores(request));
+    }
+
+    private String evaluationMetadata(PeerEvaluation evaluation) {
+        return "{\"evaluationId\":" + evaluation.getId()
+                + ",\"evaluatorId\":" + evaluation.getEvaluator().getId()
+                + ",\"evaluateeId\":" + evaluation.getEvaluatee().getId()
+                + ",\"collaborationScore\":" + evaluation.getCollaborationScore()
+                + ",\"initiativeScore\":" + evaluation.getInitiativeScore()
+                + ",\"communicationScore\":" + evaluation.getCommunicationScore()
+                + ",\"outputScore\":" + evaluation.getOutputScore() + "}";
     }
 
     private boolean hasUniformScores(PeerEvaluationCreateRequest request) {
@@ -178,5 +203,11 @@ public class EvaluationService {
         return firstScore == request.initiativeScore() &&
                 firstScore == request.communicationScore() &&
                 firstScore == request.outputScore();
+    }
+
+    private void requireEvaluationOpen(Project project) {
+        if (!project.isEvaluatingState(TimeUtil.todayUtc())) {
+            throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
+        }
     }
 }

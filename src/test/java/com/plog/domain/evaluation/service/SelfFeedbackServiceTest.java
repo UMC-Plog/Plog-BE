@@ -14,10 +14,12 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.entity.ProjectStatus;
+import com.plog.domain.project.entity.PeerEvaluationStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.event.EvaluationCompletionCheckRequestedEvent;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -43,6 +45,9 @@ class SelfFeedbackServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private ReportActivityLogRepository reportActivityLogRepository;
+
     private SelfFeedbackService selfFeedbackService;
 
     @BeforeEach
@@ -52,6 +57,7 @@ class SelfFeedbackServiceTest {
                 new EvaluationParticipantResolver(
                         projectMemberRepository,
                         new ProjectAccessService(projectMemberRepository)),
+                reportActivityLogRepository,
                 eventPublisher
         );
     }
@@ -72,6 +78,8 @@ class SelfFeedbackServiceTest {
 
         assertThat(response.selfFeedbackId()).isEqualTo(12L);
         assertThat(selfFeedback.getContent()).isEqualTo("수정된 피드백");
+        verify(reportActivityLogRepository).refreshSourceSnapshot(
+                "EVALUATION", "self-feedback:12", "수정된 피드백", "{\"selfFeedbackId\":12}");
     }
 
     @Test
@@ -120,7 +128,8 @@ class SelfFeedbackServiceTest {
     @Test
     void rejectsSelfFeedbackBeforeTheEndDay() {
         ProjectMember projectMember = projectMember(
-                ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC).plusDays(1));
+                ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC).plusDays(1),
+                PeerEvaluationStatus.PENDING);
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
                 .thenReturn(Optional.of(projectMember));
 
@@ -146,6 +155,12 @@ class SelfFeedbackServiceTest {
     }
 
     private ProjectMember projectMember(ProjectStatus status, LocalDate endDay) {
+        return projectMember(status, endDay, status == ProjectStatus.COMPLETED
+                ? PeerEvaluationStatus.CLOSED : PeerEvaluationStatus.OPEN);
+    }
+
+    private ProjectMember projectMember(
+            ProjectStatus status, LocalDate endDay, PeerEvaluationStatus evaluationStatus) {
         Project project = Project.builder()
                 .id(1L)
                 .projectName("Plog")
@@ -155,6 +170,7 @@ class SelfFeedbackServiceTest {
                 .status(status)
                 .startDay(LocalDate.of(2026, 1, 1))
                 .endDay(endDay)
+                .peerEvaluationStatus(evaluationStatus)
                 .build();
         return ProjectMember.builder()
                 .id(10L)

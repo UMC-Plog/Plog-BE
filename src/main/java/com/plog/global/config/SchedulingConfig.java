@@ -1,5 +1,6 @@
 package com.plog.global.config;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
@@ -15,8 +16,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * 인스턴스를 여러 대로 늘리면 같은 배치가 중복 실행된다. 썸네일 쪽은 UPDATE 의
  * thumbnailStatus 가드와 thumbnailAt IS NULL 선점으로 중복을 흡수하지만, 나머지 배치는
  * 그렇지 않으므로 그때는 분산 락이나 단일 실행 노드 지정이 필요하다.
+ * 테스트처럼 배치를 직접 호출하는 환경은 {@code plog.scheduling.enabled=false}로 전체 등록을 끈다.
  */
 @Configuration
 @EnableScheduling
+@ConditionalOnProperty(name = "plog.scheduling.enabled", havingValue = "true", matchIfMissing = true)
 public class SchedulingConfig {
 }
