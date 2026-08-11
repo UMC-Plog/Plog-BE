@@ -38,4 +38,20 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             @Param("today") LocalDate today,
             Pageable pageable
     );
+
+    @Query("select project.id from Project project "
+            + "where project.id > :lastProjectId "
+            + "and project.status = com.plog.domain.project.entity.ProjectStatus.IN_PROGRESS "
+            + "and project.endDay <= :today "
+            + "and (project.peerEvaluationStatus is null "
+            + "or project.peerEvaluationStatus = com.plog.domain.project.entity.PeerEvaluationStatus.PENDING "
+            + "or project.internalCollectionStatus is null "
+            + "or project.internalCollectionStatus = com.plog.domain.project.entity.ProjectCollectionStatus.NOT_STARTED "
+            + "or project.internalCollectionStatus = com.plog.domain.project.entity.ProjectCollectionStatus.FAILED) "
+            + "order by project.id asc")
+    List<Long> findProjectsAwaitingDeadlineProcessingAfterId(
+            @Param("today") LocalDate today,
+            @Param("lastProjectId") Long lastProjectId,
+            Pageable pageable
+    );
 }

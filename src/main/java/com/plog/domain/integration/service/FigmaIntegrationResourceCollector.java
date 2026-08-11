@@ -18,7 +18,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
-/** Figma 파일의 현재 스냅샷, version history, 댓글과 reaction 원문을 저장한다. */
+/** Figma 파일의 메타데이터, version history, 댓글과 reaction 원문을 저장한다. */
 @Slf4j
 @Component
 class FigmaIntegrationResourceCollector implements IntegrationResourceCollector {
@@ -62,10 +62,11 @@ class FigmaIntegrationResourceCollector implements IntegrationResourceCollector 
     ) {
         String token = projectIntegrationService.decryptAccessToken(verifiedIntegration);
         String fileKey = resource.getProviderResourceId();
-        JsonNode file = get("/v1/files/" + fileKey + "?depth=1", token, context);
+        JsonNode file = get("/v1/files/" + fileKey + "/meta", token, context).path("file");
         activityStoreService.store(resource, IntegrationActivityType.FIGMA_FILE_METADATA,
                 "file:" + fileKey + ":" + file.path("version").asText("current"), null, null, null,
-                parseInstant(file.path("lastModified").asText(null)), resource.getResourceUrl(), file.toString());
+                parseInstant(file.path("last_touched_at").asText(null)), resource.getResourceUrl(),
+                file.toString());
 
         collectVersions(resource, fileKey, token, context);
 

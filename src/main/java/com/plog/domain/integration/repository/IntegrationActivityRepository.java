@@ -3,6 +3,7 @@ package com.plog.domain.integration.repository;
 import com.plog.domain.integration.entity.IntegrationActivity;
 import com.plog.domain.project.entity.ProjectMember;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -269,6 +270,30 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
             + "where activity.integrationResource.projectIntegration.id = :projectIntegrationId")
     List<IntegrationActivity> findReportProjectionTargetsByProjectIntegration(
             @Param("projectIntegrationId") Long projectIntegrationId
+    );
+
+    @EntityGraph(attributePaths = {
+            "integrationResource",
+            "integrationResource.projectIntegration",
+            "integrationResource.projectIntegration.project",
+            "projectMember"
+    })
+    @Query("select activity from IntegrationActivity activity "
+            + "where activity.integrationResource.projectIntegration.project.id = :projectId "
+            + "and ("
+            + "(activity.occurredAt is not null "
+            + "and activity.occurredAt >= :occurredStart "
+            + "and activity.occurredAt < :occurredEnd) "
+            + "or (activity.occurredAt is null "
+            + "and activity.createdAt >= :createdStart "
+            + "and activity.createdAt < :createdEnd)"
+            + ")")
+    List<IntegrationActivity> findReportProjectionTargetsByProjectAndActivityWindow(
+            @Param("projectId") Long projectId,
+            @Param("occurredStart") Instant occurredStart,
+            @Param("occurredEnd") Instant occurredEnd,
+            @Param("createdStart") LocalDateTime createdStart,
+            @Param("createdEnd") LocalDateTime createdEnd
     );
 
     void deleteAllByIntegrationResourceProjectIntegrationId(Long projectIntegrationId);

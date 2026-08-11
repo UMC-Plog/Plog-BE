@@ -374,16 +374,17 @@ public class IntegrationResourceService {
         String fileKey = parseFigmaFileKey(request.fileUrl());
         try {
             JsonNode body = restClient.get()
-                    .uri("https://api.figma.com/v1/files/{fileKey}?depth=1", fileKey)
+                    .uri("https://api.figma.com/v1/files/{fileKey}/meta", fileKey)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + projectIntegrationService.decryptAccessToken(integration))
                     .retrieve()
                     .body(JsonNode.class);
-            if (body == null || body.path("name").asText().isBlank()) {
+            JsonNode file = body == null ? null : body.path("file");
+            if (file == null || file.path("name").asText().isBlank()) {
                 throw new ApiException(IntegrationErrorCode.EXTERNAL_RESOURCE_NOT_FOUND);
             }
             return new ValidatedResource(
-                    IntegrationResourceType.FIGMA_FILE, fileKey, body.path("name").asText(),
-                    request.fileUrl(), body.toString(), parseInstant(body.path("lastModified").asText(null))
+                    IntegrationResourceType.FIGMA_FILE, fileKey, file.path("name").asText(),
+                    request.fileUrl(), file.toString(), parseInstant(file.path("last_touched_at").asText(null))
             );
         } catch (RestClientResponseException exception) {
             throw providerException("Figma 리소스 검증", exception);

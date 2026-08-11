@@ -27,6 +27,7 @@ import com.plog.domain.report.repository.ReportActivityLogRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -297,6 +298,40 @@ class IntegrationActivityReportLogAdapterTest {
     }
 
     @Test
+    void endDayChangeSynchronizesOnlyChangedActivityWindow() {
+        IntegrationActivity activity = activity(
+                LinkType.GITHUB,
+                IntegrationActivityType.GITHUB_COMMIT,
+                ProjectMember.builder().id(63L).build(),
+                "commit:abc123",
+                "wantkdd",
+                "wantkdd@example.com",
+                "{\"sha\":\"abc123\"}"
+        );
+        when(integrationActivityRepository.findReportProjectionTargetsByProjectAndActivityWindow(
+                eq(40L),
+                eq(Instant.parse("2026-08-02T00:00:00Z")),
+                eq(Instant.parse("2026-08-04T00:00:00Z")),
+                eq(LocalDateTime.of(2026, 8, 2, 0, 0)),
+                eq(LocalDateTime.of(2026, 8, 4, 0, 0))
+        )).thenReturn(List.of(activity));
+
+        adapter.synchronizeProjectActivitiesForEndDayChange(
+                40L, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 3));
+
+        verify(reportActivityLogRepository).upsertExternalActivityLog(
+                eq(63L),
+                eq("GITHUB"),
+                eq("GITHUB_COMMIT"),
+                eq(null),
+                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
+                eq("{\"sha\":\"abc123\"}"),
+                any()
+        );
+        verify(integrationActivityRepository, never()).findReportProjectionTargetsByProjectIntegration(any());
+    }
+
+    @Test
     void blankSynchronizationRequestsDoNothing() {
         adapter.synchronizeActivity(null, "commit:abc123");
         adapter.synchronizeActivity(10L, " ");
@@ -305,6 +340,11 @@ class IntegrationActivityReportLogAdapterTest {
         adapter.synchronizeProviderActorActivities(null, "actor", null, null);
         adapter.synchronizeProviderActorActivities(5L, " ", null, null);
         adapter.synchronizeProjectIntegrationActivities(null);
+        adapter.synchronizeProjectActivitiesForEndDayChange(null, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 2));
+        adapter.synchronizeProjectActivitiesForEndDayChange(40L, null, LocalDate.of(2026, 8, 2));
+        adapter.synchronizeProjectActivitiesForEndDayChange(40L, LocalDate.of(2026, 8, 1), null);
+        adapter.synchronizeProjectActivitiesForEndDayChange(
+                40L, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 1));
         adapter.deleteProjectMemberProjection(null, LinkType.GITHUB, 63L);
         adapter.deleteProjectMemberProjection(40L, null, 63L);
         adapter.deleteProjectMemberProjection(40L, LinkType.GITHUB, null);

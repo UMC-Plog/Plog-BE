@@ -15,6 +15,7 @@ import com.plog.domain.integration.entity.CollectionPhase;
 import com.plog.domain.integration.entity.IntegrationActivityType;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.ProjectIntegration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import org.hamcrest.Matchers;
@@ -83,6 +84,18 @@ class FigmaIntegrationResourceCollectorTest {
                 IntegrationActivityType.FIGMA_COMMENT,
                 IntegrationActivityType.FIGMA_COMMENT_REACTION
         );
+        verify(activityStoreService).store(
+                resource,
+                IntegrationActivityType.FIGMA_FILE_METADATA,
+                "file:" + FILE_KEY + ":file-version-1",
+                null,
+                null,
+                null,
+                Instant.parse("2026-08-01T09:00:00Z"),
+                RESOURCE_URL,
+                "{\"name\":\"App\",\"version\":\"file-version-1\","
+                        + "\"last_touched_at\":\"2026-08-01T09:00:00Z\"}"
+        );
     }
 
     private Fixture fixture() {
@@ -102,11 +115,12 @@ class FigmaIntegrationResourceCollectorTest {
     }
 
     private void expectFile(MockRestServiceServer server) {
-        server.expect(requestTo("https://api.figma.com/v1/files/" + FILE_KEY + "?depth=1"))
+        server.expect(requestTo("https://api.figma.com/v1/files/" + FILE_KEY + "/meta"))
                 .andExpect(method(HttpMethod.GET))
                 .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN))
                 .andRespond(withSuccess("""
-                        {"name":"App","version":"file-version-1","lastModified":"2026-08-01T09:00:00Z"}
+                        {"file":{"name":"App","version":"file-version-1",
+                          "last_touched_at":"2026-08-01T09:00:00Z"}}
                         """, MediaType.APPLICATION_JSON));
     }
 
