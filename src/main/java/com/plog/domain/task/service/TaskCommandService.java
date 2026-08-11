@@ -27,13 +27,16 @@ import com.plog.infrastructure.s3.UploadedFileService;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 // 업무카드 생성/수정/삭제 + 첨부파일 등록/삭제 — 쓰기 전용
 @Service
+@Slf4j
 public class TaskCommandService {
 
     private final TaskRepository taskRepository;
@@ -45,6 +48,7 @@ public class TaskCommandService {
     private final UploadedFileService uploadedFileService;
     private final TaskAttachmentUrlResolver urlResolver;
     private final ApplicationEventPublisher eventPublisher;
+    private final TaskTitleCompetencyClassifier competencyClassifier;
 
     public TaskCommandService(TaskRepository taskRepository,
                               TaskAttachmentRepository taskAttachmentRepository,
@@ -54,7 +58,8 @@ public class TaskCommandService {
                               AttachmentPolicy attachmentPolicy,
                               UploadedFileService uploadedFileService,
                               TaskAttachmentUrlResolver urlResolver,
-                              ApplicationEventPublisher eventPublisher) {
+                              ApplicationEventPublisher eventPublisher,
+                              TaskTitleCompetencyClassifier competencyClassifier) {
         this.taskRepository = taskRepository;
         this.taskAttachmentRepository = taskAttachmentRepository;
         this.reportActivityLogRepository = reportActivityLogRepository;
@@ -64,6 +69,7 @@ public class TaskCommandService {
         this.uploadedFileService = uploadedFileService;
         this.urlResolver = urlResolver;
         this.eventPublisher = eventPublisher;
+        this.competencyClassifier = competencyClassifier;
     }
 
     // 업무 카드 생성
@@ -88,6 +94,7 @@ public class TaskCommandService {
 
         Task task = Task.create(assignee, request.title(), request.category(),
                 request.cardStatus(), request.endDate());
+        classifySafely(task, request.title());
         taskRepository.save(task);
 
         List<TaskAttachment> attachments = createAttachments(task, userId, request.attachments());
@@ -107,8 +114,10 @@ public class TaskCommandService {
         Task task = taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
                 .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
 
-        if (request.title() != null) {
+        boolean titleChanged = request.title() != null && !Objects.equals(task.getTitle(), request.title());
+        if (titleChanged) {
             task.changeTitle(request.title());
+            classifySafely(task, request.title());
         }
 
         if (request.projectMemberId() != null) {
@@ -142,6 +151,16 @@ public class TaskCommandService {
                 .toList();
 
         return TaskUpdateResponse.from(task, attachments);
+    }
+
+    private void classifySafely(Task task, String title) {
+        try {
+            task.applyCompetencyClassification(competencyClassifier.classify(title));
+        } catch (RuntimeException e) {
+            task.clearCompetencyClassification();
+            log.warn("task_title_competency_classification_failed taskId={} titleLength={}",
+                    task.getId(), title == null ? null : title.length(), e);
+        }
     }
 
     // 업무카드 삭제

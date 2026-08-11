@@ -7,15 +7,36 @@ import static org.mockito.Mockito.when;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskStatus;
+import com.plog.domain.task.entity.TaskCompetencyClassification;
+import com.plog.domain.report.entity.CompetencyCategory;
 import com.plog.domain.user.entity.ProfilePreset;
 import com.plog.domain.user.entity.User;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.math.BigDecimal;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class TaskDetailResponseTest {
+
+    @Test
+    void includesTaskCompetencyClassification() {
+        Task task = Task.builder()
+                .projectMember(stubAssignee())
+                .title("로그인 API 구현")
+                .cardStatus(TaskStatus.TODO)
+                .endDate(LocalDate.now())
+                .build();
+        task.applyCompetencyClassification(new TaskCompetencyClassification(
+                CompetencyCategory.OUTPUT, new BigDecimal("0.9000"), "task-title-anchor-v1"));
+
+        TaskDetailResponse response = TaskDetailResponse.from(task, List.of());
+
+        assertThat(response.inferredCompetency()).isEqualTo(CompetencyCategory.OUTPUT);
+        assertThat(response.competencyConfidence()).isEqualByComparingTo("0.9000");
+        assertThat(response.competencyClassifierVersion()).isEqualTo("task-title-anchor-v1");
+    }
 
     private ProjectMember stubAssignee() {
         User user = mock(User.class);
