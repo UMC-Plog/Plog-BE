@@ -212,7 +212,7 @@ class EvaluationServiceTest {
     }
 
     @Test
-    void exposesFinalSubmissionAvailabilityWhenEveryRequirementIsCompleted() {
+    void exposesFinalSubmissionAvailabilityWithoutAccountMapping() {
         Project project = project(ProjectStatus.IN_PROGRESS, TimeUtil.today());
         ProjectMember currentMember = activeMember(10L, project);
         ProjectMember teammate = ProjectMember.builder()
@@ -226,16 +226,15 @@ class EvaluationServiceTest {
         when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(1L, MemberStatus.ACTIVE))
                 .thenReturn(List.of(currentMember, teammate));
         when(peerEvaluationRepository.findEvaluatedTargetIds(currentMember)).thenReturn(Set.of(20L));
-        when(selfFeedbackRepository.findByProjectMemberId(10L))
-                .thenReturn(Optional.of(mock(com.plog.domain.evaluation.entity.SelfFeedback.class)));
-        when(actorMappingStatusService.isMyMappingCompleted(1L, 10L)).thenReturn(true);
+        when(selfFeedbackRepository.findByProjectMemberId(10L)).thenReturn(Optional.empty());
+        when(actorMappingStatusService.isMyMappingCompleted(1L, 10L)).thenReturn(false);
 
         EvaluationTargetResponse response = evaluationService.getEvaluationTargets(1L, 7L);
 
         assertThat(response.completedPeerEvaluationCount()).isEqualTo(1);
         assertThat(response.totalPeerEvaluationCount()).isEqualTo(1);
-        assertThat(response.isSelfFeedbackCompleted()).isTrue();
-        assertThat(response.isAccountMappingCompleted()).isTrue();
+        assertThat(response.isSelfFeedbackCompleted()).isFalse();
+        assertThat(response.isAccountMappingCompleted()).isFalse();
         assertThat(response.isFinalSubmissionAvailable()).isTrue();
     }
 

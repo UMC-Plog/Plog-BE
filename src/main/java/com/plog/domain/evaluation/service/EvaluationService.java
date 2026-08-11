@@ -85,8 +85,7 @@ public class EvaluationService {
         boolean selfFeedbackRequirementMet = totalPeerEvaluationCount > 0 || isSelfFeedbackCompleted;
         boolean isFinalSubmissionAvailable = !project.isCompleted()
                 && completedPeerEvaluationCount == totalPeerEvaluationCount
-                && selfFeedbackRequirementMet
-                && isAccountMappingCompleted;
+                && selfFeedbackRequirementMet;
 
         return new EvaluationTargetResponse(
                 targets,
