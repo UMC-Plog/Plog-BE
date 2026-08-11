@@ -13,11 +13,13 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.HtmlUtils;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ReportPdfArchiveService {
 
     private final ReportRepository reportRepository;
@@ -31,11 +33,35 @@ public class ReportPdfArchiveService {
                 .orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
         List<ReportMemberResult> members = resultRepository.findAllByReportIdOrderByProjectMemberIdAsc(reportId);
         String code = report.getReportCode();
-        byte[] archive = zip(report, members);
         String fileName = code + "-reports.zip";
         String objectKey = "reports/" + reportId + "/" + fileName;
-        fileStorageService.putGeneratedObject(objectKey, "application/zip", archive);
-        textWriter.attachPdfArchive(reportId, objectKey, fileName);
+        byte[] archive;
+        try {
+            archive = zip(report, members);
+            log.info("리포트 PDF ZIP 렌더링 완료: reportId={}, memberCount={}, archiveBytes={}",
+                    reportId, members.size(), archive.length);
+        } catch (RuntimeException exception) {
+            log.error("리포트 PDF ZIP 렌더링 실패: reportId={}, memberCount={}",
+                    reportId, members.size(), exception);
+            throw exception;
+        }
+        try {
+            fileStorageService.putGeneratedObject(objectKey, "application/zip", archive);
+            log.info("리포트 PDF ZIP S3 업로드 완료: reportId={}, objectKey={}", reportId, objectKey);
+        } catch (RuntimeException exception) {
+            log.error("리포트 PDF ZIP S3 업로드 실패: reportId={}, objectKey={}",
+                    reportId, objectKey, exception);
+            throw exception;
+        }
+        try {
+            textWriter.attachPdfArchive(reportId, objectKey, fileName);
+            log.info("리포트 PDF ZIP 메타데이터 저장 완료: reportId={}, objectKey={}, fileName={}",
+                    reportId, objectKey, fileName);
+        } catch (RuntimeException exception) {
+            log.error("리포트 PDF ZIP 메타데이터 저장 실패: reportId={}, objectKey={}, fileName={}",
+                    reportId, objectKey, fileName, exception);
+            throw exception;
+        }
     }
 
     private byte[] zip(Report report, List<ReportMemberResult> members) {
