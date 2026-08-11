@@ -124,6 +124,11 @@ class IntegrationCollectionJobWorker {
         }
 
         @Override
+        public boolean finalCollection() {
+            return job.finalCollection();
+        }
+
+        @Override
         public CollectionCursor cursor() {
             return job.cursor();
         }

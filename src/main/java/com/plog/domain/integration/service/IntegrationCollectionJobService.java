@@ -60,7 +60,11 @@ public class IntegrationCollectionJobService {
         List<IntegrationCollectionJob> active = integrationCollectionJobRepository
                 .findByProjectIdAndStatuses(projectId, ACTIVE_STATUSES);
         if (!active.isEmpty()) {
-            return active.getFirst();
+            IntegrationCollectionJob activeJob = active.getFirst();
+            if (isFinalCollectionExpected(activeJob)) {
+                activeJob.makeAvailableNow(Instant.now());
+            }
+            return activeJob;
         }
         ProjectMember requestedBy = projectMemberId == null
                 ? null
@@ -82,8 +86,9 @@ public class IntegrationCollectionJobService {
             return null;
         }
         IntegrationCollectionJob job = due.getFirst();
+        boolean finalCollection = isFinalCollectionExpected(job);
         String token = job.begin(now);
-        if (job.getRequestedByProjectMember() == null) {
+        if (finalCollection) {
             eventPublisher.publishEvent(new ExternalCollectionStartedEvent(job.getProject().getId()));
         }
         return new ClaimedJob(
@@ -91,6 +96,7 @@ public class IntegrationCollectionJobService {
                 job.getProject().getId(),
                 token,
                 job.getAttemptCount(),
+                finalCollection,
                 new CollectionCursor(
                         job.getCursorResourceId(), job.getCursorPhase(), job.getCursorItemNumber())
         );
@@ -187,6 +193,7 @@ public class IntegrationCollectionJobService {
             Long projectId,
             String claimToken,
             int attemptCount,
+            boolean finalCollection,
             CollectionCursor cursor
     ) {
     }

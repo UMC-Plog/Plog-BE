@@ -177,8 +177,15 @@ public class IntegrationDataCollectionService {
                 return true;
             } catch (ProviderResourceAccessException exception) {
                 // rate limit 창은 보통 한 시간이라 5초 인라인 재시도로는 열리지 않는다.
-                // 리소스를 실패시키지 말고 잡을 통째로 reset 이후로 미룬다.
+                // 수동 수집은 잡을 통째로 reset 이후로 미루되, 마감 최종 수집은 이 리소스만
+                // 실패로 남기고 다음 리소스를 계속 처리해 평가 시작을 무기한 막지 않는다.
                 if (ProviderRateLimitSupport.isRateLimited(exception)) {
+                    if (context.finalCollection()) {
+                        String reason = "provider rate limit exceeded";
+                        resourceCollectionStateService.markFailed(resource.getId(), Instant.now(), reason);
+                        failures.add(failure(resource, reason));
+                        return false;
+                    }
                     throw rateLimited(exception);
                 }
                 if (handleProviderFailure(resource, failures, exception, attempt)) {

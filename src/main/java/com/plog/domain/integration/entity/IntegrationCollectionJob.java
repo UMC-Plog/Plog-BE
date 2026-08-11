@@ -160,6 +160,13 @@ public class IntegrationCollectionJob extends BaseEntity {
         this.claimToken = null;
     }
 
+    /** 최종 수집 전환 시 이미 대기 중인 재시도 잡을 즉시 다시 처리할 수 있게 한다. */
+    public void makeAvailableNow(Instant now) {
+        if (this.status == IntegrationCollectionJobStatus.RETRYABLE && this.availableAt.isAfter(now)) {
+            this.availableAt = now;
+        }
+    }
+
     /** heartbeat가 끊긴 잡을 토큰 없이 회수한다. 커서는 유지해 진행분을 버리지 않는다. */
     public void reclaim(Instant now) {
         this.status = IntegrationCollectionJobStatus.RETRYABLE;

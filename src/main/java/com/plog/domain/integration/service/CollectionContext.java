@@ -10,6 +10,11 @@ import com.plog.domain.integration.entity.CollectionPhase;
  */
 interface CollectionContext {
 
+    /** 프로젝트 마감으로 실행되는 최종 수집인지 여부. */
+    default boolean finalCollection() {
+        return false;
+    }
+
     /** 재개 지점. 신규 수집이면 {@link CollectionCursor#start()}. */
     CollectionCursor cursor();
 

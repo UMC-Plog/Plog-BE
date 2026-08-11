@@ -87,6 +87,27 @@ public class IntegrationActivityReportLogAdapter {
     }
 
     @Transactional
+    public void synchronizeProjectActivitiesForEndDayChange(
+            Long projectId, LocalDate previousEndDay, LocalDate currentEndDay) {
+        if (projectId == null || previousEndDay == null || currentEndDay == null
+                || previousEndDay.equals(currentEndDay)) {
+            return;
+        }
+        LocalDate lowerEndDay = previousEndDay.isBefore(currentEndDay) ? previousEndDay : currentEndDay;
+        LocalDate upperEndDay = previousEndDay.isBefore(currentEndDay) ? currentEndDay : previousEndDay;
+        LocalDateTime windowStart = lowerEndDay.plusDays(1).atStartOfDay();
+        LocalDateTime windowEnd = upperEndDay.plusDays(1).atStartOfDay();
+        integrationActivityRepository.findReportProjectionTargetsByProjectAndActivityWindow(
+                        projectId,
+                        windowStart.atZone(TimeUtil.STORAGE_ZONE).toInstant(),
+                        windowEnd.atZone(TimeUtil.STORAGE_ZONE).toInstant(),
+                        windowStart,
+                        windowEnd
+                )
+                .forEach(this::synchronize);
+    }
+
+    @Transactional
     public void deleteProjectMemberProjection(Long projectId, LinkType linkType, Long projectMemberId) {
         if (projectId == null || linkType == null || projectMemberId == null) {
             return;
