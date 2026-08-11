@@ -2,12 +2,14 @@ package com.plog.domain.report.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.plog.domain.evaluation.entity.PeerEvaluation;
 import com.plog.domain.evaluation.entity.SelfFeedback;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
 import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
+import com.plog.domain.notification.entity.NotificationType;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
@@ -47,10 +49,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * {@code EmbeddingClientConfig}가 자동으로 StubEmbeddingClient로 폴백하므로 별도 설정이 필요 없다
  * (벡터가 의미는 없지만 파이프라인이 끝까지 도는지 검증하는 데는 지장 없음).
  * <p>
- * <b>0단계는 이벤트 경유가 아니라 서비스 직접 호출로 시딩한다.</b> 이벤트 발행→
- * {@code @TransactionalEventListener(AFTER_COMMIT)} 배선은 {@code TaskActivityLogServiceTest}/
- * {@code TaskActivityLogListenerTest} 등 유닛 테스트가 이미 검증했고, 이 테스트는 "실 데이터가
- * 1~6단계를 예외 없이 통과하는지"에만 집중한다.
+ * <b>0단계는 이벤트 경유가 아니라 서비스 직접 호출로 시딩한다.</b> 대신 발행 단계의
+ * {@code ReportPublishedEvent -> @TransactionalEventListener(AFTER_COMMIT)}는 실제 빈과 DB로 검증한다.
  */
 @DisplayName("리포트 파이프라인 통합 테스트")
 class ReportPipelineIntegrationTest extends E2eTestBase {
@@ -83,6 +83,10 @@ class ReportPipelineIntegrationTest extends E2eTestBase {
         Long memberUserId = saveUser("pipeline-member");
         Long ownerId = saveMember(ownerUserId, projectId, "OWNER", "ACTIVE", "오너");
         Long memberId = saveMember(memberUserId, projectId, "MEMBER", "ACTIVE", "멤버");
+        jdbc.update("insert into fcm (user_id, token, created_at, updated_at) values (?, ?, now(), now())",
+                ownerUserId, "pipeline-owner-token");
+        jdbc.update("insert into fcm (user_id, token, created_at, updated_at) values (?, ?, now(), now())",
+                memberUserId, "pipeline-member-token");
 
         ProjectMember owner = projectMemberRepository.getReferenceById(ownerId);
         ProjectMember member = projectMemberRepository.getReferenceById(memberId);
@@ -125,6 +129,15 @@ class ReportPipelineIntegrationTest extends E2eTestBase {
 
         Report saved = reportRepository.findById(report.getId()).orElseThrow();
         assertThat(saved.getStatus()).isEqualTo(ReportStatus.COMPLETED);
+
+        // publish()의 상태 변경 트랜잭션이 커밋된 뒤 실제 비동기 리스너가 알림 저장과 FCM을 수행한다.
+        awaitAsyncTasks();
+        verify(fcmGateway, org.mockito.Mockito.times(2)).send(any());
+        Integer notificationCount = jdbc.queryForObject("""
+                select count(*) from notifications
+                where project_id = ? and type = ? and resource_id = ?
+                """, Integer.class, projectId, NotificationType.REPORT_PUBLISHED.name(), report.getId());
+        assertThat(notificationCount).isEqualTo(2);
 
         // 측정 불가(null)와 실제 0을 구분하면서도 멤버를 제외하지 않고 끝까지 발행하는지 확인한다.
         ReportMemberResult ownerResult = reportMemberResultRepository

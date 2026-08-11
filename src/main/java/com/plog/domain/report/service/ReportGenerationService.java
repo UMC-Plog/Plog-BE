@@ -1,6 +1,5 @@
 package com.plog.domain.report.service;
 
-import com.plog.domain.notification.event.ReportPublishedEvent;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
@@ -22,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -57,7 +55,6 @@ public class ReportGenerationService {
     private final ReportLlmGateway llmGateway;
     private final ReportPdfArchiveService pdfArchiveService;
     private final ReportActivityPreparationService activityPreparationService;
-    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 비동기 생성. API 는 즉시 202 를 돌려주고 프론트는 조회 API 를 폴링한다 —
@@ -196,7 +193,6 @@ public class ReportGenerationService {
             // PDF는 재생성 가능한 부가 산출물이다. 본문 발행을 되돌리지 않고 다운로드만 비활성화한다.
             log.error("리포트 PDF ZIP 생성 실패(리포트 발행은 유지합니다): reportId={}", reportId, exception);
         }
-        eventPublisher.publishEvent(new ReportPublishedEvent(target.projectId(), reportId));
         log.info("리포트 발행 완료: reportId={}, 멤버 {}명 중 {}명 텍스트 생성",
                 reportId, target.members().size(), succeeded);
         return new ReportGenerationResult(reportId, target.members().size(), succeeded, true);
