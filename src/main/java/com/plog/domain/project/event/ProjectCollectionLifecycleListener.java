@@ -35,7 +35,7 @@ public class ProjectCollectionLifecycleListener {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onExternalCollectionFinished(ExternalCollectionFinishedEvent event) {
-        projectDeadlineService.completeExternalCollection(event.projectId(), event.status());
+        projectDeadlineService.completeExternalCollection(event.projectId(), event.jobId(), event.status());
     }
 
     @Async
