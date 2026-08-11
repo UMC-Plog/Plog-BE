@@ -11,7 +11,13 @@ import com.plog.domain.notification.controller.NotificationSettingsController;
 import com.plog.domain.project.controller.ProjectController;
 import com.plog.domain.project.controller.ProjectLeaveController;
 import com.plog.domain.project.controller.ProjectSettingsController;
+import com.plog.domain.project.controller.docs.ProjectControllerDoc;
+import com.plog.domain.project.controller.docs.ProjectInvitationControllerDoc;
+import com.plog.domain.project.controller.docs.ProjectInviteControllerDoc;
+import com.plog.domain.project.controller.docs.ProjectJoinControllerDoc;
+import com.plog.domain.project.controller.docs.ProjectListControllerDoc;
 import com.plog.domain.project.controller.docs.ProjectMemberControllerDoc;
+import com.plog.domain.project.controller.docs.ProjectRoleControllerDoc;
 import com.plog.domain.report.controller.docs.ReportControllerDoc;
 import com.plog.domain.user.controller.AuthController;
 import com.plog.domain.user.controller.EmailVerificationController;
@@ -50,7 +56,13 @@ class SwaggerDomainTagTest {
                 FcmTokenController.class);
         assertTag("Project", PROJECT_DESCRIPTION,
                 ProjectController.class,
+                ProjectControllerDoc.class,
+                ProjectInvitationControllerDoc.class,
+                ProjectInviteControllerDoc.class,
+                ProjectJoinControllerDoc.class,
+                ProjectListControllerDoc.class,
                 ProjectMemberControllerDoc.class,
+                ProjectRoleControllerDoc.class,
                 ProjectLeaveController.class,
                 ProjectSettingsController.class);
         assertTag("Report", REPORT_DESCRIPTION,
