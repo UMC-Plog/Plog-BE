@@ -4,11 +4,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.plog.domain.evaluation.dto.request.PeerEvaluationCreateRequest;
 import com.plog.domain.evaluation.dto.response.PeerEvaluationCreateResponse;
+import com.plog.domain.evaluation.dto.response.EvaluationTargetResponse;
 import com.plog.domain.evaluation.service.EvaluationService;
 import com.plog.global.security.jwt.JwtProvider;
 import com.plog.global.security.jwt.MediaTokenProvider;
@@ -52,6 +54,20 @@ class EvaluationControllerTest {
     @AfterEach
     void clearAuthentication() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void returnsEvaluationSubmissionProgress() throws Exception {
+        given(evaluationService.getEvaluationTargets(1L, 7L))
+                .willReturn(new EvaluationTargetResponse(List.of(), 0, 0, true, true, true));
+
+        mockMvc.perform(get("/api/projects/{projectId}/evaluations/targets", 1L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.completedPeerEvaluationCount").value(0))
+                .andExpect(jsonPath("$.result.totalPeerEvaluationCount").value(0))
+                .andExpect(jsonPath("$.result.isSelfFeedbackCompleted").value(true))
+                .andExpect(jsonPath("$.result.isAccountMappingCompleted").value(true))
+                .andExpect(jsonPath("$.result.isFinalSubmissionAvailable").value(true));
     }
 
     @Test

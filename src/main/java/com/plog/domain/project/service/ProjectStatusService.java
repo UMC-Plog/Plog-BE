@@ -1,8 +1,6 @@
 package com.plog.domain.project.service;
 
-import com.plog.domain.integration.entity.ProjectIntegration;
-import com.plog.domain.integration.repository.IntegrationActivityRepository;
-import com.plog.domain.integration.repository.ProjectIntegrationRepository;
+import com.plog.domain.integration.service.IntegrationActorMappingStatusService;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
 import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
 import com.plog.domain.project.dto.ProjectStatusDto;
@@ -36,8 +34,7 @@ public class ProjectStatusService {
     private final PeerEvaluationRepository peerEvaluationRepository;
     private final SelfFeedbackRepository selfFeedbackRepository;
     private final ProjectAccessService projectAccessService;
-    private final ProjectIntegrationRepository projectIntegrationRepository;
-    private final IntegrationActivityRepository integrationActivityRepository;
+    private final IntegrationActorMappingStatusService actorMappingStatusService;
     private final ReportLifecycleService reportLifecycleService;
     private final ReportRepository reportRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -61,7 +58,8 @@ public class ProjectStatusService {
 
         long activeMemberCount = projectMemberRepository.countByProjectIdAndStatus(projectId, MemberStatus.ACTIVE);
         boolean allEvaluationsSubmitted = isAllEvaluationSubmitted(projectId, activeMemberCount);
-        if (allEvaluationsSubmitted && hasUnmappedActivityActors(projectId)) {
+        if (allEvaluationsSubmitted
+                && !actorMappingStatusService.areAllActiveMemberMappingsCompleted(projectId, activeMemberCount)) {
             throw new ApiException(ProjectErrorCode.ACTOR_MAPPING_REQUIRED);
         }
         boolean allSubmitted = allEvaluationsSubmitted;
@@ -91,7 +89,8 @@ public class ProjectStatusService {
         }
 
         long activeMemberCount = projectMemberRepository.countByProjectIdAndStatus(projectId, MemberStatus.ACTIVE);
-        if (!isAllEvaluationSubmitted(projectId, activeMemberCount) || hasUnmappedActivityActors(projectId)) {
+        if (!isAllEvaluationSubmitted(projectId, activeMemberCount)
+                || !actorMappingStatusService.areAllActiveMemberMappingsCompleted(projectId, activeMemberCount)) {
             return Optional.empty();
         }
 
@@ -129,13 +128,6 @@ public class ProjectStatusService {
         Optional<Report> report = reportLifecycleService.startFor(project);
         report.ifPresent(this::requestGeneration);
         return report;
-    }
-
-    private boolean hasUnmappedActivityActors(Long projectId) {
-        return projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId).stream()
-                .filter(ProjectIntegration::isConnected)
-                .anyMatch(integration -> integrationActivityRepository
-                        .existsUnassignedActivityActorByProjectIntegrationId(integration.getId()));
     }
 
     private ProjectStatusDto.Response toResponse(Project project, boolean timeoutApplied) {
