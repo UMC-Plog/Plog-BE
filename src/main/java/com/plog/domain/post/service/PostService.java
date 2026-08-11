@@ -78,6 +78,9 @@ public class PostService {
         List<PostAttachment> savedAttachments = saveAttachments(post, attachments, resolvedFiles);
         eventPublisher.publishEvent(new PostCreatedEvent(
                 post.getId(), member.getId(), content, post.getCreatedAt()));
+        if (request.isNotice()) {
+            eventPublisher.publishEvent(new NoticePublishedEvent(projectId, post.getId()));
+        }
         return toCreateResponse(post, member, savedAttachments);
     }
 
