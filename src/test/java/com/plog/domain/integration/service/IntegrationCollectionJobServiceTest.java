@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.plog.domain.integration.config.IntegrationCollectionProperties;
@@ -13,7 +14,6 @@ import com.plog.domain.integration.entity.IntegrationCollectionJobStatus;
 import com.plog.domain.integration.event.ExternalCollectionFinishedEvent;
 import com.plog.domain.integration.event.ExternalCollectionStartedEvent;
 import com.plog.domain.integration.repository.IntegrationCollectionJobRepository;
-import com.plog.domain.notification.event.IntegrationCollectionCompletedEvent;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectCollectionStatus;
 import com.plog.domain.project.entity.ProjectMember;
@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -98,11 +100,9 @@ class IntegrationCollectionJobServiceTest {
     }
 
     @Test
-    void 잡_성공_트랜잭션에서_수집_요청자의_완료_이벤트를_발행한다() {
+    void 수동_잡_성공만으로_피어평가_준비_알림을_발행하지_않는다() {
         Project project = mock(Project.class);
-        given(project.getId()).willReturn(7L);
         ProjectMember requester = mock(ProjectMember.class);
-        given(requester.getId()).willReturn(3L);
         IntegrationCollectionJob entity = IntegrationCollectionJob.builder()
                 .id(42L)
                 .project(project)
@@ -120,8 +120,23 @@ class IntegrationCollectionJobServiceTest {
 
         service.succeed(claimed, Instant.now(), 3, 3);
 
-        verify(eventPublisher).publishEvent(new IntegrationCollectionCompletedEvent(7L, 42L, 3L));
+        verify(eventPublisher, never()).publishEvent(any());
         assertThat(entity.getStatus()).isEqualTo(IntegrationCollectionJobStatus.SUCCEEDED);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ProjectCollectionStatus.class, names = {"FAILED", "PARTIAL_FAILED"})
+    void 마감_최종_수집이_실패_상태여도_재수집_잡은_최종_수집으로_판단한다(
+            ProjectCollectionStatus collectionStatus
+    ) {
+        Project project = mock(Project.class);
+        given(project.getExternalCollectionStatus()).willReturn(collectionStatus);
+        given(projectRepository.findById(7L)).willReturn(Optional.of(project));
+        IntegrationCollectionJobService.ClaimedJob claimed = new IntegrationCollectionJobService.ClaimedJob(
+                42L, 7L, "token", 1, false, CollectionCursor.start());
+        IntegrationCollectionJobService service = service();
+
+        assertThat(service.isFinalCollectionExpected(claimed)).isTrue();
     }
 
     @Test
@@ -145,7 +160,7 @@ class IntegrationCollectionJobServiceTest {
         service.succeed(claimed, Instant.now(), 3, 3);
 
         verify(eventPublisher).publishEvent(
-                new ExternalCollectionFinishedEvent(7L, IntegrationCollectionJobStatus.SUCCEEDED));
+                new ExternalCollectionFinishedEvent(7L, 42L, IntegrationCollectionJobStatus.SUCCEEDED));
     }
 
     private IntegrationCollectionJobService service() {
