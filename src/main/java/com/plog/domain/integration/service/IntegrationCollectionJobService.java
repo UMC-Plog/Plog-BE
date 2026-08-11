@@ -5,6 +5,7 @@ import com.plog.domain.integration.entity.CollectionPhase;
 import com.plog.domain.integration.entity.IntegrationCollectionJob;
 import com.plog.domain.integration.entity.IntegrationCollectionJobStatus;
 import com.plog.domain.integration.repository.IntegrationCollectionJobRepository;
+import com.plog.domain.notification.event.IntegrationCollectionCompletedEvent;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataRetrievalFailureException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -39,6 +41,7 @@ public class IntegrationCollectionJobService {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final IntegrationCollectionProperties properties;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 활성 잡이 있으면 그것을 그대로 돌려준다(멱등).
@@ -103,7 +106,13 @@ public class IntegrationCollectionJobService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void succeed(ClaimedJob job, Instant now, int requestedCount, int collectedCount) {
-        locked(job).succeed(job.claimToken(), now, requestedCount, collectedCount);
+        IntegrationCollectionJob entity = locked(job);
+        entity.succeed(job.claimToken(), now, requestedCount, collectedCount);
+        ProjectMember requestedBy = entity.getRequestedByProjectMember();
+        if (requestedBy != null) {
+            eventPublisher.publishEvent(new IntegrationCollectionCompletedEvent(
+                    entity.getProject().getId(), entity.getId(), requestedBy.getId()));
+        }
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
