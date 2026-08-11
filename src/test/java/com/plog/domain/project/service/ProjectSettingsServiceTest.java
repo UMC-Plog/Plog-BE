@@ -36,6 +36,7 @@ class ProjectSettingsServiceTest {
     @Mock private ProjectIntegrationRepository projectIntegrationRepository;
     @Mock private InviteTokenCipher inviteTokenCipher;
     @Mock private IntegrationActivityReportLogAdapter reportLogAdapter;
+    @Mock private ProjectDeadlineService projectDeadlineService;
 
     private ProjectSettingsService service;
 
@@ -47,7 +48,8 @@ class ProjectSettingsServiceTest {
                 projectIntegrationRepository,
                 inviteTokenCipher,
                 new ProjectSettingsValidator(),
-                reportLogAdapter
+                reportLogAdapter,
+                projectDeadlineService
         );
     }
 
@@ -97,6 +99,7 @@ class ProjectSettingsServiceTest {
 
         assertThat(response.endDay()).isEqualTo(today);
         assertThat(project.getEndDay()).isEqualTo(today);
+        verify(projectDeadlineService).processDeadline(1L);
     }
 
     @Test
@@ -122,6 +125,7 @@ class ProjectSettingsServiceTest {
         service.updateSettings(1L, 7L, new ProjectSettingsDto.UpdateRequest(null, newEndDay, null));
 
         verify(reportLogAdapter).synchronizeProjectIntegrationActivities(20L);
+        verify(projectDeadlineService, never()).processDeadline(1L);
     }
 
     @Test
