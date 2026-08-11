@@ -250,8 +250,8 @@ public interface IntegrationControllerDoc {
                     provider 활동을 최소 한 번 수집한 뒤 발견된 provider 계정과 프로젝트 멤버의 명시적 매핑을 조회합니다.
                     mappings에는 팀원이 직접 저장한 매핑, availableProviderActors에는 수집 활동에서 발견된 모든 provider 계정이 포함됩니다.
                     이미 매핑된 계정은 mapped=true이며, mappedByCurrentMember로 현재 멤버의 매핑 여부를 구분할 수 있습니다.
-                    GitHub는 ID/login, Notion은 user ID, Figma는 ID/handle, Google은 personName·permissionId와 제공 가능한 표시 정보를 사용합니다.
-                    provider가 활동 응답에 이메일을 제공하지 않을 수 있으므로 이메일만으로 계정을 식별하지 않습니다.
+                    GitHub는 ID/login, Notion은 user ID, Figma는 ID/handle, Google은 provider ID·이메일·현재 사용자 신호를 사용합니다.
+                    Google 표시 이름은 동명이인 가능성이 있어 actor 식별이나 자동 매핑에 사용하지 않습니다.
                     actorKey는 원본 계정 식별값을 노출하지 않는 불투명 키이며 저장 요청에 그대로 전달합니다.
                     다른 멤버의 원본 provider ID는 제공하지 않고 이메일 형식의 값은 마스킹합니다.
                     현재 로그인 멤버 ID는 currentProjectMemberId로 제공하며, 각 멤버는 자신의 매핑만 저장·변경·해제할 수 있습니다.

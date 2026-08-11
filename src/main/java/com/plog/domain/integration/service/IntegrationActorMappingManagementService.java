@@ -26,8 +26,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.postgresql.util.PSQLException;
@@ -65,7 +67,7 @@ public class IntegrationActorMappingManagementService {
                 ))
                 .sorted(Comparator.comparing(IntegrationActorMappingResponse::projectMemberId))
                 .toList();
-        List<IntegrationProviderActorResponse> availableProviderActors = providerActors(integration.getId()).stream()
+        List<IntegrationProviderActorResponse> availableProviderActors = providerActors(integration).stream()
                 .map(providerActor -> toProviderActorResponse(
                         providerActor, identities, aliases, currentMember.getId()))
                 .sorted(Comparator
@@ -93,7 +95,7 @@ public class IntegrationActorMappingManagementService {
         ProjectMember currentMember = requireActiveMember(projectId, userId);
         requireMappingEditable(projectId);
         ProjectIntegration integration = requireConnectedIntegrationForUpdate(projectId, linkType);
-        ProviderActor providerActor = providerActors(integration.getId()).stream()
+        ProviderActor providerActor = providerActors(integration).stream()
                 .filter(item -> item.actorKey().equals(request.actorKey()))
                 .findFirst()
                 .orElseThrow(() -> new ApiException(IntegrationErrorCode.PROVIDER_ACTOR_NOT_FOUND));
@@ -153,7 +155,7 @@ public class IntegrationActorMappingManagementService {
         }
 
         if (oldActor != null) {
-            clearActivities(integration.getId(), currentMember, linkType, oldActor);
+            clearActivities(integration, currentMember, oldActor);
         }
         reportLogAdapter.deleteProjectMemberProjection(projectId, linkType, currentMember.getId());
         assignActivities(integration.getId(), currentMember, linkType, providerActor);
@@ -174,7 +176,7 @@ public class IntegrationActorMappingManagementService {
         aliasRepository.deleteAllByIdentityId(identity.getId());
         identityRepository.delete(identity);
         identityRepository.flush();
-        clearActivities(integration.getId(), currentMember, linkType, actor);
+        clearActivities(integration, currentMember, actor);
         reportLogAdapter.deleteProjectMemberProjection(projectId, linkType, currentMember.getId());
         return response;
     }
@@ -206,20 +208,57 @@ public class IntegrationActorMappingManagementService {
                 .orElseThrow(() -> new ApiException(IntegrationErrorCode.PROJECT_INTEGRATION_NOT_FOUND));
     }
 
-    private List<ProviderActor> providerActors(Long projectIntegrationId) {
+    private List<ProviderActor> providerActors(ProjectIntegration integration) {
         Map<String, MutableProviderActor> providerActors = new LinkedHashMap<>();
-        for (IntegrationActorObservation observation : activityRepository.findActorObservations(projectIntegrationId)) {
-            String actorKey = actorKey(
-                    observation.getActorProviderId(),
-                    observation.getActorLogin(),
-                    observation.getActorEmail()
-            );
-            if (actorKey == null) {
-                continue;
+        for (IntegrationActorObservation observation : activityRepository.findActorObservations(integration.getId())) {
+            if (isGoogle(integration.getLinkType())) {
+                mergeGoogleActor(providerActors, observation);
+            } else {
+                String actorKey = actorKey(
+                        observation.getActorProviderId(),
+                        observation.getActorLogin(),
+                        observation.getActorEmail()
+                );
+                if (actorKey == null) {
+                    continue;
+                }
+                providerActors.computeIfAbsent(actorKey, key -> new MutableProviderActor(key, false))
+                        .merge(observation);
             }
-            providerActors.computeIfAbsent(actorKey, MutableProviderActor::new).merge(observation);
         }
         return providerActors.values().stream().map(MutableProviderActor::toProviderActor).toList();
+    }
+
+    private void mergeGoogleActor(
+            Map<String, MutableProviderActor> providerActors,
+            IntegrationActorObservation observation
+    ) {
+        ProviderActorKey providerId = ProviderActorKey.providerId(observation.getActorProviderId());
+        ProviderActorKey email = ProviderActorKey.email(observation.getActorEmail());
+        if (providerId == null && email == null) {
+            return;
+        }
+        Set<String> matchingKeys = new LinkedHashSet<>();
+        for (Map.Entry<String, MutableProviderActor> entry : providerActors.entrySet()) {
+            MutableProviderActor actor = entry.getValue();
+            if ((providerId != null && actor.hasProviderId(providerId.value()))
+                    || (email != null && actor.hasEmail(email.value()))) {
+                matchingKeys.add(entry.getKey());
+            }
+        }
+        MutableProviderActor merged;
+        if (matchingKeys.isEmpty()) {
+            String actorKey = actorKey(observation.getActorProviderId(), null, observation.getActorEmail());
+            merged = new MutableProviderActor(actorKey, true);
+            providerActors.put(actorKey, merged);
+        } else {
+            String firstKey = matchingKeys.iterator().next();
+            merged = providerActors.get(firstKey);
+            for (String key : matchingKeys.stream().skip(1).toList()) {
+                merged.merge(providerActors.remove(key));
+            }
+        }
+        merged.merge(observation);
     }
 
     private boolean matches(
@@ -228,21 +267,46 @@ public class IntegrationActorMappingManagementService {
             List<ProjectMemberIntegrationIdentityAlias> aliases
     ) {
         ProviderActorKey providerId = ProviderActorKey.providerId(providerActor.providerActorId());
-        if (providerId != null) {
+        if (providerId != null && !providerActor.googleActor()) {
             return providerId.storageValue().equals(identity.getProviderActorId());
         }
-        ProviderActorKey primaryKey = ProviderActorKey.primary(
-                null, providerActor.providerLogin(), providerActor.providerEmail());
-        if (primaryKey != null && primaryKey.storageValue().equals(identity.getProviderActorId())) {
-            return true;
+        for (String actorProviderId : providerActor.providerActorIds()) {
+            ProviderActorKey clusterProviderId = ProviderActorKey.providerId(actorProviderId);
+            if (clusterProviderId != null
+                    && clusterProviderId.storageValue().equals(identity.getProviderActorId())) {
+                return true;
+            }
+        }
+        if (providerActor.googleActor()) {
+            for (String providerEmail : providerActor.providerEmails()) {
+                ProviderActorKey email = ProviderActorKey.email(providerEmail);
+                if (email != null && email.storageValue().equals(identity.getProviderActorId())) {
+                    return true;
+                }
+            }
+        } else {
+            ProviderActorKey primaryKey = ProviderActorKey.primary(
+                    null, providerActor.providerLogin(), providerActor.providerEmail());
+            if (primaryKey != null && primaryKey.storageValue().equals(identity.getProviderActorId())) {
+                return true;
+            }
         }
         return aliases.stream()
                 .filter(alias -> alias.getIdentity().getId().equals(identity.getId()))
                 .anyMatch(alias -> switch (alias.getAliasType()) {
                     case EMAIL -> matchesAlias(alias.getAliasValue(),
-                            ProviderActorKey.email(providerActor.providerEmail()));
-                    case LOGIN -> matchesAlias(alias.getAliasValue(),
-                            ProviderActorKey.login(providerActor.providerLogin()));
+                            providerActor.providerEmails().stream()
+                                    .map(ProviderActorKey::email)
+                                    .filter(key -> key != null)
+                                    .filter(key -> matchesAlias(alias.getAliasValue(), key))
+                                    .findFirst()
+                                    .orElse(null));
+                    case LOGIN -> providerActor.googleActor()
+                            ? providerActor.providerActorIds().stream().anyMatch(providerActorId ->
+                                    ProviderActorKey.matchesGoogleProviderIdAlias(
+                                            alias.getAliasValue(), providerActorId))
+                            : matchesAlias(alias.getAliasValue(),
+                                    ProviderActorKey.login(providerActor.providerLogin()));
                 });
     }
 
@@ -270,14 +334,31 @@ public class IntegrationActorMappingManagementService {
             ProviderActor providerActor
     ) {
         List<ProjectMemberIntegrationIdentityAlias> aliases = new ArrayList<>();
-        ProviderActorKey email = ProviderActorKey.email(providerActor.providerEmail());
-        if (email != null) {
-            aliases.add(ProjectMemberIntegrationIdentityAlias.builder()
-                    .identity(identity)
-                    .projectIntegration(integration)
-                    .aliasType(IntegrationIdentityAliasType.EMAIL)
-                    .aliasValue(email.value())
-                    .build());
+        ProviderActorKey storedKey = ProviderActorKey.fromStored(identity.getProviderActorId());
+        if (providerActor.googleActor()) {
+            for (String providerActorId : providerActor.providerActorIds()) {
+                if (storedKey == null
+                        || storedKey.type() != ProviderActorKey.Type.PROVIDER_ID
+                        || !storedKey.value().equals(providerActorId)) {
+                    aliases.add(ProjectMemberIntegrationIdentityAlias.builder()
+                            .identity(identity)
+                            .projectIntegration(integration)
+                            .aliasType(IntegrationIdentityAliasType.LOGIN)
+                            .aliasValue(ProviderActorKey.googleProviderIdAlias(providerActorId))
+                            .build());
+                }
+            }
+        }
+        for (String providerEmail : providerActor.providerEmails()) {
+            ProviderActorKey email = ProviderActorKey.email(providerEmail);
+            if (email != null) {
+                aliases.add(ProjectMemberIntegrationIdentityAlias.builder()
+                        .identity(identity)
+                        .projectIntegration(integration)
+                        .aliasType(IntegrationIdentityAliasType.EMAIL)
+                        .aliasValue(email.value())
+                        .build());
+            }
         }
         ProviderActorKey login = ProviderActorKey.login(providerActor.providerLogin());
         if (integration.getLinkType() == LinkType.GITHUB && login != null) {
@@ -333,12 +414,7 @@ public class IntegrationActorMappingManagementService {
             LinkType linkType,
             ProviderActor actor
     ) {
-        for (ProviderActorKey key : matchKeys(
-                linkType,
-                ProviderActorKey.providerId(actor.providerActorId()),
-                actor.providerLogin(),
-                actor.providerEmail()
-        )) {
+        for (ProviderActorKey key : matchKeys(linkType, actor)) {
             switch (key.type()) {
                 case PROVIDER_ID -> activityRepository.assignProjectMemberByProviderId(
                         integrationId, projectMember, key.value());
@@ -352,21 +428,48 @@ public class IntegrationActorMappingManagementService {
     }
 
     private void clearActivities(
-            Long integrationId,
+            ProjectIntegration integration,
             ProjectMember expectedMember,
-            LinkType linkType,
             ActorIdentity actor
     ) {
+        Long integrationId = integration.getId();
+        LinkType linkType = integration.getLinkType();
+        if (isGoogle(linkType)) {
+            for (ProviderActor observedActor : providerActors(integration)) {
+                if (matches(observedActor, actor)) {
+                    clearActivities(integrationId, expectedMember, matchKeys(linkType, observedActor));
+                    return;
+                }
+            }
+        }
         ProviderActorKey storedKey = ProviderActorKey.fromStored(actor.storedProviderActorId());
         ProviderActorKey providerId = storedKey != null && storedKey.type() == ProviderActorKey.Type.PROVIDER_ID
                 ? storedKey
                 : null;
-        for (ProviderActorKey key : matchKeys(
-                linkType,
-                providerId,
-                actor.providerLogin(),
-                actor.providerEmail()
-        )) {
+        clearActivities(integrationId, expectedMember,
+                matchKeys(linkType, providerId, actor.providerLogin(), actor.providerEmail()));
+    }
+
+    private boolean matches(ProviderActor providerActor, ActorIdentity actor) {
+        ProviderActorKey storedKey = ProviderActorKey.fromStored(actor.storedProviderActorId());
+        if (storedKey != null && storedKey.type() == ProviderActorKey.Type.PROVIDER_ID
+                && providerActor.providerActorIds().contains(storedKey.value())) {
+            return true;
+        }
+        if (storedKey != null && storedKey.type() == ProviderActorKey.Type.EMAIL
+                && providerActor.providerEmails().contains(storedKey.value())) {
+            return true;
+        }
+        ProviderActorKey email = ProviderActorKey.email(actor.providerEmail());
+        return email != null && providerActor.providerEmails().contains(email.value());
+    }
+
+    private void clearActivities(
+            Long integrationId,
+            ProjectMember expectedMember,
+            List<ProviderActorKey> keys
+    ) {
+        for (ProviderActorKey key : keys) {
             switch (key.type()) {
                 case PROVIDER_ID -> activityRepository.clearProjectMemberByProviderId(
                         integrationId, expectedMember, key.value());
@@ -376,6 +479,34 @@ public class IntegrationActorMappingManagementService {
                         integrationId, expectedMember, key.value());
             }
         }
+    }
+
+    private List<ProviderActorKey> matchKeys(
+            LinkType linkType,
+            ProviderActor actor
+    ) {
+        if (!isGoogle(linkType)) {
+            return matchKeys(
+                    linkType,
+                    ProviderActorKey.providerId(actor.providerActorId()),
+                    actor.providerLogin(),
+                    actor.providerEmail()
+            );
+        }
+        List<ProviderActorKey> keys = new ArrayList<>();
+        for (String providerActorId : actor.providerActorIds()) {
+            ProviderActorKey providerId = ProviderActorKey.providerId(providerActorId);
+            if (providerId != null) {
+                keys.add(providerId);
+            }
+        }
+        for (String providerEmail : actor.providerEmails()) {
+            ProviderActorKey email = ProviderActorKey.email(providerEmail);
+            if (email != null) {
+                keys.add(email);
+            }
+        }
+        return keys;
     }
 
     private List<ProviderActorKey> matchKeys(
@@ -399,6 +530,10 @@ public class IntegrationActorMappingManagementService {
             }
         }
         return keys;
+    }
+
+    private boolean isGoogle(LinkType linkType) {
+        return linkType == LinkType.GOOGLE_DOCS || linkType == LinkType.GOOGLE_SLIDES;
     }
 
     private IntegrationActorMappingResponse toMappingResponse(
@@ -430,6 +565,9 @@ public class IntegrationActorMappingManagementService {
             String providerActorId,
             String providerLogin,
             String providerEmail,
+            List<String> providerActorIds,
+            List<String> providerEmails,
+            boolean googleActor,
             long activityCount,
             Instant firstOccurredAt,
             Instant lastOccurredAt
@@ -460,36 +598,83 @@ public class IntegrationActorMappingManagementService {
     private static final class MutableProviderActor {
 
         private final String actorKey;
+        private final boolean googleActor;
         private String providerActorId;
         private String providerLogin;
         private String providerEmail;
+        private final Set<String> providerActorIds = new LinkedHashSet<>();
+        private final Set<String> providerEmails = new LinkedHashSet<>();
         private long activityCount;
         private Instant firstOccurredAt;
         private Instant lastOccurredAt;
 
-        private MutableProviderActor(String actorKey) {
+        private MutableProviderActor(String actorKey, boolean googleActor) {
             this.actorKey = actorKey;
+            this.googleActor = googleActor;
         }
 
         private void merge(IntegrationActorObservation observation) {
             providerActorId = prefer(providerActorId, observation.getActorProviderId());
             providerLogin = prefer(providerLogin, observation.getActorLogin());
             providerEmail = prefer(providerEmail, observation.getActorEmail());
+            ProviderActorKey providerId = ProviderActorKey.providerId(observation.getActorProviderId());
+            if (providerId != null) {
+                providerActorIds.add(providerId.value());
+            }
+            ProviderActorKey email = ProviderActorKey.email(observation.getActorEmail());
+            if (email != null) {
+                providerEmails.add(email.value());
+            }
             activityCount += observation.getActivityCount();
             firstOccurredAt = earlier(firstOccurredAt, observation.getFirstOccurredAt());
             lastOccurredAt = later(lastOccurredAt, observation.getLastOccurredAt());
         }
 
+        private void merge(MutableProviderActor other) {
+            providerActorId = prefer(providerActorId, other.providerActorId);
+            providerLogin = prefer(providerLogin, other.providerLogin);
+            providerEmail = prefer(providerEmail, other.providerEmail);
+            providerActorIds.addAll(other.providerActorIds);
+            providerEmails.addAll(other.providerEmails);
+            activityCount += other.activityCount;
+            firstOccurredAt = earlier(firstOccurredAt, other.firstOccurredAt);
+            lastOccurredAt = later(lastOccurredAt, other.lastOccurredAt);
+        }
+
+        private boolean hasProviderId(String providerId) {
+            return providerActorIds.contains(providerId);
+        }
+
+        private boolean hasEmail(String email) {
+            return providerEmails.contains(email);
+        }
+
         private ProviderActor toProviderActor() {
+            List<String> sortedProviderIds = providerActorIds.stream().sorted().toList();
+            List<String> sortedEmails = providerEmails.stream().sorted().toList();
+            String selectedProviderId = googleActor && !sortedProviderIds.isEmpty()
+                    ? sortedProviderIds.get(0)
+                    : providerActorId;
+            String selectedEmail = googleActor && !sortedEmails.isEmpty()
+                    ? sortedEmails.get(0)
+                    : providerEmail;
             return new ProviderActor(
-                    actorKey,
-                    providerActorId,
+                    googleActor ? canonicalGoogleActorKey(selectedProviderId, selectedEmail) : actorKey,
+                    selectedProviderId,
                     providerLogin,
-                    providerEmail,
+                    selectedEmail,
+                    sortedProviderIds,
+                    sortedEmails,
+                    googleActor,
                     activityCount,
                     firstOccurredAt,
                     lastOccurredAt
             );
+        }
+
+        private String canonicalGoogleActorKey(String selectedProviderId, String selectedEmail) {
+            ProviderActorKey key = ProviderActorKey.primary(selectedProviderId, null, selectedEmail);
+            return key == null ? actorKey : key.selectionKey();
         }
 
         private static String prefer(String current, String candidate) {

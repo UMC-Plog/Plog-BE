@@ -19,7 +19,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** email/login fallback actor 매핑. 중복 별칭은 저장 단계에서 거절한다. */
+/** email/login fallback actor 매핑. Google provider ID는 기존 스키마 호환을 위해 prefix가 붙은 LOGIN 값으로 저장한다. */
 @Entity
 @Getter
 @Builder
