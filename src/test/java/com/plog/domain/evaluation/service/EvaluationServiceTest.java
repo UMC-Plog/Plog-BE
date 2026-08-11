@@ -20,6 +20,7 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.entity.ProjectStatus;
+import com.plog.domain.project.entity.PeerEvaluationStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
@@ -158,7 +159,8 @@ class EvaluationServiceTest {
 
     @Test
     void rejectsAPeerEvaluationBeforeTheEndDay() {
-        Project project = project(ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC).plusDays(1));
+        Project project = project(ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC).plusDays(1),
+                PeerEvaluationStatus.PENDING);
         ProjectMember evaluator = activeMember(10L, project);
         ProjectMember evaluatee = activeMember(20L, project);
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
@@ -270,6 +272,11 @@ class EvaluationServiceTest {
     }
 
     private Project project(ProjectStatus status, LocalDate endDay) {
+        return project(status, endDay, status == ProjectStatus.COMPLETED
+                ? PeerEvaluationStatus.CLOSED : PeerEvaluationStatus.OPEN);
+    }
+
+    private Project project(ProjectStatus status, LocalDate endDay, PeerEvaluationStatus evaluationStatus) {
         return Project.builder()
                 .id(1L)
                 .projectName("Plog")
@@ -279,6 +286,7 @@ class EvaluationServiceTest {
                 .status(status)
                 .startDay(LocalDate.of(2026, 1, 1))
                 .endDay(endDay)
+                .peerEvaluationStatus(evaluationStatus)
                 .build();
     }
 }

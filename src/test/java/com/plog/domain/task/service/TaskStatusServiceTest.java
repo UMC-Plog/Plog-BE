@@ -12,6 +12,7 @@ import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskStatus;
 import com.plog.domain.task.event.TaskStatusChangedEvent;
 import com.plog.domain.task.repository.TaskRepository;
+import com.plog.domain.task.repository.TaskStatusHistoryRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,12 +33,14 @@ class TaskStatusServiceTest {
     @Mock private TaskRepository taskRepository;
     @Mock private ProjectAccessService projectAccessService;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private TaskStatusHistoryRepository taskStatusHistoryRepository;
 
     private TaskStatusService service;
 
     @BeforeEach
     void setUp() {
-        service = new TaskStatusService(taskRepository, projectAccessService, eventPublisher);
+        service = new TaskStatusService(
+                taskRepository, projectAccessService, eventPublisher, taskStatusHistoryRepository);
     }
 
     private Task taskWithStatus(TaskStatus status) {

@@ -1,6 +1,5 @@
 package com.plog.domain.project.repository;
 
-import com.plog.domain.notification.entity.NotificationType;
 import com.plog.domain.project.entity.Project;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
@@ -26,15 +25,17 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
     @Query("select project from Project project where project.id = :projectId")
     Optional<Project> findByIdForUpdate(@Param("projectId") Long projectId);
 
-    @Query("select project from Project project "
+    @Query("select project.id from Project project "
             + "where project.status = com.plog.domain.project.entity.ProjectStatus.IN_PROGRESS "
             + "and project.endDay <= :today "
-            + "and not exists (select 1 from Notification notification "
-            + "where notification.project = project and notification.type = :type) "
+            + "and (project.peerEvaluationStatus is null "
+            + "or project.peerEvaluationStatus = com.plog.domain.project.entity.PeerEvaluationStatus.PENDING "
+            + "or project.internalCollectionStatus is null "
+            + "or project.internalCollectionStatus = com.plog.domain.project.entity.ProjectCollectionStatus.NOT_STARTED "
+            + "or project.internalCollectionStatus = com.plog.domain.project.entity.ProjectCollectionStatus.FAILED) "
             + "order by project.endDay asc, project.id asc")
-    List<Project> findProjectsAwaitingPeerEvaluationNotification(
+    List<Long> findProjectsAwaitingDeadlineProcessing(
             @Param("today") LocalDate today,
-            @Param("type") NotificationType type,
             Pageable pageable
     );
 }

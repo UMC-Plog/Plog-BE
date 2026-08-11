@@ -17,6 +17,8 @@ class ProjectTest {
                 .status(status)
                 .startDay(END_DAY.minusDays(30))
                 .endDay(END_DAY)
+                .peerEvaluationStatus(status == ProjectStatus.COMPLETED
+                        ? PeerEvaluationStatus.CLOSED : PeerEvaluationStatus.OPEN)
                 .build();
     }
 
@@ -28,10 +30,17 @@ class ProjectTest {
     }
 
     @Test
-    void isNotEvaluatingBeforeTheEndDay() {
-        Project project = projectEndingOnEndDay(ProjectStatus.IN_PROGRESS);
+    void isNotEvaluatingWhileEvaluationIsPending() {
+        Project project = Project.builder()
+                .inviteTokenHash("token-hash")
+                .inviteTokenEncrypted("encrypted-token")
+                .status(ProjectStatus.IN_PROGRESS)
+                .startDay(END_DAY.minusDays(30))
+                .endDay(END_DAY)
+                .peerEvaluationStatus(PeerEvaluationStatus.PENDING)
+                .build();
 
-        assertThat(project.isEvaluatingState(END_DAY.minusDays(1))).isFalse();
+        assertThat(project.isEvaluatingState(END_DAY)).isFalse();
     }
 
     @Test

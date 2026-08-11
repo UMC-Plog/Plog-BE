@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import com.plog.domain.integration.config.IntegrationCollectionProperties;
 import com.plog.domain.integration.entity.IntegrationCollectionJob;
 import com.plog.domain.integration.entity.IntegrationCollectionJobStatus;
+import com.plog.domain.integration.event.ExternalCollectionFinishedEvent;
 import com.plog.domain.integration.repository.IntegrationCollectionJobRepository;
 import com.plog.domain.notification.event.IntegrationCollectionCompletedEvent;
 import com.plog.domain.project.entity.Project;
@@ -18,7 +19,6 @@ import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
@@ -55,10 +55,31 @@ class IntegrationCollectionJobServiceTest {
 
         service.succeed(claimed, Instant.now(), 3, 3);
 
-        ArgumentCaptor<IntegrationCollectionCompletedEvent> captor =
-                ArgumentCaptor.forClass(IntegrationCollectionCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        assertThat(captor.getValue()).isEqualTo(new IntegrationCollectionCompletedEvent(7L, 42L, 3L));
+        verify(eventPublisher).publishEvent(new IntegrationCollectionCompletedEvent(7L, 42L, 3L));
         assertThat(entity.getStatus()).isEqualTo(IntegrationCollectionJobStatus.SUCCEEDED);
+    }
+
+    @Test
+    void 자동_최종_수집이_끝나면_평가_오픈용_이벤트를_발행한다() {
+        Project project = mock(Project.class);
+        given(project.getId()).willReturn(7L);
+        IntegrationCollectionJob entity = IntegrationCollectionJob.builder()
+                .id(42L)
+                .project(project)
+                .status(IntegrationCollectionJobStatus.PENDING)
+                .availableAt(Instant.EPOCH)
+                .attemptCount(0)
+                .build();
+        String token = entity.begin(Instant.now());
+        IntegrationCollectionJobService.ClaimedJob claimed = new IntegrationCollectionJobService.ClaimedJob(
+                42L, 7L, token, 1, CollectionCursor.start());
+        given(jobRepository.findByIdForUpdate(42L)).willReturn(Optional.of(entity));
+        IntegrationCollectionJobService service = new IntegrationCollectionJobService(
+                jobRepository, projectRepository, projectMemberRepository, properties, eventPublisher);
+
+        service.succeed(claimed, Instant.now(), 3, 3);
+
+        verify(eventPublisher).publishEvent(
+                new ExternalCollectionFinishedEvent(7L, IntegrationCollectionJobStatus.SUCCEEDED));
     }
 }

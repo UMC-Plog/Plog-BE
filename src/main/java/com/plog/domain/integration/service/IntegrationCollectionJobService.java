@@ -4,9 +4,12 @@ import com.plog.domain.integration.config.IntegrationCollectionProperties;
 import com.plog.domain.integration.entity.CollectionPhase;
 import com.plog.domain.integration.entity.IntegrationCollectionJob;
 import com.plog.domain.integration.entity.IntegrationCollectionJobStatus;
+import com.plog.domain.integration.event.ExternalCollectionFinishedEvent;
+import com.plog.domain.integration.event.ExternalCollectionStartedEvent;
 import com.plog.domain.integration.repository.IntegrationCollectionJobRepository;
 import com.plog.domain.notification.event.IntegrationCollectionCompletedEvent;
 import com.plog.domain.project.entity.Project;
+import com.plog.domain.project.entity.ProjectCollectionStatus;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
@@ -80,6 +83,9 @@ public class IntegrationCollectionJobService {
         }
         IntegrationCollectionJob job = due.getFirst();
         String token = job.begin(now);
+        if (job.getRequestedByProjectMember() == null) {
+            eventPublisher.publishEvent(new ExternalCollectionStartedEvent(job.getProject().getId()));
+        }
         return new ClaimedJob(
                 job.getId(),
                 job.getProject().getId(),
@@ -109,6 +115,10 @@ public class IntegrationCollectionJobService {
         IntegrationCollectionJob entity = locked(job);
         entity.succeed(job.claimToken(), now, requestedCount, collectedCount);
         ProjectMember requestedBy = entity.getRequestedByProjectMember();
+        if (isFinalCollectionExpected(entity)) {
+            eventPublisher.publishEvent(new ExternalCollectionFinishedEvent(
+                    entity.getProject().getId(), IntegrationCollectionJobStatus.SUCCEEDED));
+        }
         if (requestedBy != null) {
             eventPublisher.publishEvent(new IntegrationCollectionCompletedEvent(
                     entity.getProject().getId(), entity.getId(), requestedBy.getId()));
@@ -118,12 +128,22 @@ public class IntegrationCollectionJobService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void partiallyFail(
             ClaimedJob job, Instant now, int requestedCount, int collectedCount, String summary) {
-        locked(job).partiallyFail(job.claimToken(), now, requestedCount, collectedCount, summary);
+        IntegrationCollectionJob entity = locked(job);
+        entity.partiallyFail(job.claimToken(), now, requestedCount, collectedCount, summary);
+        if (isFinalCollectionExpected(entity)) {
+            eventPublisher.publishEvent(new ExternalCollectionFinishedEvent(
+                    entity.getProject().getId(), IntegrationCollectionJobStatus.PARTIAL_FAILED));
+        }
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void fail(ClaimedJob job, Instant now, String summary) {
-        locked(job).fail(job.claimToken(), now, summary);
+        IntegrationCollectionJob entity = locked(job);
+        entity.fail(job.claimToken(), now, summary);
+        if (isFinalCollectionExpected(entity)) {
+            eventPublisher.publishEvent(new ExternalCollectionFinishedEvent(
+                    entity.getProject().getId(), IntegrationCollectionJobStatus.FAILED));
+        }
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -153,6 +173,13 @@ public class IntegrationCollectionJobService {
         return integrationCollectionJobRepository.findByIdForUpdate(job.jobId())
                 .orElseThrow(() -> new DataRetrievalFailureException(
                         "Collection job disappeared while processing: " + job.jobId()));
+    }
+
+    private boolean isFinalCollectionExpected(IntegrationCollectionJob job) {
+        ProjectCollectionStatus status = job.getProject().getExternalCollectionStatus();
+        return job.getRequestedByProjectMember() == null
+                || status == ProjectCollectionStatus.PENDING
+                || status == ProjectCollectionStatus.RUNNING;
     }
 
     public record ClaimedJob(
