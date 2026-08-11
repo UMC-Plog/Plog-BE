@@ -3,6 +3,12 @@ package com.plog.domain.project.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import com.plog.domain.integration.entity.IntegrationCollectionJob;
+import com.plog.domain.integration.entity.IntegrationCollectionJobStatus;
+import com.plog.domain.integration.repository.IntegrationCollectionJobRepository;
+import com.plog.domain.notification.entity.NotificationProjectSetting;
+import com.plog.domain.notification.entity.NotificationType;
+import com.plog.domain.notification.repository.NotificationProjectSettingRepository;
 import com.plog.domain.project.dto.response.ProjectLeaveResponse;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
@@ -18,6 +24,7 @@ import com.plog.infrastructure.s3.FileStorageService;
 import com.plog.infrastructure.s3.ThumbnailProperties;
 import com.plog.infrastructure.s3.UploadedFileService;
 import com.plog.global.util.HashUtil;
+import java.time.Instant;
 import java.time.LocalDate;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -89,12 +96,22 @@ class ProjectLeaveServiceIntegrationTest {
     private ProjectMemberRepository projectMemberRepository;
 
     @Autowired
+    private IntegrationCollectionJobRepository integrationCollectionJobRepository;
+
+    @Autowired
+    private NotificationProjectSettingRepository notificationProjectSettingRepository;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @AfterEach
     void cleanUp() {
         TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
         transactionTemplate.executeWithoutResult(status -> {
+            integrationCollectionJobRepository.deleteAll();
+            integrationCollectionJobRepository.flush();
+            notificationProjectSettingRepository.deleteAll();
+            notificationProjectSettingRepository.flush();
             projectMemberRepository.deleteAll();
             projectMemberRepository.flush();
             projectRepository.deleteAll();
@@ -127,6 +144,20 @@ class ProjectLeaveServiceIntegrationTest {
 
         assertThat(projectRepository.findById(fixture.projectId())).isEmpty();
         assertThat(projectMemberRepository.count()).isZero();
+    }
+
+    @Test
+    void lastMemberLeaveDeletesProjectScopedSettingsAndCollectionJobs() {
+        Fixture fixture = saveOwner("project-scoped-relations");
+        saveProjectScopedRelations(fixture);
+
+        assertThatCode(() -> projectLeaveService.leave(fixture.projectId(), fixture.userId()))
+                .doesNotThrowAnyException();
+
+        assertThat(integrationCollectionJobRepository.count()).isZero();
+        assertThat(notificationProjectSettingRepository.count()).isZero();
+        assertThat(projectMemberRepository.count()).isZero();
+        assertThat(projectRepository.findById(fixture.projectId())).isEmpty();
     }
 
     @Test
@@ -222,6 +253,27 @@ class ProjectLeaveServiceIntegrationTest {
                     .role(ProjectRole.MEMBER)
                     .status(MemberStatus.ACTIVE)
                     .build()).getId();
+        });
+    }
+
+    private void saveProjectScopedRelations(Fixture fixture) {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.executeWithoutResult(status -> {
+            User user = userRepository.findById(fixture.userId()).orElseThrow();
+            Project project = projectRepository.findById(fixture.projectId()).orElseThrow();
+            ProjectMember projectMember = projectMemberRepository
+                    .findByProjectIdAndUserId(fixture.projectId(), fixture.userId())
+                    .orElseThrow();
+
+            notificationProjectSettingRepository.save(NotificationProjectSetting.create(
+                    user, project, NotificationType.CHAT_MESSAGE, true));
+            integrationCollectionJobRepository.save(IntegrationCollectionJob.builder()
+                    .project(project)
+                    .requestedByProjectMember(projectMember)
+                    .status(IntegrationCollectionJobStatus.PENDING)
+                    .availableAt(Instant.now())
+                    .attemptCount(0)
+                    .build());
         });
     }
 

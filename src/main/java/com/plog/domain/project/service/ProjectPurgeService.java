@@ -41,6 +41,8 @@ public class ProjectPurgeService {
                 + "where resource.projectIntegration.project.id = :projectId", projectId);
         delete("delete from IntegrationAuthorizationState authorizationState "
                 + "where authorizationState.project.id = :projectId", projectId);
+        delete("delete from IntegrationCollectionJob collectionJob "
+                + "where collectionJob.project.id = :projectId", projectId);
         delete("delete from IntegrationCollectionRun collectionRun "
                 + "where collectionRun.project.id = :projectId", projectId);
         delete("delete from ProjectIntegration integration "
@@ -57,6 +59,7 @@ public class ProjectPurgeService {
         delete("delete from ReportMemberResult result where result.report.project.id = :projectId", projectId);
         delete("delete from Report report where report.project.id = :projectId", projectId);
         delete("delete from Notification notification where notification.project.id = :projectId", projectId);
+        delete("delete from NotificationProjectSetting setting where setting.project.id = :projectId", projectId);
         delete("delete from ProjectMember member where member.project.id = :projectId", projectId);
         // 프로젝트 행도 여기서 벌크로 지운다. 호출부가 em.remove(project)로 지우면,
         // 위 벌크 delete가 남긴 managed ProjectMember 엔티티가 REMOVED 상태의 project를
