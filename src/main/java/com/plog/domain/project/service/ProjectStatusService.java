@@ -1,6 +1,5 @@
 package com.plog.domain.project.service;
 
-import com.plog.domain.integration.service.IntegrationActorMappingStatusService;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
 import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
 import com.plog.domain.project.dto.ProjectStatusDto;
@@ -33,7 +32,6 @@ public class ProjectStatusService {
     private final PeerEvaluationRepository peerEvaluationRepository;
     private final SelfFeedbackRepository selfFeedbackRepository;
     private final ProjectAccessService projectAccessService;
-    private final IntegrationActorMappingStatusService actorMappingStatusService;
     private final ReportLifecycleService reportLifecycleService;
     private final ReportRepository reportRepository;
 
@@ -60,10 +58,6 @@ public class ProjectStatusService {
 
         long activeMemberCount = projectMemberRepository.countByProjectIdAndStatus(projectId, MemberStatus.ACTIVE);
         boolean allEvaluationsSubmitted = isAllEvaluationSubmitted(projectId, activeMemberCount);
-        if (allEvaluationsSubmitted
-                && !actorMappingStatusService.areAllActiveMemberMappingsCompleted(projectId, activeMemberCount)) {
-            throw new ApiException(ProjectErrorCode.ACTOR_MAPPING_REQUIRED);
-        }
         boolean allSubmitted = allEvaluationsSubmitted;
         boolean timeoutApplied = !allSubmitted && project.isEvaluationClosed(TimeUtil.today());
 
@@ -91,8 +85,7 @@ public class ProjectStatusService {
         }
 
         long activeMemberCount = projectMemberRepository.countByProjectIdAndStatus(projectId, MemberStatus.ACTIVE);
-        if (!isAllEvaluationSubmitted(projectId, activeMemberCount)
-                || !actorMappingStatusService.areAllActiveMemberMappingsCompleted(projectId, activeMemberCount)) {
+        if (!isAllEvaluationSubmitted(projectId, activeMemberCount)) {
             return Optional.empty();
         }
 

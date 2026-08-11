@@ -16,10 +16,10 @@ public record EvaluationTargetResponse(
         @Schema(description = "자기 피드백 작성 완료 여부", example = "true")
         boolean isSelfFeedbackCompleted,
         @JsonProperty("isAccountMappingCompleted")
-        @Schema(description = "연동된 모든 외부 서비스에서 본인 계정 선택을 완료했는지 여부", example = "true")
+        @Schema(description = "외부 서비스 본인 계정 선택 완료 여부. 최종 제출 필수 조건은 아님", example = "false")
         boolean isAccountMappingCompleted,
         @JsonProperty("isFinalSubmissionAvailable")
-        @Schema(description = "Peer 평가, 자기 피드백, 본인 계정 선택을 모두 완료해 최종 제출할 수 있는지 여부", example = "true")
+        @Schema(description = "Peer 평가와 자기 피드백을 완료해 최종 제출할 수 있는지 여부", example = "true")
         boolean isFinalSubmissionAvailable
 ) {
 }
