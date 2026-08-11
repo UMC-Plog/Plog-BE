@@ -108,7 +108,7 @@ public class ReportSearchService {
                 summary.getProjectId(),
                 summary.getProjectName(),
                 summary.getReportId(),
-                ReportCodeFormatter.format(summary.getReportId(), summary.getCreatedAt()),
+                ReportCodeFormatter.formatTeam(summary.getProjectId(), summary.getCreatedAt()),
                 summary.getReportStatus(),
                 TimeUtil.toInstant(summary.getCompletedAt())
         );

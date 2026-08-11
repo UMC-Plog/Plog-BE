@@ -3,14 +3,12 @@ package com.plog.domain.report.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.report.entity.Report;
-import com.plog.domain.report.entity.ReportStatus;
 import com.plog.domain.report.repository.ReportRepository;
 import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
@@ -23,7 +21,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ReportBatchServiceTest {
@@ -34,33 +31,28 @@ class ReportBatchServiceTest {
     @Mock
     private ReportLifecycleService reportLifecycleService;
 
-    @Mock
-    private ReportGenerationService reportGenerationService;
-
     @InjectMocks
     private ReportBatchService reportBatchService;
 
-    // 행만 만들고 끝내면 GENERATING 으로 남아 다음 회차 대상에서도 빠진다 — 영영 발행되지 않는다.
     @Test
-    void generatesTheReportRightAfterStartingIt() {
+    void countsReportWhoseLifecycleWasStarted() {
         givenDueProjects(1L);
         Report started = mockReport();
-        ReflectionTestUtils.setField(started, "id", 77L);
         when(reportLifecycleService.closeEvaluationAndStart(1L)).thenReturn(Optional.of(started));
 
-        reportBatchService.startDueReports();
+        ReportBatchResult result = reportBatchService.startDueReports();
 
-        verify(reportGenerationService).generate(77L);
+        assertThat(result.started()).isEqualTo(1);
     }
 
     @Test
-    void doesNotGenerateForSkippedProjects() {
+    void countsSkippedProjects() {
         givenDueProjects(1L);
         when(reportLifecycleService.closeEvaluationAndStart(1L)).thenReturn(Optional.empty());
 
-        reportBatchService.startDueReports();
+        ReportBatchResult result = reportBatchService.startDueReports();
 
-        verify(reportGenerationService, never()).generate(anyLong());
+        assertThat(result.skipped()).isEqualTo(1);
     }
 
     @Test
@@ -111,7 +103,7 @@ class ReportBatchServiceTest {
 
     @Test
     void doesNothingWhenNoProjectIsDue() {
-        when(reportRepository.findProjectsDueForReport(any(), any(), any())).thenReturn(List.of());
+        when(reportRepository.findProjectsDueForReport(any(), any())).thenReturn(List.of());
 
         ReportBatchResult result = reportBatchService.startDueReports();
 
@@ -125,14 +117,13 @@ class ReportBatchServiceTest {
      */
     @Test
     void queriesWithTheEvaluationDeadlineDerivedFromTheProjectEntity() {
-        when(reportRepository.findProjectsDueForReport(any(), any(), any())).thenReturn(List.of());
+        when(reportRepository.findProjectsDueForReport(any(), any())).thenReturn(List.of());
 
         reportBatchService.startDueReports();
 
         ArgumentCaptor<LocalDate> bound = ArgumentCaptor.forClass(LocalDate.class);
         verify(reportRepository).findProjectsDueForReport(
                 bound.capture(),
-                eq(ReportStatus.restartBlockingStatuses()),
                 any(Pageable.class)
         );
         LocalDate today = TimeUtil.today();
@@ -145,7 +136,7 @@ class ReportBatchServiceTest {
         List<Project> projects = java.util.Arrays.stream(projectIds)
                 .map(this::project)
                 .toList();
-        when(reportRepository.findProjectsDueForReport(any(), any(), any())).thenReturn(projects);
+        when(reportRepository.findProjectsDueForReport(any(), any())).thenReturn(projects);
     }
 
     private Project project(Long id) {

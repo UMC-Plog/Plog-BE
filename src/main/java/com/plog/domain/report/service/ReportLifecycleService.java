@@ -4,10 +4,12 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.report.entity.Report;
 import com.plog.domain.report.entity.ReportStatus;
+import com.plog.domain.report.event.ReportGenerationRequestedEvent;
 import com.plog.domain.report.repository.ReportRepository;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +25,7 @@ public class ReportLifecycleService {
 
     private final ReportRepository reportRepository;
     private final ProjectRepository projectRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 유예 기간이 끝난 프로젝트의 평가를 닫고 리포트를 시작한다. 배치가 프로젝트 1건마다 호출하며,
@@ -35,7 +38,7 @@ public class ReportLifecycleService {
      * 프로젝트 행을 비관적 락으로 선점하는 것이 멱등성의 근거다 — 사용자 요청 경로
      * ({@code ProjectStatusService})도 같은 락을 잡으므로 둘이 동시에 리포트를 만들 수 없다.
      *
-     * @return 새로 시작한 리포트. 이미 있어서 건너뛰었으면 {@link Optional#empty()}
+     * @return 새로 시작하거나 FAILED 에서 재시작한 리포트. 진행·완료 상태라 건너뛰면 빈 값
      */
     @Transactional
     public Optional<Report> closeEvaluationAndStart(Long projectId) {
@@ -49,27 +52,37 @@ public class ReportLifecycleService {
     }
 
     /**
-     * 프로젝트의 리포트를 시작한다. 이미 진행 중(GENERATING)이거나 발행된(COMPLETED) 리포트가 있으면
-     * 아무것도 하지 않고 빈 값을 돌려준다 — 호출부가 몇 번 불러도 안전하다.
-     * FAILED 리포트만 있는 경우는 재시도로 보고 새 행을 시작한다.
+     * 프로젝트의 리포트를 시작한다. 기존 행이 GENERATING 또는 COMPLETED 면 건너뛰고,
+     * FAILED 면 같은 행을 GENERATING 으로 전환해 재큐잉한다.
      * <p>
-     * exists 체크와 save 사이의 경합은 DB 제약으로 못 막는다(project_id 가 유니크가 아니다).
-     * 그래서 호출부가 프로젝트 행을 이미 선점한 상태여야 한다 —
-     * ProjectStatusService 는 findByIdForUpdate 로, 스케줄러도 같은 락을 잡고 들어온다.
+     * 호출부의 프로젝트 행 락으로 정상 경로를 직렬화하고, DB의 project_id 유니크 제약으로
+     * 다른 진입점이나 실수로 인한 중복 insert까지 최종 차단한다.
      *
-     * @return 새로 시작한 리포트. 이미 있어서 건너뛰었으면 {@link Optional#empty()}
+     * @return 새로 시작하거나 재시작한 리포트. 진행·완료 상태라 건너뛰면 빈 값
      */
     @Transactional
     public Optional<Report> startFor(Project project) {
         if (project == null || project.getId() == null) {
             throw new IllegalArgumentException("리포트를 시작하려면 저장된 프로젝트가 필요합니다.");
         }
-        if (reportRepository.existsByProjectIdAndStatusIn(
-                project.getId(), ReportStatus.restartBlockingStatuses())) {
-            return Optional.empty();
+        Optional<Report> existing = reportRepository.findByProjectId(project.getId());
+        if (existing.isPresent()) {
+            Report report = existing.get();
+            if (report.getStatus() != ReportStatus.FAILED) {
+                return Optional.empty();
+            }
+            report.restart();
+            requestGeneration(report);
+            log.info("실패 리포트 재시작: reportId={}, projectId={}", report.getId(), project.getId());
+            return Optional.of(report);
         }
         Report report = reportRepository.save(Report.start(project));
+        requestGeneration(report);
         log.info("리포트 생성: reportId={}, projectId={}", report.getId(), project.getId());
         return Optional.of(report);
+    }
+
+    private void requestGeneration(Report report) {
+        eventPublisher.publishEvent(new ReportGenerationRequestedEvent(report.getId()));
     }
 }

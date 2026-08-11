@@ -142,7 +142,7 @@ public class ReportMemberResult extends BaseEntity {
 
     // ── 5단계(LLM) 산출물. 컬럼 하나가 화면 섹션 하나에 대응한다. ──
     // 중첩 구조인 것들은 jsonb 에 직렬화해 넣는다(ReportActivityLog.metadata 와 같은 방식).
-    // 근거가 부족하면 LLM 이 비워 보내므로 전부 nullable 이고, 화면은 빈 섹션을 숨긴다.
+    // 최신 LLM 응답은 근거 부족 시 안내 문구를 채운다. nullable 은 과거 응답 호환을 위해 유지한다.
 
     /** 개인 리포트 상단의 "AI 한줄 평가". */
     @Column(name = "headline", columnDefinition = "TEXT")

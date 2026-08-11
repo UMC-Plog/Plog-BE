@@ -264,7 +264,7 @@ class ReportControllerTest {
                 "앞으로는 이렇게 해보세요",
                 List.of(new ReportMemberSummaryResponse(
                         7L,
-                        "창훈",
+                        "이창훈",
                         new BigDecimal("82.50"),
                         ReliabilityTier.P1,
                         "적극적인 리더십으로 팀의 방향을 잡았어요"
@@ -280,7 +280,7 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$.result.completedAt").value("2026-07-20T12:00:00Z"))
                 .andExpect(jsonPath("$.result.pdfAvailable").value(true))
                 .andExpect(jsonPath("$.result.members[0].projectMemberId").value(7L))
-                .andExpect(jsonPath("$.result.members[0].memberName").value("창훈"))
+                .andExpect(jsonPath("$.result.members[0].memberName").value("이창훈"))
                 .andExpect(jsonPath("$.result.members[0].finalScore").value(82.50))
                 .andExpect(jsonPath("$.result.members[0].reliabilityTier").value("P1"))
                 // 팀 리포트 화면이 필요한 AI 텍스트가 실제로 내려가는지
@@ -313,7 +313,7 @@ class ReportControllerTest {
         given(detailService.getMemberResult(1L, 20L, 7L)).willReturn(new ReportMemberResultResponse(
                 20L,
                 7L,
-                "창훈",
+                "이창훈",
                 new BigDecimal("88.00"),
                 null,
                 new BigDecimal("80.00"),
@@ -341,7 +341,7 @@ class ReportControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("REPORT004"))
                 .andExpect(jsonPath("$.result.projectMemberId").value(7L))
-                .andExpect(jsonPath("$.result.memberName").value("창훈"))
+                .andExpect(jsonPath("$.result.memberName").value("이창훈"))
                 .andExpect(jsonPath("$.result.finalScore").value(82.50))
                 .andExpect(jsonPath("$.result.externalToolConnected").value(true))
                 .andExpect(jsonPath("$.result.reliabilityTier").value("P2"))

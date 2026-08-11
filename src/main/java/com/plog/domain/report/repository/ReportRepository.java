@@ -7,7 +7,6 @@ import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -19,21 +18,14 @@ import org.springframework.data.repository.query.Param;
 
 public interface ReportRepository extends JpaRepository<Report, Long> {
 
-    /**
-     * 리포트 생성 멱등성 체크용. reports 는 project_id 유니크가 아니라(중간/최종 리포트 대비)
-     * DB 제약으로 중복을 막을 수 없어서, "재시작을 막는 상태"의 행이 이미 있는지로 판정한다.
-     * 기준 집합은 {@link ReportStatus#restartBlockingStatuses()}.
-     */
-    boolean existsByProjectIdAndStatusIn(Long projectId, Collection<ReportStatus> statuses);
-
-    Optional<Report> findFirstByProjectIdOrderByIdDesc(Long projectId);
+    Optional<Report> findByProjectId(Long projectId);
 
     /** 상세 조회용. 권한 확인과 응답 모두 project 가 필요해서 LAZY 프록시를 미리 채워 온다. */
     @EntityGraph(attributePaths = {"project"})
     Optional<Report> findWithProjectById(Long reportId);
 
     /**
-     * 리포트 자동 생성 배치의 대상 — 평가 유예가 끝났는데 아직 리포트가 없는 프로젝트.
+     * 리포트 자동 생성 배치의 대상 — 평가 유예가 끝났고 리포트가 없거나 이전 생성이 실패한 프로젝트.
      * <p>
      * 리포트 도메인의 배치가 쓰는 쿼리라 ProjectRepository 가 아니라 여기에 둔다
      * (report → project 방향은 이미 Report.project 로 존재한다).
@@ -45,11 +37,10 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     @Query("select project from Project project "
             + "where project.endDay <= :endDayOnOrBefore "
             + "and not exists (select 1 from Report report "
-            + "where report.project = project and report.status in :activeStatuses) "
+            + "where report.project = project and report.status <> com.plog.domain.report.entity.ReportStatus.FAILED) "
             + "order by project.endDay asc, project.id asc")
     List<Project> findProjectsDueForReport(
             @Param("endDayOnOrBefore") LocalDate endDayOnOrBefore,
-            @Param("activeStatuses") Collection<ReportStatus> activeStatuses,
             Pageable pageable
     );
 

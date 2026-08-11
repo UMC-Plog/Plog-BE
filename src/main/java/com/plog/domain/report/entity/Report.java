@@ -15,6 +15,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
 import java.util.Locale;
@@ -31,15 +32,19 @@ import org.hibernate.annotations.ColumnDefault;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "reports")
+@Table(name = "reports", uniqueConstraints = {
+        @UniqueConstraint(name = Report.UNIQUE_PROJECT_REPORT_CONSTRAINT, columnNames = "project_id")
+})
 public class Report extends BaseEntity {
+
+    public static final String UNIQUE_PROJECT_REPORT_CONSTRAINT = "uk_report_project";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "report_id")
     private Long id;
 
-    // 유니크 아님: 한 프로젝트가 중간/최종 등 여러 리포트를 가질 수 있음
+    // 팀/개인 리포트는 같은 분석 결과를 서로 다른 형태로 보여주는 것이므로 프로젝트당 한 행만 둔다.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
@@ -88,6 +93,23 @@ public class Report extends BaseEntity {
         return new Report(project);
     }
 
+    /** 실패한 생성 시도를 같은 행에서 다시 시작한다. 발행 완료 리포트는 재시작할 수 없다. */
+    public void restart() {
+        if (status != ReportStatus.FAILED) {
+            throw new IllegalStateException(
+                    "only a failed report can restart, but status=" + status);
+        }
+        this.status = ReportStatus.GENERATING;
+        this.snapshotAt = TimeUtil.now();
+        this.completedAt = null;
+        this.pdfObjectKey = null;
+        this.pdfFileName = null;
+        this.teamStrength = null;
+        this.teamSuggestion = null;
+        this.teamCompletionRate = null;
+        this.teamDeadlineComplianceRate = null;
+    }
+
     public void complete(LocalDateTime completedAt) {
         requireGenerating();
         if (completedAt == null) {
@@ -116,8 +138,12 @@ public class Report extends BaseEntity {
         this.teamDeadlineComplianceRate = deadlineComplianceRate;
     }
 
-    public String getReportCode() {
-        return ReportCodeFormatter.format(id, getCreatedAt());
+    public String getTeamReportCode() {
+        return ReportCodeFormatter.formatTeam(project.getId(), getCreatedAt());
+    }
+
+    public String getPersonalReportCode() {
+        return ReportCodeFormatter.formatPersonal(project.getId(), getCreatedAt());
     }
 
     public void attachPdf(String objectKey, String fileName) {

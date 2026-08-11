@@ -32,7 +32,7 @@ public class ReportPdfArchiveService {
         Report report = reportRepository.findWithProjectById(reportId)
                 .orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
         List<ReportMemberResult> members = resultRepository.findAllByReportIdOrderByProjectMemberIdAsc(reportId);
-        String code = report.getReportCode();
+        String code = report.getTeamReportCode();
         String fileName = code + "-reports.zip";
         String objectKey = "reports/" + reportId + "/" + fileName;
         byte[] archive;
@@ -88,12 +88,12 @@ public class ReportPdfArchiveService {
     private String teamHtml(Report report, List<ReportMemberResult> members) {
         StringBuilder rows = new StringBuilder();
         for (ReportMemberResult member : members) {
-            rows.append("<tr><td>").append(esc(member.getProjectMember().getDisplayNickname())).append("</td><td>")
+            rows.append("<tr><td>").append(esc(member.getProjectMember().getUser().getName())).append("</td><td>")
                     .append(value(member.getFinalScore())).append("</td><td>")
                     .append(value(member.getContributionRate())).append("%</td></tr>");
         }
         return page(report.getProject().getProjectName() + " 팀 리포트",
-                "<p>리포트 코드: " + esc(report.getReportCode()) + "</p>"
+                "<p>리포트 코드: " + esc(report.getTeamReportCode()) + "</p>"
                         + "<p>팀 완료율: " + value(report.getTeamCompletionRate()) + "% / 마감 준수율: "
                         + value(report.getTeamDeadlineComplianceRate()) + "%</p>"
                         + "<h2>AI 인사이트</h2><p>" + esc(report.getTeamStrength()) + "</p><p>"
@@ -103,8 +103,8 @@ public class ReportPdfArchiveService {
 
     private String memberHtml(Report report, ReportMemberResult member) {
         return page(report.getProject().getProjectName() + " - "
-                        + member.getProjectMember().getDisplayNickname() + " 개인 리포트",
-                "<p>리포트 코드: " + esc(report.getReportCode()) + "</p>"
+                        + member.getProjectMember().getUser().getName() + " 개인 리포트",
+                "<p>리포트 코드: " + esc(report.getPersonalReportCode()) + "</p>"
                         + "<h2>" + esc(member.getHeadline()) + "</h2>"
                         + "<p>종합점수: " + value(member.getFinalScore()) + " / 협업 안정도: "
                         + value(member.getCollaborationStability()) + "</p>"

@@ -90,7 +90,7 @@ public class ReportDetailService {
         int deadlineTargetTaskCount = members.stream().mapToInt(ReportMemberSummaryResponse::deadlineTargetTaskCount).sum();
         return new ReportDetailResponse(
                 report.getId(),
-                report.getReportCode(),
+                report.getTeamReportCode(),
                 report.getProject().getId(),
                 report.getProject().getProjectName(),
                 report.getStatus(),
@@ -143,7 +143,7 @@ public class ReportDetailService {
         return new ReportMemberResultResponse(
                 report.getId(),
                 result.getProjectMember().getId(),
-                result.getProjectMember().getDisplayNickname(),
+                result.getProjectMember().getUser().getName(),
                 result.getInternalScore(),
                 result.getExternalScore(),
                 result.getPeerScore(),
@@ -172,7 +172,7 @@ public class ReportDetailService {
                 readJson(result.getWeakness(), MemberReportText.Weakness.class),
                 readJson(result.getGrowth(), MemberReportText.GrowthInsight.class),
                 readJson(result.getWriting(), MemberReportText.WritingSuggestion.class),
-                report.getReportCode(),
+                report.getPersonalReportCode(),
                 report.getProject().getProjectName(),
                 TimeUtil.toInstant(report.getCompletedAt()),
                 report.getProject().getStartDay(),
