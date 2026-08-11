@@ -131,6 +131,25 @@ class ProjectLeaveServiceIntegrationTest {
         assertThat(leaver.getStatus()).isEqualTo(MemberStatus.EXIT);
     }
 
+    @Test
+    void ownerLeaveDelegatesOwnershipToRemainingMemberAndExits() {
+        Fixture fixture = saveOwner("delegating-owner");
+        Long successorId = saveActiveMember(fixture, "delegated-member");
+
+        ProjectLeaveResponse response = projectLeaveService.leave(fixture.projectId(), fixture.userId());
+
+        assertThat(response.success()).isTrue();
+        // 프로젝트는 유지되고, 남은 멤버가 새 OWNER가 되며, 기존 OWNER는 EXIT 처리된다.
+        assertThat(projectRepository.findById(fixture.projectId())).isPresent();
+        ProjectMember successor = projectMemberRepository.findById(successorId).orElseThrow();
+        assertThat(successor.getRole()).isEqualTo(ProjectRole.OWNER);
+        assertThat(successor.getStatus()).isEqualTo(MemberStatus.ACTIVE);
+        ProjectMember previousOwner = projectMemberRepository
+                .findByProjectIdAndUserId(fixture.projectId(), fixture.userId()).orElseThrow();
+        assertThat(previousOwner.getRole()).isEqualTo(ProjectRole.MEMBER);
+        assertThat(previousOwner.getStatus()).isEqualTo(MemberStatus.EXIT);
+    }
+
     private Fixture saveOwner(String suffix) {
         TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
         return transactionTemplate.execute(status -> {
