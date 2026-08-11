@@ -3,13 +3,12 @@ package com.plog.domain.integration.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.lenient;
 
 import com.plog.domain.integration.dto.request.IntegrationActorMappingRequest;
 import com.plog.domain.integration.dto.response.IntegrationActorMappingListResponse;
@@ -40,6 +39,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -344,15 +344,16 @@ class IntegrationActorMappingManagementServiceTest {
         verify(activityRepository).assignProjectMemberByProviderId(20L, currentMember, "permission-current");
         verify(activityRepository).assignProjectMemberByEmail(20L, currentMember, "self@example.com");
         verify(activityRepository, never()).assignProjectMemberByLogin(any(), any(), any());
-        verify(aliasRepository).saveAll(argThat(aliases -> {
-            assertThat(aliases)
-                    .extracting(alias -> alias.getAliasType() + ":" + alias.getAliasValue())
-                    .containsExactlyInAnyOrder(
-                            "LOGIN:" + ProviderActorKey.googleProviderIdAlias("permission-current"),
-                            "EMAIL:self@example.com"
-                    );
-            return true;
-        }));
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        ArgumentCaptor<List<ProjectMemberIntegrationIdentityAlias>> aliasesCaptor =
+                ArgumentCaptor.forClass(List.class);
+        verify(aliasRepository).saveAll(aliasesCaptor.capture());
+        assertThat(aliasesCaptor.getValue())
+                .extracting(alias -> alias.getAliasType() + ":" + alias.getAliasValue())
+                .containsExactlyInAnyOrder(
+                        "LOGIN:" + ProviderActorKey.googleProviderIdAlias("permission-current"),
+                        "EMAIL:self@example.com"
+                );
     }
 
     @Test
@@ -377,7 +378,7 @@ class IntegrationActorMappingManagementServiceTest {
     }
 
     @Test
-    void excludesGoogleNameOnlyActorsFromMappingCandidatesAndSaveResolution() {
+    void excludesGoogleNameOnlyActorsFromMappingCandidates() {
         ProjectIntegration docsIntegration = projectIntegration(20L, LinkType.GOOGLE_DOCS);
         IntegrationActorObservation nameOnly = mock(IntegrationActorObservation.class);
         given(projectIntegrationRepository.findByProjectIdAndLinkType(1L, LinkType.GOOGLE_DOCS))
@@ -389,9 +390,16 @@ class IntegrationActorMappingManagementServiceTest {
         IntegrationActorMappingListResponse response = service.getMappings(1L, 10L, LinkType.GOOGLE_DOCS);
 
         assertThat(response.availableProviderActors()).isEmpty();
+    }
 
+    @Test
+    void rejectsGoogleNameOnlyActorSaveResolution() {
+        ProjectIntegration docsIntegration = projectIntegration(20L, LinkType.GOOGLE_DOCS);
+        IntegrationActorObservation nameOnly = mock(IntegrationActorObservation.class);
         given(projectIntegrationRepository.findByProjectIdAndLinkTypeForUpdate(1L, LinkType.GOOGLE_DOCS))
                 .willReturn(Optional.of(docsIntegration));
+        given(activityRepository.findActorObservations(20L)).willReturn(List.of(nameOnly));
+
         assertThatThrownBy(() -> service.saveMyMapping(
                 1L,
                 10L,

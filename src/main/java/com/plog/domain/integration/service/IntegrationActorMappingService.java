@@ -43,7 +43,7 @@ public class IntegrationActorMappingService {
         if (emailAlias != null) {
             return emailAlias;
         }
-        if (!allowsLoginIdentity(integration.getLinkType())) {
+        if (isGoogle(integration.getLinkType())) {
             return null;
         }
         ProviderActorKey login = ProviderActorKey.login(actorLogin);
@@ -60,10 +60,6 @@ public class IntegrationActorMappingService {
 
     private boolean isGoogle(LinkType linkType) {
         return linkType == LinkType.GOOGLE_DOCS || linkType == LinkType.GOOGLE_SLIDES;
-    }
-
-    private boolean allowsLoginIdentity(LinkType linkType) {
-        return linkType != LinkType.GOOGLE_DOCS && linkType != LinkType.GOOGLE_SLIDES;
     }
 
     private ProjectMember resolveExact(Long integrationId, String providerActorId) {

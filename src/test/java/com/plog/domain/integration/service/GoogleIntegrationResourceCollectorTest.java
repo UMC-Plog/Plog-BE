@@ -360,6 +360,47 @@ class GoogleIntegrationResourceCollectorTest {
     }
 
     @Test
+    @DisplayName("연동 계정 ID가 없으면 현재 사용자 actor의 원본 provider ID를 보존한다")
+    void preservesOriginalCurrentGoogleUserActorWhenExternalAccountIdIsMissing() {
+        Fixture fixture = fixture();
+        IntegrationResource resource = resource(IntegrationResourceType.GOOGLE_DOCUMENT);
+        ProjectIntegration verifiedIntegration = mock(ProjectIntegration.class);
+        given(verifiedIntegration.getExternalAccountId()).willReturn(null);
+        given(verifiedIntegration.getExternalAccountName()).willReturn("self@example.com");
+
+        expectFileMetadata(fixture.server);
+        expectDriveActivity(fixture.server, """
+                {"itemName":"items/google-file-1","pageSize":100}
+                """, """
+                {"activities":[{"primaryActionDetail":{"edit":{}},"actors":[{"user":{"knownUser":{
+                  "personName":"people/108281305932882777267","displayName":"유상완","isCurrentUser":true}}}],
+                 "timestamp":"2026-08-01T10:00:00Z"}]}
+                """);
+        expectComments(fixture.server, """
+                {"comments":[{"id":"comment-self","createdTime":"2026-08-01T12:00:00Z",
+                  "author":{"me":true,"permissionId":"comment-permission","displayName":"유상완"},
+                  "content":"hello"}]}
+                """);
+        expectReplies(fixture.server, "comment-self", null, """
+                {"replies":[{"id":"reply-self","createdTime":"2026-08-01T12:10:00Z",
+                  "author":{"me":true,"permissionId":"reply-permission","displayName":"유상완"},"content":"reply"}]}
+                """);
+        expectRevisions(fixture.server, "{}");
+        expectDocumentSnapshot(fixture.server);
+
+        fixture.collector.collect(resource, verifiedIntegration, CollectionContext.noop());
+
+        fixture.server.verify();
+        assertThat(storedActorsFor(IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY)).containsExactly(
+                new StoredActor("people/108281305932882777267", "유상완", null)
+        );
+        assertThat(storedLatestActorsFor(IntegrationActivityType.GOOGLE_DRIVE_COMMENT)).containsExactly(
+                new StoredActor("comment-permission", "유상완", null),
+                new StoredActor("reply-permission", "유상완", null)
+        );
+    }
+
+    @Test
     @DisplayName("같은 표시 이름이어도 현재 사용자가 아니면 연동 계정 ID로 정규화하지 않는다")
     void doesNotNormalizeNonCurrentGoogleUserByDisplayName() {
         Fixture fixture = fixture();
@@ -769,16 +810,7 @@ class GoogleIntegrationResourceCollectorTest {
         verify(activityStoreService, atLeastOnce()).store(
                 any(), eq(activityType), any(), providerIdCaptor.capture(), loginCaptor.capture(),
                 emailCaptor.capture(), any(), any(), any());
-
-        List<StoredActor> actors = new ArrayList<>();
-        for (int index = 0; index < providerIdCaptor.getAllValues().size(); index++) {
-            actors.add(new StoredActor(
-                    providerIdCaptor.getAllValues().get(index),
-                    loginCaptor.getAllValues().get(index),
-                    emailCaptor.getAllValues().get(index)
-            ));
-        }
-        return actors;
+        return storedActors(providerIdCaptor, loginCaptor, emailCaptor);
     }
 
     private List<StoredActor> storedLatestActorsFor(IntegrationActivityType activityType) {
@@ -788,7 +820,14 @@ class GoogleIntegrationResourceCollectorTest {
         verify(activityStoreService, atLeastOnce()).storeLatestProviderPayload(
                 any(), eq(activityType), any(), providerIdCaptor.capture(), loginCaptor.capture(),
                 emailCaptor.capture(), any(), any(), any());
+        return storedActors(providerIdCaptor, loginCaptor, emailCaptor);
+    }
 
+    private List<StoredActor> storedActors(
+            ArgumentCaptor<String> providerIdCaptor,
+            ArgumentCaptor<String> loginCaptor,
+            ArgumentCaptor<String> emailCaptor
+    ) {
         List<StoredActor> actors = new ArrayList<>();
         for (int index = 0; index < providerIdCaptor.getAllValues().size(); index++) {
             actors.add(new StoredActor(

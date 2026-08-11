@@ -95,7 +95,8 @@ public class IntegrationActorMappingManagementService {
         ProjectMember currentMember = requireActiveMember(projectId, userId);
         requireMappingEditable(projectId);
         ProjectIntegration integration = requireConnectedIntegrationForUpdate(projectId, linkType);
-        ProviderActor providerActor = providerActors(integration).stream()
+        List<ProviderActor> observedProviderActors = providerActors(integration);
+        ProviderActor providerActor = observedProviderActors.stream()
                 .filter(item -> item.actorKey().equals(request.actorKey()))
                 .findFirst()
                 .orElseThrow(() -> new ApiException(IntegrationErrorCode.PROVIDER_ACTOR_NOT_FOUND));
@@ -155,7 +156,7 @@ public class IntegrationActorMappingManagementService {
         }
 
         if (oldActor != null) {
-            clearActivities(integration, currentMember, oldActor);
+            clearActivities(integration, currentMember, oldActor, observedProviderActors);
         }
         reportLogAdapter.deleteProjectMemberProjection(projectId, linkType, currentMember.getId());
         assignActivities(integration.getId(), currentMember, linkType, providerActor);
@@ -294,13 +295,10 @@ public class IntegrationActorMappingManagementService {
         return aliases.stream()
                 .filter(alias -> alias.getIdentity().getId().equals(identity.getId()))
                 .anyMatch(alias -> switch (alias.getAliasType()) {
-                    case EMAIL -> matchesAlias(alias.getAliasValue(),
-                            providerActor.providerEmails().stream()
-                                    .map(ProviderActorKey::email)
-                                    .filter(key -> key != null)
-                                    .filter(key -> matchesAlias(alias.getAliasValue(), key))
-                                    .findFirst()
-                                    .orElse(null));
+                    case EMAIL -> providerActor.providerEmails().stream()
+                            .map(ProviderActorKey::email)
+                            .filter(key -> key != null)
+                            .anyMatch(key -> alias.getAliasValue().equals(key.value()));
                     case LOGIN -> providerActor.googleActor()
                             ? providerActor.providerActorIds().stream().anyMatch(providerActorId ->
                                     ProviderActorKey.matchesGoogleProviderIdAlias(
@@ -432,10 +430,22 @@ public class IntegrationActorMappingManagementService {
             ProjectMember expectedMember,
             ActorIdentity actor
     ) {
+        List<ProviderActor> observedProviderActors = isGoogle(integration.getLinkType())
+                ? providerActors(integration)
+                : List.of();
+        clearActivities(integration, expectedMember, actor, observedProviderActors);
+    }
+
+    private void clearActivities(
+            ProjectIntegration integration,
+            ProjectMember expectedMember,
+            ActorIdentity actor,
+            List<ProviderActor> observedProviderActors
+    ) {
         Long integrationId = integration.getId();
         LinkType linkType = integration.getLinkType();
         if (isGoogle(linkType)) {
-            for (ProviderActor observedActor : providerActors(integration)) {
+            for (ProviderActor observedActor : observedProviderActors) {
                 if (matches(observedActor, actor)) {
                     clearActivities(integrationId, expectedMember, matchKeys(linkType, observedActor));
                     return;

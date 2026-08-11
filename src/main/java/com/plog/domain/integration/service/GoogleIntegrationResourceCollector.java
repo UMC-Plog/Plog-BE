@@ -264,19 +264,34 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             GooglePeopleActorResolver.Actor actor,
             ProjectIntegration integration
     ) {
+        SelfActorMetadata metadata = selfActorMetadata(actor.login(), actor.email(), integration);
+        if (metadata == null) {
+            return actor;
+        }
         return new GooglePeopleActorResolver.Actor(
-                canonicalAccountActorId(integration),
-                actor.login(),
-                firstNonblank(actor.email(), externalAccountEmail(integration))
+                metadata.providerId(),
+                metadata.login(),
+                metadata.email()
         );
     }
 
     private GoogleActor selfActor(GoogleActor actor, ProjectIntegration integration) {
+        SelfActorMetadata metadata = selfActorMetadata(actor.login(), actor.email(), integration);
+        if (metadata == null) {
+            return actor;
+        }
         return new GoogleActor(
-                canonicalAccountActorId(integration),
-                actor.login(),
-                firstNonblank(actor.email(), externalAccountEmail(integration))
+                metadata.providerId(),
+                metadata.login(),
+                metadata.email()
         );
+    }
+
+    private SelfActorMetadata selfActorMetadata(String actorLogin, String actorEmail, ProjectIntegration integration) {
+        String providerId = canonicalAccountActorId(integration);
+        return providerId == null
+                ? null
+                : new SelfActorMetadata(providerId, actorLogin, firstNonblank(actorEmail, externalAccountEmail(integration)));
     }
 
     private String canonicalAccountActorId(ProjectIntegration integration) {
@@ -296,6 +311,9 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     }
 
     private record GoogleActor(String providerId, String login, String email) {
+    }
+
+    private record SelfActorMetadata(String providerId, String login, String email) {
     }
 
     private String sha256(String value) {

@@ -42,6 +42,7 @@ class IntegrationActorMappingServiceTest {
         ProjectMember member = ProjectMember.builder().id(10L).build();
         ProjectIntegration integration = ProjectIntegration.builder()
                 .id(2L)
+                .linkType(LinkType.GITHUB)
                 .build();
         given(identityRepository.findByProjectIntegrationIdAndProviderActorId(2L, "actor-1"))
                 .willReturn(Optional.of(ProjectMemberIntegrationIdentity.builder()
@@ -58,7 +59,10 @@ class IntegrationActorMappingServiceTest {
     @Test
     void resolvesOnlyExplicitAliasesAndDoesNotTrustAnUnregisteredActivityEmail() {
         ProjectMember member = ProjectMember.builder().id(10L).build();
-        ProjectIntegration integration = ProjectIntegration.builder().id(2L).build();
+        ProjectIntegration integration = ProjectIntegration.builder()
+                .id(2L)
+                .linkType(LinkType.GITHUB)
+                .build();
         ProjectMemberIntegrationIdentity identity = ProjectMemberIntegrationIdentity.builder()
                 .projectMember(member)
                 .build();
@@ -90,7 +94,10 @@ class IntegrationActorMappingServiceTest {
 
     @Test
     void doesNotFallbackToSharedEmailWhenAStableProviderIdIsPresent() {
-        ProjectIntegration integration = ProjectIntegration.builder().id(2L).build();
+        ProjectIntegration integration = ProjectIntegration.builder()
+                .id(2L)
+                .linkType(LinkType.GITHUB)
+                .build();
         given(identityRepository.findByProjectIntegrationIdAndProviderActorId(2L, "actor-2"))
                 .willReturn(Optional.empty());
 
