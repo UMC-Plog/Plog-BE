@@ -70,12 +70,9 @@ class ReportMemberResultRepositoryIntegrationTest {
     @Autowired
     private EntityManager entityManager;
 
-    /**
-     * 표시 닉네임 규칙(anNickname 우선, 공백이면 user.nickname)과 정렬(점수 내림차순, 미계산은 뒤)을
-     * 실제 SQL 로 확인한다. coalesce/nullif/trim 과 case 정렬은 단위 테스트로는 검증되지 않는다.
-     */
+    /** 실명 노출과 정렬(점수 내림차순, 미계산은 뒤)을 실제 SQL 로 확인한다. */
     @Test
-    void projectsMemberSummariesWithDisplayNicknameAndScoreOrdering() {
+    void projectsMemberSummariesWithRealNameAndScoreOrdering() {
         Project project = saveProject("Plog");
         Report report = reportRepository.save(Report.start(project));
         ProjectMember withAlias = saveMember(project, "chang", "창훈", "별명창훈");
@@ -100,7 +97,7 @@ class ReportMemberResultRepositoryIntegrationTest {
         List<ReportMemberSummary> summaries = memberResultRepository.findMemberSummaries(report.getId());
 
         assertThat(summaries).extracting(ReportMemberSummary::getMemberName)
-                .containsExactly("송민", "별명창훈", "현모");
+                .containsExactly("실명-송민", "실명-창훈", "실명-현모");
         assertThat(summaries.getFirst().getFinalScore()).isEqualByComparingTo("82.50");
         assertThat(summaries.getFirst().getContributionRate()).isEqualByComparingTo("70.00");
         assertThat(summaries.get(1).getContributionRate()).isEqualByComparingTo("30.00");
@@ -133,14 +130,15 @@ class ReportMemberResultRepositoryIntegrationTest {
         assertThat(found).isPresent();
         // 영속성 컨텍스트를 비운 뒤라 fetch 가 안 됐으면 여기서 LazyInitializationException 이 난다.
         entityManager.clear();
-        assertThat(found.get().getProjectMember().getDisplayNickname()).isEqualTo("창훈");
+        assertThat(found.get().getProjectMember().getUser().getName()).isEqualTo("실명-창훈");
     }
 
     @Test
     void findsNothingForAnotherReportsMember() {
         Project project = saveProject("Plog");
         Report report = reportRepository.save(Report.start(project));
-        Report otherReport = reportRepository.save(Report.start(project));
+        Project otherProject = saveProject("Other");
+        Report otherReport = reportRepository.save(Report.start(otherProject));
         ProjectMember member = saveMember(project, "chang", "창훈", null);
         saveResult(report, member, new BigDecimal("82.50"));
         entityManager.flush();
@@ -165,7 +163,7 @@ class ReportMemberResultRepositoryIntegrationTest {
         Project notYet = saveProjectEndingOn("유예중", bound.plusDays(1));
         Project alreadyReported = saveProjectEndingOn("리포트있음", bound.minusDays(1));
         reportRepository.save(Report.start(alreadyReported));
-        Project failedOnly = saveProjectEndingOn("실패만있음", bound.minusDays(1));
+        Project failedOnly = saveProjectEndingOn("실패리포트있음", bound.minusDays(1));
         Report failed = Report.start(failedOnly);
         failed.fail();
         reportRepository.save(failed);
@@ -173,11 +171,11 @@ class ReportMemberResultRepositoryIntegrationTest {
         entityManager.clear();
 
         List<Project> found = reportRepository.findProjectsDueForReport(
-                bound, ReportStatus.restartBlockingStatuses(), PageRequest.of(0, 100));
+                bound, PageRequest.of(0, 100));
 
         assertThat(found).extracting(Project::getId)
-                .containsExactlyInAnyOrder(due.getId(), exactlyDue.getId(), failedOnly.getId())
-                .doesNotContain(notYet.getId(), alreadyReported.getId());
+                .containsExactlyInAnyOrder(due.getId(), exactlyDue.getId())
+                .doesNotContain(notYet.getId(), alreadyReported.getId(), failedOnly.getId());
     }
 
     @Test
@@ -189,27 +187,10 @@ class ReportMemberResultRepositoryIntegrationTest {
         entityManager.clear();
 
         List<Project> found = reportRepository.findProjectsDueForReport(
-                bound, ReportStatus.restartBlockingStatuses(), PageRequest.of(0, 1));
+                bound, PageRequest.of(0, 1));
 
         assertThat(found).extracting(Project::getId).containsExactly(older.getId());
         assertThat(found).extracting(Project::getId).doesNotContain(newer.getId());
-    }
-
-    /** 리포트 생성 멱등성의 근거 쿼리 — FAILED 만 있으면 재시작이 열려야 한다. */
-    @Test
-    void treatsFailedReportAsRestartable() {
-        Project project = saveProject("Plog");
-        Report failed = Report.start(project);
-        failed.fail();
-        reportRepository.save(failed);
-
-        assertThat(reportRepository.existsByProjectIdAndStatusIn(
-                project.getId(), ReportStatus.restartBlockingStatuses())).isFalse();
-
-        reportRepository.save(Report.start(project));
-
-        assertThat(reportRepository.existsByProjectIdAndStatusIn(
-                project.getId(), ReportStatus.restartBlockingStatuses())).isTrue();
     }
 
     private ReportMemberResult saveResult(Report report, ProjectMember member, BigDecimal finalScore) {
@@ -229,7 +210,7 @@ class ReportMemberResultRepositoryIntegrationTest {
 
     private ProjectMember saveMember(Project project, String handle, String nickname, String anNickname) {
         User user = userRepository.save(User.createLocal(
-                handle + "@plog.test", "encoded", nickname, nickname));
+                handle + "@plog.test", "encoded", "실명-" + nickname, nickname));
         return projectMemberRepository.save(ProjectMember.builder()
                 .project(project)
                 .user(user)

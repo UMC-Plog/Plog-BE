@@ -3,14 +3,12 @@ package com.plog.domain.report.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.report.entity.Report;
-import com.plog.domain.report.entity.ReportStatus;
 import com.plog.domain.report.repository.ReportRepository;
 import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
@@ -111,7 +109,7 @@ class ReportBatchServiceTest {
 
     @Test
     void doesNothingWhenNoProjectIsDue() {
-        when(reportRepository.findProjectsDueForReport(any(), any(), any())).thenReturn(List.of());
+        when(reportRepository.findProjectsDueForReport(any(), any())).thenReturn(List.of());
 
         ReportBatchResult result = reportBatchService.startDueReports();
 
@@ -125,14 +123,13 @@ class ReportBatchServiceTest {
      */
     @Test
     void queriesWithTheEvaluationDeadlineDerivedFromTheProjectEntity() {
-        when(reportRepository.findProjectsDueForReport(any(), any(), any())).thenReturn(List.of());
+        when(reportRepository.findProjectsDueForReport(any(), any())).thenReturn(List.of());
 
         reportBatchService.startDueReports();
 
         ArgumentCaptor<LocalDate> bound = ArgumentCaptor.forClass(LocalDate.class);
         verify(reportRepository).findProjectsDueForReport(
                 bound.capture(),
-                eq(ReportStatus.restartBlockingStatuses()),
                 any(Pageable.class)
         );
         LocalDate today = TimeUtil.today();
@@ -145,7 +142,7 @@ class ReportBatchServiceTest {
         List<Project> projects = java.util.Arrays.stream(projectIds)
                 .map(this::project)
                 .toList();
-        when(reportRepository.findProjectsDueForReport(any(), any(), any())).thenReturn(projects);
+        when(reportRepository.findProjectsDueForReport(any(), any())).thenReturn(projects);
     }
 
     private Project project(Long id) {

@@ -15,7 +15,7 @@ public interface ReportMemberSummary {
 
     Long getProjectMemberId();
 
-    /** 표시 닉네임 — anNickname 우선, 비어 있으면 user.nickname (ProjectMember.getDisplayNickname 과 같은 기준). */
+    /** 리포트에서 공개하는 계정 실명(User.name). */
     String getMemberName();
 
     BigDecimal getFinalScore();

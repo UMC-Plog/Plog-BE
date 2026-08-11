@@ -1,6 +1,7 @@
 package com.plog.domain.report.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectStatus;
@@ -20,6 +21,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -57,30 +59,30 @@ class ReportRepositoryIntegrationTest {
     private EntityManager entityManager;
 
     @Test
-    void returnsOnlyTheRequestedProjectsReportsAsAStableSliceProjection() {
+    void returnsOnlyTheRequestedProjectsSingleReportProjection() {
         Project project = saveProject("Plog");
         Project otherProject = saveProject("Other");
-        Report older = saveCompleted(project, LocalDateTime.of(2026, 7, 20, 10, 0));
-        Report latest = saveCompleted(project, LocalDateTime.of(2026, 7, 21, 10, 0));
-        Report generating = reportRepository.save(Report.start(project));
+        Report report = saveCompleted(project, LocalDateTime.of(2026, 7, 21, 10, 0));
         saveCompleted(otherProject, LocalDateTime.of(2026, 7, 22, 10, 0));
 
-        Slice<ReportSummary> first = reportRepository.findProjectReportSlice(
-                project.getId(), PageRequest.of(0, 2)
-        );
-        Slice<ReportSummary> second = reportRepository.findProjectReportSlice(
-                project.getId(), PageRequest.of(1, 2)
-        );
+        Slice<ReportSummary> found = reportRepository.findProjectReportSlice(
+                project.getId(), PageRequest.of(0, 2));
 
-        assertThat(first.hasNext()).isTrue();
-        assertThat(first.getContent()).extracting(ReportSummary::getReportId)
-                .containsExactly(latest.getId(), older.getId());
-        assertThat(first.getContent().getFirst().getProjectId()).isEqualTo(project.getId());
-        assertThat(first.getContent().getFirst().getProjectName()).isEqualTo("Plog");
-        assertThat(first.getContent().getFirst().getReportStatus()).isEqualTo(ReportStatus.COMPLETED);
-        assertThat(second.hasNext()).isFalse();
-        assertThat(second.getContent()).extracting(ReportSummary::getReportId)
-                .containsExactly(generating.getId());
+        assertThat(found.hasNext()).isFalse();
+        assertThat(found.getContent()).extracting(ReportSummary::getReportId)
+                .containsExactly(report.getId());
+        assertThat(found.getContent().getFirst().getProjectId()).isEqualTo(project.getId());
+        assertThat(found.getContent().getFirst().getProjectName()).isEqualTo("Plog");
+        assertThat(found.getContent().getFirst().getReportStatus()).isEqualTo(ReportStatus.COMPLETED);
+    }
+
+    @Test
+    void rejectsASecondReportForTheSameProject() {
+        Project project = saveProject("Single");
+        reportRepository.saveAndFlush(Report.start(project));
+
+        assertThatThrownBy(() -> reportRepository.saveAndFlush(Report.start(project)))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

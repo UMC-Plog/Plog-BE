@@ -1,7 +1,6 @@
 package com.plog.domain.report.service;
 
 import com.plog.domain.project.entity.Project;
-import com.plog.domain.report.entity.ReportStatus;
 import com.plog.domain.report.repository.ReportRepository;
 import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
@@ -51,7 +50,6 @@ public class ReportBatchService {
         LocalDate today = TimeUtil.today();
         List<Project> dueProjects = reportRepository.findProjectsDueForReport(
                 Project.latestEndDayWithClosedEvaluation(today),
-                ReportStatus.restartBlockingStatuses(),
                 PageRequest.of(0, BATCH_SIZE)
         );
         if (dueProjects.isEmpty()) {

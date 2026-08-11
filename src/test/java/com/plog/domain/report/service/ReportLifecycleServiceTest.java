@@ -14,7 +14,6 @@ import com.plog.domain.report.entity.Report;
 import com.plog.domain.report.entity.ReportStatus;
 import com.plog.domain.report.repository.ReportRepository;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -39,8 +38,7 @@ class ReportLifecycleServiceTest {
     @Test
     void startsGeneratingReportWhenProjectHasNone() {
         Project project = project();
-        when(reportRepository.existsByProjectIdAndStatusIn(PROJECT_ID, ReportStatus.restartBlockingStatuses()))
-                .thenReturn(false);
+        when(reportRepository.existsByProjectId(PROJECT_ID)).thenReturn(false);
         when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Optional<Report> started = reportLifecycleService.startFor(project);
@@ -55,8 +53,7 @@ class ReportLifecycleServiceTest {
     // 평가 종료 훅과 마감일 배치가 같은 프로젝트를 두 번 건드려도 리포트는 한 건이어야 한다.
     @Test
     void skipsWhenReportAlreadyExistsForProject() {
-        when(reportRepository.existsByProjectIdAndStatusIn(PROJECT_ID, ReportStatus.restartBlockingStatuses()))
-                .thenReturn(true);
+        when(reportRepository.existsByProjectId(PROJECT_ID)).thenReturn(true);
 
         Optional<Report> started = reportLifecycleService.startFor(project());
 
@@ -64,20 +61,12 @@ class ReportLifecycleServiceTest {
         verify(reportRepository, never()).save(any(Report.class));
     }
 
-    // FAILED 만 남은 프로젝트는 재시도 대상이다 — 멱등성 기준 집합에서 빠져 있는 것이 그 자체로 계약이다.
-    @Test
-    void restartBlockingStatusesCoverGeneratingAndCompletedOnly() {
-        assertThat(ReportStatus.restartBlockingStatuses())
-                .isEqualTo(Set.of(ReportStatus.GENERATING, ReportStatus.COMPLETED));
-    }
-
     // 평가를 닫지 않으면 리포트 발행 후에도 동료 평가가 계속 들어와 근거 데이터가 나중에 바뀐다.
     @Test
     void closesEvaluationBeforeStartingTheReport() {
         Project project = project();
         when(projectRepository.findByIdForUpdate(PROJECT_ID)).thenReturn(Optional.of(project));
-        when(reportRepository.existsByProjectIdAndStatusIn(PROJECT_ID, ReportStatus.restartBlockingStatuses()))
-                .thenReturn(false);
+        when(reportRepository.existsByProjectId(PROJECT_ID)).thenReturn(false);
         when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Optional<Report> started = reportLifecycleService.closeEvaluationAndStart(PROJECT_ID);
@@ -93,8 +82,7 @@ class ReportLifecycleServiceTest {
         Project project = project();
         project.complete();
         when(projectRepository.findByIdForUpdate(PROJECT_ID)).thenReturn(Optional.of(project));
-        when(reportRepository.existsByProjectIdAndStatusIn(PROJECT_ID, ReportStatus.restartBlockingStatuses()))
-                .thenReturn(false);
+        when(reportRepository.existsByProjectId(PROJECT_ID)).thenReturn(false);
         when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         assertThat(reportLifecycleService.closeEvaluationAndStart(PROJECT_ID)).isPresent();
@@ -105,8 +93,7 @@ class ReportLifecycleServiceTest {
     void skipsWhenTheDueProjectAlreadyHasAReport() {
         Project project = project();
         when(projectRepository.findByIdForUpdate(PROJECT_ID)).thenReturn(Optional.of(project));
-        when(reportRepository.existsByProjectIdAndStatusIn(PROJECT_ID, ReportStatus.restartBlockingStatuses()))
-                .thenReturn(true);
+        when(reportRepository.existsByProjectId(PROJECT_ID)).thenReturn(true);
 
         assertThat(reportLifecycleService.closeEvaluationAndStart(PROJECT_ID)).isEmpty();
         verify(reportRepository, never()).save(any(Report.class));

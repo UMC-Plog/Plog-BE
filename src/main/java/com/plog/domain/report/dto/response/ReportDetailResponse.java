@@ -10,7 +10,7 @@ import java.util.List;
 public record ReportDetailResponse(
         @Schema(description = "리포트 ID", example = "20")
         Long reportId,
-        @Schema(description = "리포트 표시 코드", example = "PLOG-2026-07-00000020")
+        @Schema(description = "팀 리포트 표시 코드", example = "PLOG-T-2026-08-15")
         String reportCode,
         @Schema(description = "프로젝트 ID", example = "1")
         Long projectId,

@@ -136,7 +136,7 @@ public class ProjectStatusService {
     }
 
     private ProjectStatusDto.Response toResponse(Project project, boolean timeoutApplied) {
-        Report report = reportRepository.findFirstByProjectIdOrderByIdDesc(project.getId()).orElse(null);
+        Report report = reportRepository.findByProjectId(project.getId()).orElse(null);
         return new ProjectStatusDto.Response(
                 project.getId(),
                 project.getStatus(),

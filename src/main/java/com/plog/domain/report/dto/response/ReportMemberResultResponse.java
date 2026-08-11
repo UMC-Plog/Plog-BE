@@ -17,7 +17,7 @@ public record ReportMemberResultResponse(
         Long reportId,
         @Schema(description = "프로젝트 멤버 ID", example = "7")
         Long projectMemberId,
-        @Schema(description = "표시 닉네임", example = "창훈")
+        @Schema(description = "실명", example = "김창훈")
         String memberName,
         @Schema(description = "Plog 내부 활동 점수", example = "88.00")
         BigDecimal internalScore,
@@ -81,7 +81,7 @@ public record ReportMemberResultResponse(
         MemberReportText.GrowthInsight growth,
         @Schema(description = "AI 문장 변환(자기소개서/포트폴리오). 근거 부족 시 null")
         MemberReportText.WritingSuggestion writing,
-        @Schema(description = "리포트 표시 코드") String reportCode,
+        @Schema(description = "개인 리포트 표시 코드", example = "PLOG-P-2026-08-15") String reportCode,
         @Schema(description = "프로젝트 이름") String projectName,
         @Schema(description = "리포트 발행 시각") Instant completedAt,
         @Schema(description = "프로젝트 시작일") LocalDate projectStartDate,

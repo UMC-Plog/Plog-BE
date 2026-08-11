@@ -11,13 +11,21 @@ public final class ReportCodeFormatter {
     private ReportCodeFormatter() {
     }
 
-    public static String format(Long reportId, LocalDateTime createdAtUtc) {
-        if (reportId == null || createdAtUtc == null) {
+    public static String formatTeam(Long projectId, LocalDateTime createdAtUtc) {
+        return format("T", projectId, createdAtUtc);
+    }
+
+    public static String formatPersonal(Long projectId, LocalDateTime createdAtUtc) {
+        return format("P", projectId, createdAtUtc);
+    }
+
+    private static String format(String reportType, Long projectId, LocalDateTime createdAtUtc) {
+        if (projectId == null || createdAtUtc == null) {
             return null;
         }
         String yearMonth = createdAtUtc.atZone(TimeUtil.STORAGE_ZONE)
                 .withZoneSameInstant(TimeUtil.DISPLAY_ZONE)
                 .format(YEAR_MONTH);
-        return "PLOG-" + yearMonth + "-" + String.format(java.util.Locale.ROOT, "%08d", reportId);
+        return "PLOG-" + reportType + "-" + yearMonth + "-" + projectId;
     }
 }

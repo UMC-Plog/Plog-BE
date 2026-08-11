@@ -53,6 +53,7 @@ class ReportSearchServiceTest {
         given(summary.getProjectId()).willReturn(10L);
         given(summary.getProjectName()).willReturn("PLOG API");
         given(summary.getReportId()).willReturn(20L);
+        given(summary.getCreatedAt()).willReturn(LocalDateTime.of(2026, 7, 20, 11, 0));
         given(summary.getReportStatus()).willReturn(ReportStatus.COMPLETED);
         given(summary.getCompletedAt()).willReturn(completedAt);
         given(reportRepository.findAccessibleReportSlice(
@@ -67,6 +68,7 @@ class ReportSearchServiceTest {
                 10L,
                 "PLOG API",
                 20L,
+                "PLOG-T-2026-07-10",
                 ReportStatus.COMPLETED,
                 completedAt.toInstant(TimeUtil.STORAGE_ZONE)
         ));
@@ -81,6 +83,7 @@ class ReportSearchServiceTest {
         given(summary.getProjectId()).willReturn(10L);
         given(summary.getProjectName()).willReturn("PLOG API");
         given(summary.getReportId()).willReturn(20L);
+        given(summary.getCreatedAt()).willReturn(LocalDateTime.of(2026, 7, 20, 11, 0));
         given(summary.getReportStatus()).willReturn(ReportStatus.COMPLETED);
         given(summary.getCompletedAt()).willReturn(completedAt);
         given(reportRepository.searchAccessibleReportSlice(
@@ -108,6 +111,7 @@ class ReportSearchServiceTest {
                 10L,
                 "PLOG API",
                 20L,
+                "PLOG-T-2026-07-10",
                 ReportStatus.COMPLETED,
                 completedAt.toInstant(TimeUtil.STORAGE_ZONE)
         ));

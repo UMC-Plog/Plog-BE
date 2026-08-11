@@ -3,7 +3,6 @@ package com.plog.domain.report.service;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.report.entity.Report;
-import com.plog.domain.report.entity.ReportStatus;
 import com.plog.domain.report.repository.ReportRepository;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -49,13 +48,11 @@ public class ReportLifecycleService {
     }
 
     /**
-     * 프로젝트의 리포트를 시작한다. 이미 진행 중(GENERATING)이거나 발행된(COMPLETED) 리포트가 있으면
-     * 아무것도 하지 않고 빈 값을 돌려준다 — 호출부가 몇 번 불러도 안전하다.
-     * FAILED 리포트만 있는 경우는 재시도로 보고 새 행을 시작한다.
+     * 프로젝트의 리포트를 시작한다. 상태와 무관하게 리포트가 이미 하나라도 있으면
+     * 아무것도 하지 않고 빈 값을 돌려준다 — 사용자 재생성 요청은 지원하지 않는다.
      * <p>
-     * exists 체크와 save 사이의 경합은 DB 제약으로 못 막는다(project_id 가 유니크가 아니다).
-     * 그래서 호출부가 프로젝트 행을 이미 선점한 상태여야 한다 —
-     * ProjectStatusService 는 findByIdForUpdate 로, 스케줄러도 같은 락을 잡고 들어온다.
+     * 호출부의 프로젝트 행 락으로 정상 경로를 직렬화하고, DB의 project_id 유니크 제약으로
+     * 다른 진입점이나 실수로 인한 중복 insert까지 최종 차단한다.
      *
      * @return 새로 시작한 리포트. 이미 있어서 건너뛰었으면 {@link Optional#empty()}
      */
@@ -64,8 +61,7 @@ public class ReportLifecycleService {
         if (project == null || project.getId() == null) {
             throw new IllegalArgumentException("리포트를 시작하려면 저장된 프로젝트가 필요합니다.");
         }
-        if (reportRepository.existsByProjectIdAndStatusIn(
-                project.getId(), ReportStatus.restartBlockingStatuses())) {
+        if (reportRepository.existsByProjectId(project.getId())) {
             return Optional.empty();
         }
         Report report = reportRepository.save(Report.start(project));

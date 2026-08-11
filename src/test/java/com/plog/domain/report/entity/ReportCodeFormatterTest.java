@@ -7,20 +7,19 @@ import org.junit.jupiter.api.Test;
 
 class ReportCodeFormatterTest {
 
-    // 저장 기준이 KST라 연월이 저장값 그대로 쓰인다. 월 경계 직전 값으로 경계를 지킨다.
     @Test
-    void 생성시각의_KST_연월로_코드를_만들고_ID를_8자리로_패딩한다() {
-        String code = ReportCodeFormatter.format(
-                12345L, LocalDateTime.of(2025, 7, 31, 23, 59));
+    void 팀_리포트_코드는_KST_연월과_프로젝트_ID를_사용한다() {
+        String code = ReportCodeFormatter.formatTeam(
+                15L, LocalDateTime.of(2025, 7, 31, 15, 0));
 
-        assertThat(code).isEqualTo("PLOG-2025-07-00012345");
+        assertThat(code).isEqualTo("PLOG-T-2025-07-15");
     }
 
     @Test
-    void 자정을_넘기면_다음_달_코드가_된다() {
-        String code = ReportCodeFormatter.format(
-                12345L, LocalDateTime.of(2025, 8, 1, 0, 0));
+    void 개인_리포트_코드는_P_구분자를_사용한다() {
+        String code = ReportCodeFormatter.formatPersonal(
+                15L, LocalDateTime.of(2025, 7, 31, 15, 0));
 
-        assertThat(code).isEqualTo("PLOG-2025-08-00012345");
+        assertThat(code).isEqualTo("PLOG-P-2025-07-15");
     }
 }
