@@ -7,6 +7,8 @@ import java.util.Locale;
 record ProviderActorKey(Type type, String value) {
 
     private static final String SELECTION_PREFIX = "actor:";
+    /** 기존 alias_type 스키마를 유지하면서 Google provider ID 별칭을 LOGIN 값과 구분한다. */
+    private static final String GOOGLE_PROVIDER_ID_ALIAS_PREFIX = "google-provider-id:";
 
     enum Type {
         PROVIDER_ID("id:"),
@@ -40,6 +42,16 @@ record ProviderActorKey(Type type, String value) {
 
     static ProviderActorKey login(String value) {
         return hasText(value) ? new ProviderActorKey(Type.LOGIN, value.toLowerCase(Locale.ROOT)) : null;
+    }
+
+    static String googleProviderIdAlias(String providerActorId) {
+        ProviderActorKey key = providerId(providerActorId);
+        return key == null ? null : GOOGLE_PROVIDER_ID_ALIAS_PREFIX + key.value;
+    }
+
+    static boolean matchesGoogleProviderIdAlias(String aliasValue, String providerActorId) {
+        String expected = googleProviderIdAlias(providerActorId);
+        return expected != null && expected.equals(aliasValue);
     }
 
     static ProviderActorKey fromStored(String storedValue) {

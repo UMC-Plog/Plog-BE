@@ -319,6 +319,117 @@ class GoogleIntegrationResourceCollectorTest {
     }
 
     @Test
+    @DisplayName("Google 현재 사용자 actor는 Drive Activity와 댓글에서 연동 계정 ID로 정규화한다")
+    void normalizesCurrentGoogleUserAcrossDriveActivityAndComments() {
+        Fixture fixture = fixture();
+        IntegrationResource resource = resource(IntegrationResourceType.GOOGLE_DOCUMENT);
+        ProjectIntegration verifiedIntegration = mock(ProjectIntegration.class);
+        given(verifiedIntegration.getExternalAccountId()).willReturn("google-sub-123");
+        given(verifiedIntegration.getExternalAccountName()).willReturn("self@example.com");
+
+        expectFileMetadata(fixture.server);
+        expectDriveActivity(fixture.server, """
+                {"itemName":"items/google-file-1","pageSize":100}
+                """, """
+                {"activities":[{"primaryActionDetail":{"edit":{}},"actors":[{"user":{"knownUser":{
+                  "personName":"people/108281305932882777267","isCurrentUser":true}}}],
+                 "timestamp":"2026-08-01T10:00:00Z"}]}
+                """);
+        expectComments(fixture.server, """
+                {"comments":[{"id":"comment-self","createdTime":"2026-08-01T12:00:00Z",
+                  "author":{"me":true,"permissionId":"comment-permission","displayName":"유상완"},
+                  "content":"hello"}]}
+                """);
+        expectReplies(fixture.server, "comment-self", null, """
+                {"replies":[{"id":"reply-self","createdTime":"2026-08-01T12:10:00Z",
+                  "author":{"me":true,"displayName":"유상완"},"content":"reply"}]}
+                """);
+        expectRevisions(fixture.server, "{}");
+        expectDocumentSnapshot(fixture.server);
+
+        fixture.collector.collect(resource, verifiedIntegration, CollectionContext.noop());
+
+        fixture.server.verify();
+        assertThat(storedActorsFor(IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY)).containsExactly(
+                new StoredActor("google-account:google-sub-123", null, "self@example.com")
+        );
+        assertThat(storedLatestActorsFor(IntegrationActivityType.GOOGLE_DRIVE_COMMENT)).containsExactly(
+                new StoredActor("google-account:google-sub-123", "유상완", "self@example.com"),
+                new StoredActor("google-account:google-sub-123", "유상완", "self@example.com")
+        );
+    }
+
+    @Test
+    @DisplayName("연동 계정 ID가 없으면 현재 사용자 actor의 원본 provider ID를 보존한다")
+    void preservesOriginalCurrentGoogleUserActorWhenExternalAccountIdIsMissing() {
+        Fixture fixture = fixture();
+        IntegrationResource resource = resource(IntegrationResourceType.GOOGLE_DOCUMENT);
+        ProjectIntegration verifiedIntegration = mock(ProjectIntegration.class);
+        given(verifiedIntegration.getExternalAccountId()).willReturn(null);
+        given(verifiedIntegration.getExternalAccountName()).willReturn("self@example.com");
+
+        expectFileMetadata(fixture.server);
+        expectDriveActivity(fixture.server, """
+                {"itemName":"items/google-file-1","pageSize":100}
+                """, """
+                {"activities":[{"primaryActionDetail":{"edit":{}},"actors":[{"user":{"knownUser":{
+                  "personName":"people/108281305932882777267","displayName":"유상완","isCurrentUser":true}}}],
+                 "timestamp":"2026-08-01T10:00:00Z"}]}
+                """);
+        expectComments(fixture.server, """
+                {"comments":[{"id":"comment-self","createdTime":"2026-08-01T12:00:00Z",
+                  "author":{"me":true,"permissionId":"comment-permission","displayName":"유상완"},
+                  "content":"hello"}]}
+                """);
+        expectReplies(fixture.server, "comment-self", null, """
+                {"replies":[{"id":"reply-self","createdTime":"2026-08-01T12:10:00Z",
+                  "author":{"me":true,"permissionId":"reply-permission","displayName":"유상완"},"content":"reply"}]}
+                """);
+        expectRevisions(fixture.server, "{}");
+        expectDocumentSnapshot(fixture.server);
+
+        fixture.collector.collect(resource, verifiedIntegration, CollectionContext.noop());
+
+        fixture.server.verify();
+        assertThat(storedActorsFor(IntegrationActivityType.GOOGLE_DRIVE_ACTIVITY)).containsExactly(
+                new StoredActor("people/108281305932882777267", "유상완", null)
+        );
+        assertThat(storedLatestActorsFor(IntegrationActivityType.GOOGLE_DRIVE_COMMENT)).containsExactly(
+                new StoredActor("comment-permission", "유상완", null),
+                new StoredActor("reply-permission", "유상완", null)
+        );
+    }
+
+    @Test
+    @DisplayName("같은 표시 이름이어도 현재 사용자가 아니면 연동 계정 ID로 정규화하지 않는다")
+    void doesNotNormalizeNonCurrentGoogleUserByDisplayName() {
+        Fixture fixture = fixture();
+        IntegrationResource resource = resource(IntegrationResourceType.GOOGLE_DOCUMENT);
+        ProjectIntegration verifiedIntegration = mock(ProjectIntegration.class);
+        given(verifiedIntegration.getExternalAccountId()).willReturn("google-sub-123");
+        given(verifiedIntegration.getExternalAccountName()).willReturn("self@example.com");
+
+        expectFileMetadata(fixture.server);
+        expectDriveActivity(fixture.server, """
+                {"itemName":"items/google-file-1","pageSize":100}
+                """, "{}");
+        expectComments(fixture.server, """
+                {"comments":[{"id":"comment-other","createdTime":"2026-08-01T12:00:00Z",
+                  "author":{"me":false,"displayName":"유상완"},"content":"other"}]}
+                """);
+        expectReplies(fixture.server, "comment-other", null, "{}");
+        expectRevisions(fixture.server, "{}");
+        expectDocumentSnapshot(fixture.server);
+
+        fixture.collector.collect(resource, verifiedIntegration, CollectionContext.noop());
+
+        fixture.server.verify();
+        assertThat(storedLatestActorsFor(IntegrationActivityType.GOOGLE_DRIVE_COMMENT)).containsExactly(
+                new StoredActor(null, "유상완", null)
+        );
+    }
+
+    @Test
     @DisplayName("Drive Activity 페이지가 바뀌어도 이미 조회한 actor는 다시 조회하지 않는다")
     void cachesResolvedDriveActivityActorsAcrossPages() {
         Fixture fixture = fixture();
@@ -699,7 +810,24 @@ class GoogleIntegrationResourceCollectorTest {
         verify(activityStoreService, atLeastOnce()).store(
                 any(), eq(activityType), any(), providerIdCaptor.capture(), loginCaptor.capture(),
                 emailCaptor.capture(), any(), any(), any());
+        return storedActors(providerIdCaptor, loginCaptor, emailCaptor);
+    }
 
+    private List<StoredActor> storedLatestActorsFor(IntegrationActivityType activityType) {
+        ArgumentCaptor<String> providerIdCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> loginCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> emailCaptor = ArgumentCaptor.forClass(String.class);
+        verify(activityStoreService, atLeastOnce()).storeLatestProviderPayload(
+                any(), eq(activityType), any(), providerIdCaptor.capture(), loginCaptor.capture(),
+                emailCaptor.capture(), any(), any(), any());
+        return storedActors(providerIdCaptor, loginCaptor, emailCaptor);
+    }
+
+    private List<StoredActor> storedActors(
+            ArgumentCaptor<String> providerIdCaptor,
+            ArgumentCaptor<String> loginCaptor,
+            ArgumentCaptor<String> emailCaptor
+    ) {
         List<StoredActor> actors = new ArrayList<>();
         for (int index = 0; index < providerIdCaptor.getAllValues().size(); index++) {
             actors.add(new StoredActor(

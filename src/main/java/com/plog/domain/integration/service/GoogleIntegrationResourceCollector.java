@@ -31,6 +31,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     private static final String DRIVE_ACTIVITY_API = "https://driveactivity.googleapis.com/v2";
     private static final String DOCS_API = "https://docs.googleapis.com/v1";
     private static final String SLIDES_API = "https://slides.googleapis.com/v1";
+    private static final String GOOGLE_ACCOUNT_ACTOR_PREFIX = "google-account:";
 
     private final ProjectIntegrationService projectIntegrationService;
     private final IntegrationActivityStoreService activityStoreService;
@@ -72,10 +73,10 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
         String token = projectIntegrationService.decryptAccessToken(verifiedIntegration);
         String fileId = resource.getProviderResourceId();
         GooglePeopleActorResolver.Session actorSession = peopleActorResolver.begin(token, context);
-        collectFileMetadata(resource, fileId, token, context);
-        collectOptional(() -> collectDriveActivity(resource, fileId, token, context, actorSession));
-        collectOptional(() -> collectComments(resource, fileId, token, context));
-        collectOptional(() -> collectRevisions(resource, fileId, token, context));
+        collectFileMetadata(resource, fileId, token, context, verifiedIntegration);
+        collectOptional(() -> collectDriveActivity(resource, fileId, token, context, actorSession, verifiedIntegration));
+        collectOptional(() -> collectComments(resource, fileId, token, context, verifiedIntegration));
+        collectOptional(() -> collectRevisions(resource, fileId, token, context, verifiedIntegration));
         if (resource.getResourceType() == IntegrationResourceType.GOOGLE_DOCUMENT) {
             collectOptional(() -> collectDocumentSnapshot(resource, fileId, token, context));
         }
@@ -114,21 +115,21 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     }
 
     private void collectFileMetadata(IntegrationResource resource, String fileId, String token,
-            CollectionContext context) {
+            CollectionContext context, ProjectIntegration integration) {
         JsonNode file = get(DRIVE_API + "/files/" + fileId
-                + "?fields=id,name,mimeType,createdTime,modifiedTime,lastModifyingUser,owners,webViewLink",
+                + "?fields=id,name,mimeType,createdTime,modifiedTime,lastModifyingUser(me,permissionId,displayName,emailAddress),owners,webViewLink",
                 token, context);
-        JsonNode actor = file.path("lastModifyingUser");
+        GoogleActor actor = googleActor(file.path("lastModifyingUser"), integration);
         activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DRIVE_FILE_SNAPSHOT,
                 "drive-file:" + fileId + ":" + file.path("modifiedTime").asText("current"),
-                actor.path("permissionId").asText(null), actor.path("displayName").asText(null),
-                actor.path("emailAddress").asText(null),
+                actor.providerId(), actor.login(), actor.email(),
                 parseInstant(file.path("modifiedTime").asText(file.path("createdTime").asText(null))),
                 file.path("webViewLink").asText(resource.getResourceUrl()), file.toString());
     }
 
     private void collectDriveActivity(IntegrationResource resource, String fileId, String token,
-            CollectionContext context, GooglePeopleActorResolver.Session actorSession) {
+            CollectionContext context, GooglePeopleActorResolver.Session actorSession,
+            ProjectIntegration integration) {
         String pageToken = null;
         Set<String> requestedPageTokens = new HashSet<>();
         do {
@@ -140,7 +141,7 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             List<JsonNode> knownUsers = new ArrayList<>();
             for (JsonNode activity : body.path("activities")) {
                 JsonNode knownUser = firstKnownUser(activity);
-                if (knownUser != null) {
+                if (knownUser != null && !knownUser.path("isCurrentUser").asBoolean(false)) {
                     knownUsers.add(knownUser);
                 }
             }
@@ -148,6 +149,9 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             for (JsonNode activity : body.path("activities")) {
                 JsonNode knownUser = firstKnownUser(activity);
                 GooglePeopleActorResolver.Actor actor = peopleActorResolver.resolve(actorSession, knownUser);
+                if (knownUser != null && knownUser.path("isCurrentUser").asBoolean(false)) {
+                    actor = selfActor(actor, integration);
+                }
                 if (!actor.hasDisplayInformation()) {
                     continue;
                 }
@@ -172,45 +176,42 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     }
 
     private void collectComments(IntegrationResource resource, String fileId, String token,
-            CollectionContext context) {
+            CollectionContext context, ProjectIntegration integration) {
         String pageToken = null;
         Set<String> requestedPageTokens = new HashSet<>();
         do {
             String url = DRIVE_API + "/files/" + fileId
                     + "/comments?pageSize=100&includeDeleted=true"
-                    + "&fields=nextPageToken,comments(id,createdTime,modifiedTime,author,content,resolved,deleted)"
+                    + "&fields=nextPageToken,comments(id,createdTime,modifiedTime,author(me,permissionId,displayName,emailAddress),content,resolved,deleted)"
                     + (pageToken == null ? "" : "&pageToken=" + pageToken);
             JsonNode body = get(url, token, context);
             for (JsonNode comment : body.path("comments")) {
-                JsonNode author = comment.path("author");
+                GoogleActor author = googleActor(comment.path("author"), integration);
                 activityStoreService.storeLatestProviderPayload(resource, IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
-                        "comment:" + comment.path("id").asText(), author.path("permissionId").asText(null),
-                        author.path("displayName").asText(null), author.path("emailAddress").asText(null),
+                        "comment:" + comment.path("id").asText(), author.providerId(), author.login(), author.email(),
                         parseInstant(comment.path("createdTime").asText(null)), resource.getResourceUrl(),
                         comment.toString());
-                collectCommentReplies(resource, fileId, comment.path("id").asText(), token, context);
+                collectCommentReplies(resource, fileId, comment.path("id").asText(), token, context, integration);
             }
             pageToken = nextPageToken(body, requestedPageTokens, "drive-comments", fileId);
         } while (pageToken != null && !pageToken.isBlank());
     }
 
     private void collectCommentReplies(IntegrationResource resource, String fileId, String commentId, String token,
-            CollectionContext context) {
+            CollectionContext context, ProjectIntegration integration) {
         String pageToken = null;
         Set<String> requestedPageTokens = new HashSet<>();
         do {
             String url = DRIVE_API + "/files/" + fileId + "/comments/" + commentId
                     + "/replies?pageSize=100&includeDeleted=true"
-                    + "&fields=nextPageToken,replies(id,createdTime,modifiedTime,author,content,deleted)"
+                    + "&fields=nextPageToken,replies(id,createdTime,modifiedTime,author(me,permissionId,displayName,emailAddress),content,deleted)"
                     + (pageToken == null ? "" : "&pageToken=" + pageToken);
             JsonNode body = get(url, token, context);
             for (JsonNode reply : body.path("replies")) {
-                JsonNode replyAuthor = reply.path("author");
+                GoogleActor replyAuthor = googleActor(reply.path("author"), integration);
                 activityStoreService.storeLatestProviderPayload(resource, IntegrationActivityType.GOOGLE_DRIVE_COMMENT,
                         "comment-reply:" + reply.path("id").asText(),
-                        replyAuthor.path("permissionId").asText(null),
-                        replyAuthor.path("displayName").asText(null),
-                        replyAuthor.path("emailAddress").asText(null),
+                        replyAuthor.providerId(), replyAuthor.login(), replyAuthor.email(),
                         parseInstant(reply.path("createdTime").asText(null)), resource.getResourceUrl(),
                         reply.toString());
             }
@@ -219,19 +220,18 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
     }
 
     private void collectRevisions(IntegrationResource resource, String fileId, String token,
-            CollectionContext context) {
+            CollectionContext context, ProjectIntegration integration) {
         String pageToken = null;
         Set<String> requestedPageTokens = new HashSet<>();
         do {
             String url = DRIVE_API + "/files/" + fileId
-                    + "/revisions?pageSize=100&fields=nextPageToken,revisions(id,modifiedTime,lastModifyingUser,originalFilename,mimeType)"
+                    + "/revisions?pageSize=100&fields=nextPageToken,revisions(id,modifiedTime,lastModifyingUser(me,permissionId,displayName,emailAddress),originalFilename,mimeType)"
                     + (pageToken == null ? "" : "&pageToken=" + pageToken);
             JsonNode body = get(url, token, context);
             for (JsonNode revision : body.path("revisions")) {
-                JsonNode author = revision.path("lastModifyingUser");
+                GoogleActor author = googleActor(revision.path("lastModifyingUser"), integration);
                 activityStoreService.store(resource, IntegrationActivityType.GOOGLE_DRIVE_REVISION,
-                        "revision:" + revision.path("id").asText(), author.path("permissionId").asText(null),
-                        author.path("displayName").asText(null), author.path("emailAddress").asText(null),
+                        "revision:" + revision.path("id").asText(), author.providerId(), author.login(), author.email(),
                         parseInstant(revision.path("modifiedTime").asText(null)), resource.getResourceUrl(),
                         revision.toString());
             }
@@ -249,6 +249,71 @@ class GoogleIntegrationResourceCollector implements IntegrationResourceCollector
             throw new ProviderResourceAccessException(503, null);
         }
         return nextPageToken;
+    }
+
+    private GoogleActor googleActor(JsonNode user, ProjectIntegration integration) {
+        GoogleActor actor = new GoogleActor(
+                user.path("permissionId").asText(null),
+                user.path("displayName").asText(null),
+                user.path("emailAddress").asText(null)
+        );
+        return user.path("me").asBoolean(false) ? selfActor(actor, integration) : actor;
+    }
+
+    private GooglePeopleActorResolver.Actor selfActor(
+            GooglePeopleActorResolver.Actor actor,
+            ProjectIntegration integration
+    ) {
+        SelfActorMetadata metadata = selfActorMetadata(actor.login(), actor.email(), integration);
+        if (metadata == null) {
+            return actor;
+        }
+        return new GooglePeopleActorResolver.Actor(
+                metadata.providerId(),
+                metadata.login(),
+                metadata.email()
+        );
+    }
+
+    private GoogleActor selfActor(GoogleActor actor, ProjectIntegration integration) {
+        SelfActorMetadata metadata = selfActorMetadata(actor.login(), actor.email(), integration);
+        if (metadata == null) {
+            return actor;
+        }
+        return new GoogleActor(
+                metadata.providerId(),
+                metadata.login(),
+                metadata.email()
+        );
+    }
+
+    private SelfActorMetadata selfActorMetadata(String actorLogin, String actorEmail, ProjectIntegration integration) {
+        String providerId = canonicalAccountActorId(integration);
+        return providerId == null
+                ? null
+                : new SelfActorMetadata(providerId, actorLogin, firstNonblank(actorEmail, externalAccountEmail(integration)));
+    }
+
+    private String canonicalAccountActorId(ProjectIntegration integration) {
+        String externalAccountId = integration.getExternalAccountId();
+        return externalAccountId == null || externalAccountId.isBlank()
+                ? null
+                : GOOGLE_ACCOUNT_ACTOR_PREFIX + externalAccountId;
+    }
+
+    private String externalAccountEmail(ProjectIntegration integration) {
+        String externalAccountName = integration.getExternalAccountName();
+        return externalAccountName != null && externalAccountName.contains("@") ? externalAccountName : null;
+    }
+
+    private String firstNonblank(String preferred, String fallback) {
+        return preferred == null || preferred.isBlank() ? fallback : preferred;
+    }
+
+    private record GoogleActor(String providerId, String login, String email) {
+    }
+
+    private record SelfActorMetadata(String providerId, String login, String email) {
     }
 
     private String sha256(String value) {

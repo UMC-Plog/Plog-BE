@@ -37,7 +37,7 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
             @Param("providerPayload") String providerPayload
     );
 
-    /** Stable provider identity를 유지하면서 mutable payload만 최신 상태로 교체한다. */
+    /** mutable payload를 갱신하고, 재수집에서 확인된 강한 actor ID/email로 기존 snapshot을 보강한다. */
     @Transactional
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = "insert into integration_activities "
@@ -48,8 +48,23 @@ public interface IntegrationActivityRepository extends JpaRepository<Integration
             + ":actorProviderId, :actorLogin, :actorEmail, :occurredAt, :sourceUrl, :providerPayload, "
             + "current_timestamp, current_timestamp) "
             + "on conflict (integration_resource_id, provider_event_key) do update "
-            + "set provider_payload = excluded.provider_payload, updated_at = current_timestamp "
-            + "where integration_activities.provider_payload is distinct from excluded.provider_payload",
+            + "set project_member_id = case "
+            + "when coalesce(:actorProviderId, '') <> '' or coalesce(:actorEmail, '') <> '' "
+            + "then excluded.project_member_id else integration_activities.project_member_id end, "
+            + "actor_provider_id = coalesce(nullif(:actorProviderId, ''), "
+            + "integration_activities.actor_provider_id), "
+            + "actor_login = coalesce(nullif(:actorLogin, ''), integration_activities.actor_login), "
+            + "actor_email = coalesce(nullif(:actorEmail, ''), integration_activities.actor_email), "
+            + "provider_payload = excluded.provider_payload, updated_at = current_timestamp "
+            + "where integration_activities.provider_payload is distinct from excluded.provider_payload "
+            + "or (coalesce(:actorProviderId, '') <> '' "
+            + "and integration_activities.actor_provider_id is distinct from :actorProviderId) "
+            + "or (coalesce(:actorLogin, '') <> '' "
+            + "and integration_activities.actor_login is distinct from :actorLogin) "
+            + "or (coalesce(:actorEmail, '') <> '' "
+            + "and integration_activities.actor_email is distinct from :actorEmail) "
+            + "or ((coalesce(:actorProviderId, '') <> '' or coalesce(:actorEmail, '') <> '') "
+            + "and integration_activities.project_member_id is distinct from :projectMemberId)",
             nativeQuery = true)
     int upsertProviderPayloadIfChanged(
             @Param("resourceId") Long resourceId,

@@ -31,6 +31,7 @@ public class ProjectSettingsService {
     private final InviteTokenCipher inviteTokenCipher;
     private final ProjectSettingsValidator settingsValidator;
     private final IntegrationActivityReportLogAdapter reportLogAdapter;
+    private final ProjectDeadlineService projectDeadlineService;
 
     @Value("${plog.invite.base-url}")
     private String inviteBaseUrl;
@@ -64,9 +65,13 @@ public class ProjectSettingsService {
         String projectName = request.projectName() == null ? null : request.projectName().trim();
         project.updateSettings(projectName, request.endDay(), request.projectType());
         projectRepository.saveAndFlush(project);
-        if (!Objects.equals(project.getEndDay(), previousEndDay)) {
+        boolean endDayChanged = !Objects.equals(project.getEndDay(), previousEndDay);
+        if (endDayChanged) {
             projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(projectId)
                     .forEach(integration -> reportLogAdapter.synchronizeProjectIntegrationActivities(integration.getId()));
+            if (!TimeUtil.todayUtc().isBefore(project.getEndDay())) {
+                projectDeadlineService.processDeadline(projectId);
+            }
         }
         return new ProjectSettingsDto.UpdateResponse(
                 project.getId(), project.getProjectName(), project.getProjectType(), project.getEndDay(),
