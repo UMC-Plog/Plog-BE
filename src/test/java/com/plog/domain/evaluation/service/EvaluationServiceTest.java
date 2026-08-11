@@ -15,16 +15,19 @@ import com.plog.domain.evaluation.entity.PeerEvaluation;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
 import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
 import com.plog.domain.integration.service.IntegrationActorMappingStatusService;
-import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.MemberStatus;
+import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.domain.user.entity.ProfilePreset;
 import com.plog.domain.user.entity.User;
 import com.plog.global.api.error.EvaluationErrorCode;
+import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -64,7 +67,9 @@ class EvaluationServiceTest {
 
     @BeforeEach
     void setUp() {
-        participantResolver = new EvaluationParticipantResolver(projectMemberRepository);
+        participantResolver = new EvaluationParticipantResolver(
+                projectMemberRepository,
+                new ProjectAccessService(projectMemberRepository));
         evaluationService = new EvaluationService(
                 projectRepository,
                 projectMemberRepository,
@@ -79,8 +84,8 @@ class EvaluationServiceTest {
     @Test
     void updatesExistingPeerEvaluationBeforeReportPublication() {
         Project project = project(ProjectStatus.IN_PROGRESS);
-        ProjectMember evaluator = ProjectMember.builder().id(10L).project(project).build();
-        ProjectMember evaluatee = ProjectMember.builder().id(20L).project(project).build();
+        ProjectMember evaluator = activeMember(10L, project);
+        ProjectMember evaluatee = activeMember(20L, project);
         PeerEvaluation evaluation = PeerEvaluation.builder()
                 .id(105L)
                 .evaluator(evaluator)
@@ -94,7 +99,8 @@ class EvaluationServiceTest {
                 .build();
         PeerEvaluationCreateRequest request = new PeerEvaluationCreateRequest(
                 4, 4, 5, 4, List.of("소통능력"), "수정된 동료 평가");
-        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(evaluator));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(evaluator));
         when(projectMemberRepository.findById(20L)).thenReturn(Optional.of(evaluatee));
         when(peerEvaluationRepository.findByEvaluatorIdAndEvaluateeId(10L, 20L)).thenReturn(Optional.of(evaluation));
 
@@ -110,9 +116,10 @@ class EvaluationServiceTest {
     @Test
     void rejectsUpdateAfterReportPublication() {
         Project project = project(ProjectStatus.COMPLETED);
-        ProjectMember evaluator = ProjectMember.builder().id(10L).project(project).build();
-        ProjectMember evaluatee = ProjectMember.builder().id(20L).project(project).build();
-        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(evaluator));
+        ProjectMember evaluator = activeMember(10L, project);
+        ProjectMember evaluatee = activeMember(20L, project);
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(evaluator));
         when(projectMemberRepository.findById(20L)).thenReturn(Optional.of(evaluatee));
 
         assertThatThrownBy(() -> evaluationService.updatePeerEvaluation(
@@ -125,11 +132,12 @@ class EvaluationServiceTest {
     @Test
     void createsAPeerEvaluationOnceTheEndDayHasPassed() {
         Project project = project(ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC).minusDays(1));
-        ProjectMember evaluator = ProjectMember.builder().id(10L).project(project).build();
-        ProjectMember evaluatee = ProjectMember.builder().id(20L).project(project).build();
+        ProjectMember evaluator = activeMember(10L, project);
+        ProjectMember evaluatee = activeMember(20L, project);
         PeerEvaluationCreateRequest request = new PeerEvaluationCreateRequest(
                 4, 4, 5, 4, List.of("소통능력"), "동료 평가");
-        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(evaluator));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(evaluator));
         when(projectMemberRepository.findById(20L)).thenReturn(Optional.of(evaluatee));
         when(peerEvaluationRepository.findByEvaluatorIdAndEvaluateeId(10L, 20L)).thenReturn(Optional.empty());
 
@@ -141,9 +149,10 @@ class EvaluationServiceTest {
     @Test
     void rejectsAPeerEvaluationBeforeTheEndDay() {
         Project project = project(ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC).plusDays(1));
-        ProjectMember evaluator = ProjectMember.builder().id(10L).project(project).build();
-        ProjectMember evaluatee = ProjectMember.builder().id(20L).project(project).build();
-        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(evaluator));
+        ProjectMember evaluator = activeMember(10L, project);
+        ProjectMember evaluatee = activeMember(20L, project);
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(evaluator));
         when(projectMemberRepository.findById(20L)).thenReturn(Optional.of(evaluatee));
 
         assertThatThrownBy(() -> evaluationService.createPeerEvaluation(
@@ -156,7 +165,7 @@ class EvaluationServiceTest {
     @Test
     void exposesEachTargetsProfilePresetForTheAvatarList() {
         Project project = project(ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC));
-        ProjectMember currentMember = ProjectMember.builder().id(10L).project(project).build();
+        ProjectMember currentMember = activeMember(10L, project);
         ProjectMember teammate = ProjectMember.builder()
                 .id(20L)
                 .project(project)
@@ -169,7 +178,8 @@ class EvaluationServiceTest {
                 .user(user("개발자", ProfilePreset.PANDA))
                 .build();
         when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
-        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(currentMember));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(currentMember));
         when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(1L, MemberStatus.ACTIVE))
                 .thenReturn(List.of(currentMember, teammate, evaluatedTeammate));
         when(peerEvaluationRepository.findEvaluatedTargetIds(currentMember)).thenReturn(Set.of(30L));
@@ -192,14 +202,15 @@ class EvaluationServiceTest {
     @Test
     void exposesFinalSubmissionAvailabilityWhenEveryRequirementIsCompleted() {
         Project project = project(ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC));
-        ProjectMember currentMember = ProjectMember.builder().id(10L).project(project).build();
+        ProjectMember currentMember = activeMember(10L, project);
         ProjectMember teammate = ProjectMember.builder()
                 .id(20L)
                 .project(project)
                 .user(user("바나", ProfilePreset.OTTER))
                 .build();
         when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
-        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(currentMember));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(currentMember));
         when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(1L, MemberStatus.ACTIVE))
                 .thenReturn(List.of(currentMember, teammate));
         when(peerEvaluationRepository.findEvaluatedTargetIds(currentMember)).thenReturn(Set.of(20L));
@@ -216,11 +227,32 @@ class EvaluationServiceTest {
         assertThat(response.isFinalSubmissionAvailable()).isTrue();
     }
 
+    @Test
+    void rejectsEvaluationAccessForExitedMember() {
+        Project project = project(ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC));
+        when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> evaluationService.getEvaluationTargets(1L, 7L))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(ProjectErrorCode.PROJECT_MEMBER_REQUIRED));
+    }
+
     private User user(String nickname, ProfilePreset profilePreset) {
         User user = mock(User.class);
         lenient().when(user.getNickname()).thenReturn(nickname);
         lenient().when(user.getProfilePreset()).thenReturn(profilePreset);
         return user;
+    }
+
+    private ProjectMember activeMember(Long id, Project project) {
+        return ProjectMember.builder()
+                .id(id)
+                .project(project)
+                .role(ProjectRole.MEMBER)
+                .status(MemberStatus.ACTIVE)
+                .build();
     }
 
     private Project project(ProjectStatus status) {

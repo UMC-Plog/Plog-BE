@@ -9,13 +9,17 @@ import static org.mockito.Mockito.when;
 import com.plog.domain.evaluation.dto.request.SelfFeedbackCreateRequest;
 import com.plog.domain.evaluation.entity.SelfFeedback;
 import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
+import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.event.EvaluationCompletionCheckRequestedEvent;
 import com.plog.domain.project.repository.ProjectMemberRepository;
+import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.global.api.error.EvaluationErrorCode;
+import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -45,7 +49,9 @@ class SelfFeedbackServiceTest {
     void setUp() {
         selfFeedbackService = new SelfFeedbackService(
                 selfFeedbackRepository,
-                new EvaluationParticipantResolver(projectMemberRepository),
+                new EvaluationParticipantResolver(
+                        projectMemberRepository,
+                        new ProjectAccessService(projectMemberRepository)),
                 eventPublisher
         );
     }
@@ -58,7 +64,8 @@ class SelfFeedbackServiceTest {
                 .projectMember(projectMember)
                 .content("기존 피드백")
                 .build();
-        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(projectMember));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(projectMember));
         when(selfFeedbackRepository.findByProjectMemberId(10L)).thenReturn(Optional.of(selfFeedback));
 
         var response = selfFeedbackService.updateSelfFeedback(1L, 7L, new SelfFeedbackCreateRequest("수정된 피드백"));
@@ -70,7 +77,8 @@ class SelfFeedbackServiceTest {
     @Test
     void rejectsUpdateAfterReportPublication() {
         ProjectMember projectMember = projectMember(ProjectStatus.COMPLETED);
-        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(projectMember));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(projectMember));
 
         assertThatThrownBy(() -> selfFeedbackService.updateSelfFeedback(
                 1L, 7L, new SelfFeedbackCreateRequest("수정된 피드백")))
@@ -83,7 +91,8 @@ class SelfFeedbackServiceTest {
     void createsSelfFeedbackOnceTheEndDayHasPassed() {
         ProjectMember projectMember = projectMember(
                 ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC).minusDays(1));
-        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(projectMember));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(projectMember));
         when(selfFeedbackRepository.findByProjectMemberId(10L)).thenReturn(Optional.empty());
 
         selfFeedbackService.createSelfFeedback(1L, 7L, new SelfFeedbackCreateRequest("셀프 피드백"));
@@ -98,7 +107,8 @@ class SelfFeedbackServiceTest {
     void rejectsSelfFeedbackAfterReportPublication() {
         ProjectMember projectMember = projectMember(
                 ProjectStatus.COMPLETED, LocalDate.now(ZoneOffset.UTC).minusDays(1));
-        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(projectMember));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(projectMember));
 
         assertThatThrownBy(() -> selfFeedbackService.createSelfFeedback(
                 1L, 7L, new SelfFeedbackCreateRequest("완료 후에 쓴 셀프 피드백")))
@@ -111,13 +121,24 @@ class SelfFeedbackServiceTest {
     void rejectsSelfFeedbackBeforeTheEndDay() {
         ProjectMember projectMember = projectMember(
                 ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC).plusDays(1));
-        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(projectMember));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(projectMember));
 
         assertThatThrownBy(() -> selfFeedbackService.createSelfFeedback(
                 1L, 7L, new SelfFeedbackCreateRequest("셀프 피드백")))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode())
                                 .isEqualTo(EvaluationErrorCode.NOT_EVALUATING_STATE));
+    }
+
+    @Test
+    void rejectsSelfFeedbackAccessForExitedMember() {
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> selfFeedbackService.getMySelfFeedback(1L, 7L))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(ProjectErrorCode.PROJECT_MEMBER_REQUIRED));
     }
 
     private ProjectMember projectMember(ProjectStatus status) {
@@ -138,6 +159,8 @@ class SelfFeedbackServiceTest {
         return ProjectMember.builder()
                 .id(10L)
                 .project(project)
+                .role(ProjectRole.MEMBER)
+                .status(MemberStatus.ACTIVE)
                 .build();
     }
 }
