@@ -12,7 +12,7 @@ import java.util.Map;
 public record ReportMemberSummaryResponse(
         @Schema(description = "프로젝트 멤버 ID", example = "7")
         Long projectMemberId,
-        @Schema(description = "표시 닉네임", example = "창훈")
+        @Schema(description = "실명", example = "김창훈")
         String memberName,
         @Schema(description = "최종 점수. 아직 계산 전이면 null", example = "82.50")
         BigDecimal finalScore,

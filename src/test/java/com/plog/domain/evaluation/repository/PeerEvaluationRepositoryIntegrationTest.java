@@ -62,8 +62,8 @@ class PeerEvaluationRepositoryIntegrationTest {
 
     /**
      * 받은 평가가 삽입 순서(제출 시각 오름차순, 동시각이면 id 오름차순)대로 안정적으로 돌아오는지 실제 SQL 로 확인한다.
-     * ORDER BY 가 없으면 행 순서가 보장되지 않아 peer_keywords 태그 칩의 최초 등장 순서가 실행마다 뒤바뀔 수 있다 —
-     * 단위 테스트(mock)로는 검증되지 않는 부분이라 여기서 고정한다.
+     * ORDER BY 가 없으면 선택 횟수가 같은 peer_keywords의 tie-break(최초 등장 순서)가 실행마다
+     * 뒤바뀔 수 있다 — 단위 테스트(mock)로는 검증되지 않는 부분이라 여기서 고정한다.
      */
     @Test
     void returnsEvaluationsInStableSubmissionOrderForKeywordAggregation() {
@@ -83,10 +83,10 @@ class PeerEvaluationRepositoryIntegrationTest {
         List<PeerEvaluation> received =
                 peerEvaluationRepository.findAllByEvaluateeIdOrderByCreatedAtAscIdAsc(evaluatee.getId());
 
-        // 평가자 순서가 삽입 순서와 같은지 — 이 순서가 확정돼야 키워드 최초 등장 순서가 안정적이다.
+        // 평가자 순서가 삽입 순서와 같은지 — 이 순서가 확정돼야 동률 키워드 순서가 안정적이다.
         assertThat(received).extracting(evaluation -> evaluation.getEvaluator().getId())
                 .containsExactly(first.getId(), second.getId(), third.getId());
-        // 그 결과 키워드는 첫 등장 순서로 ["리더십","책임감","꼼꼼함","소통"] 이 된다.
+        // 원본 순서를 고정해 집계 단계의 빈도 동률 tie-break가 재현 가능하도록 한다.
         assertThat(received).flatExtracting(PeerEvaluation::getKeywords)
                 .containsExactly("리더십", "책임감", "꼼꼼함", "소통", "리더십");
     }

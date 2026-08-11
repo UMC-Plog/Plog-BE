@@ -16,7 +16,8 @@ import java.util.Map;
  * @param categoryScores  역량별 평균 (0.0~5.0). 평가가 없는 역량은 키를 생략한다
  * @param evaluatorCount  이 멤버를 평가한 사람 수. 0 이면 Peer 근거가 없다는 뜻이므로
  *                        LLM 은 동료 평가 관련 서술을 하지 않는다
- * @param keywords        평가자들이 고른 키워드(예: "리더십", "책임감"). 화면의 태그 칩에 대응한다
+ * @param keywords        평가자들이 고른 키워드(예: "리더십", "책임감"). 선택 횟수 내림차순이며
+ *                        화면의 태그 칩에 대응한다
  * @param normalizedScore 평가 도메인의 기존 상대 점수. 현재 리포트 종합점수에는 사용하지 않는다
  */
 public record PeerEvaluationSummary(

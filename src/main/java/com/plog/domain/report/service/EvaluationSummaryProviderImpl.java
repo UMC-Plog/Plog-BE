@@ -12,10 +12,10 @@ import com.plog.domain.report.port.SelfFeedbackMatchSummary;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.ToIntFunction;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -71,7 +71,7 @@ public class EvaluationSummaryProviderImpl implements EvaluationSummaryProvider 
         categoryScores.put(CompetencyCategory.OUTPUT, scale2(output));
 
         BigDecimal average = scale2((collaboration + leadership + communication + output) / 4.0);
-        List<String> keywords = distinctKeywords(received);
+        List<String> keywords = rankedKeywords(received);
 
         // 평가 도메인의 기존 상대 점수. 리포트 종합점수는 이 값이 아니라 average * 20을 사용한다.
         BigDecimal normalizedScore = calculationService
@@ -119,19 +119,27 @@ public class EvaluationSummaryProviderImpl implements EvaluationSummaryProvider 
         return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
     }
 
-    /** 평가자들이 고른 키워드를 최초 등장 순서로 중복 없이 모은다(태그 칩 노출용). */
-    private List<String> distinctKeywords(List<PeerEvaluation> evaluations) {
-        Set<String> keywords = new LinkedHashSet<>();
+    /**
+     * 평가자들이 고른 키워드를 선택 횟수 내림차순으로 모은다(태그 칩 노출용).
+     * 횟수가 같으면 평가 제출·키워드 배열에서 먼저 등장한 값을 먼저 두어 결과를 안정적으로 유지한다.
+     */
+    private List<String> rankedKeywords(List<PeerEvaluation> evaluations) {
+        Map<String, Integer> keywordCounts = new LinkedHashMap<>();
         for (PeerEvaluation evaluation : evaluations) {
             if (evaluation.getKeywords() == null) {
                 continue;
             }
+            LinkedHashSet<String> evaluatorKeywords = new LinkedHashSet<>();
             for (String keyword : evaluation.getKeywords()) {
                 if (keyword != null && !keyword.isBlank()) {
-                    keywords.add(keyword.trim());
+                    evaluatorKeywords.add(keyword.trim());
                 }
             }
+            evaluatorKeywords.forEach(keyword -> keywordCounts.merge(keyword, 1, Integer::sum));
         }
-        return List.copyOf(keywords);
+        return keywordCounts.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                .map(Map.Entry::getKey)
+                .toList();
     }
 }

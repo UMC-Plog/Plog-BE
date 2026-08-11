@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record ReportPdfDownloadResponse(
         @Schema(description = "리포트 ID", example = "20")
         Long reportId,
-        @Schema(description = "다운로드될 ZIP 파일명", example = "PLOG-2026-08-00000020-reports.zip")
+        @Schema(description = "다운로드될 ZIP 파일명", example = "PLOG-T-2026-08-15-reports.zip")
         String fileName,
         @Schema(description = "프론트가 직접 이동할 임시 ZIP 다운로드 URL", example = "https://storage.test/reports.zip")
         String downloadUrl,

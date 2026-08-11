@@ -8,8 +8,8 @@ package com.plog.domain.report.llm;
  * 그래도 {@code ReportLlmResponseParser} 는 방어적으로 짠다 — Stub 이나 스키마 미지원
  * 프로바이더로 갈아끼울 수 있어야 하기 때문이다.
  * <p>
- * {@code required} 를 최소로 둔 건 의도다. 근거가 부족하면 비우라고 지시해 놓고 스키마로
- * 필수화하면, 모델이 빈칸을 채우려고 없는 사실을 지어낸다.
+ * 멤버 리포트의 모든 화면 섹션은 필수다. 근거가 부족한 필드는 프롬프트가 지정한 고정 문구로
+ * 채우도록 해, 모델이 사실을 지어내거나 섹션을 누락하지 않게 한다.
  */
 public final class ReportLlmSchemas {
 
@@ -67,7 +67,7 @@ public final class ReportLlmSchemas {
                       "required": ["coverLetter", "portfolio"]
                     }
                   },
-                  "required": ["headline", "teamMemberHeadline"]
+                  "required": ["headline", "teamMemberHeadline", "strengths", "weakness", "growth", "writing"]
                 }
                 """;
     }

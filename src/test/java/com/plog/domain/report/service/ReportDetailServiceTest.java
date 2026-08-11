@@ -68,7 +68,7 @@ class ReportDetailServiceTest {
         Report report = completedReport();
         when(reportRepository.findWithProjectById(REPORT_ID)).thenReturn(Optional.of(report));
         when(memberResultRepository.findMemberSummaries(REPORT_ID))
-                .thenReturn(List.of(memberSummary(PROJECT_MEMBER_ID, "창훈", new BigDecimal("82.50"))));
+                .thenReturn(List.of(memberSummary(PROJECT_MEMBER_ID, "이창훈", new BigDecimal("82.50"))));
 
         ReportDetailResponse response = reportDetailService.getReport(USER_ID, REPORT_ID);
 
@@ -76,7 +76,8 @@ class ReportDetailServiceTest {
         assertThat(response.projectName()).isEqualTo("Plog");
         assertThat(response.pdfAvailable()).isTrue();
         assertThat(response.members()).hasSize(1);
-        assertThat(response.members().getFirst().memberName()).isEqualTo("창훈");
+        assertThat(response.members().getFirst().memberName()).isEqualTo("이창훈");
+        assertThat(response.reportCode()).isEqualTo("PLOG-T-2026-07-10");
         assertThat(response.members().getFirst().finalScore()).isEqualByComparingTo("82.50");
         assertThat(response.members().getFirst().contributionRate()).isEqualByComparingTo("25.00");
         assertThat(response.projectStartDate()).isEqualTo(LocalDate.of(2026, 5, 1));
@@ -122,7 +123,7 @@ class ReportDetailServiceTest {
     }
 
     @Test
-    void returnsMemberResultWithDisplayNickname() {
+    void returnsMemberResultWithRealName() {
         Report report = completedReport();
         when(reportRepository.findWithProjectById(REPORT_ID)).thenReturn(Optional.of(report));
         when(memberResultRepository.findWithMemberByReportIdAndProjectMemberId(REPORT_ID, PROJECT_MEMBER_ID))
@@ -133,12 +134,12 @@ class ReportDetailServiceTest {
 
         assertThat(response.reportId()).isEqualTo(REPORT_ID);
         assertThat(response.projectMemberId()).isEqualTo(PROJECT_MEMBER_ID);
-        assertThat(response.memberName()).isEqualTo("창훈");
+        assertThat(response.memberName()).isEqualTo("이창훈");
         assertThat(response.finalScore()).isEqualByComparingTo("82.50");
         assertThat(response.externalToolConnected()).isFalse();
         assertThat(response.externalScore()).isNull();
         assertThat(response.reliabilityTier()).isEqualTo(ReliabilityTier.P2);
-        assertThat(response.reportCode()).startsWith("PLOG-");
+        assertThat(response.reportCode()).isEqualTo("PLOG-P-2026-07-10");
         assertThat(response.projectName()).isEqualTo("Plog");
         assertThat(response.projectStartDate()).isEqualTo(LocalDate.of(2026, 5, 1));
         assertThat(response.competencyScores100().get(CompetencyCategory.COLLABORATION))
