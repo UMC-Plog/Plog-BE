@@ -1,6 +1,7 @@
 package com.plog.domain.report.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.plog.domain.notification.event.ReportPublishedEvent;
 import com.plog.domain.report.entity.Report;
 import com.plog.domain.report.entity.ReportMemberResult;
 import com.plog.domain.report.llm.MemberReportText;
@@ -13,6 +14,7 @@ import com.plog.global.api.exception.ApiException;
 import com.plog.infrastructure.ai.LlmGenerationException;
 import com.plog.global.util.TimeUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class ReportTextWriter {
     private final ReportRepository reportRepository;
     private final ReportMemberResultRepository memberResultRepository;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     /** 멤버 1명의 LLM 텍스트 저장. 재실행이면 덮어쓴다. */
     @Transactional
@@ -61,6 +64,7 @@ public class ReportTextWriter {
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
         report.complete(TimeUtil.nowUtc());
+        eventPublisher.publishEvent(new ReportPublishedEvent(report.getProject().getId(), reportId));
     }
 
     @Transactional

@@ -10,7 +10,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.plog.domain.notification.event.ReportPublishedEvent;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
@@ -43,7 +42,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -71,9 +69,6 @@ class ReportGenerationServiceTest {
     private ReportPdfArchiveService pdfArchiveService;
     @Mock
     private ReportActivityPreparationService activityPreparationService;
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
-
     @InjectMocks
     private ReportGenerationService service;
 
@@ -94,7 +89,6 @@ class ReportGenerationServiceTest {
         verify(textWriter).writeMemberText(eq(REPORT_ID), eq(2L), any());
         verify(textWriter).writeTeamInsight(eq(REPORT_ID), any(TeamReportText.class));
         verify(textWriter).publish(REPORT_ID);
-        verify(eventPublisher).publishEvent(new ReportPublishedEvent(PROJECT_ID, REPORT_ID));
         verify(externalDataProvider).provide(eq(PROJECT_ID), eq(List.of(1L, 2L)), any());
     }
 
@@ -130,7 +124,6 @@ class ReportGenerationServiceTest {
         assertThat(result.published()).isFalse();
         verify(textWriter).markFailed(REPORT_ID);
         verify(textWriter, never()).publish(anyLong());
-        verify(eventPublisher, never()).publishEvent(any());
     }
 
     // 팀 인사이트는 부가 정보다 — 실패해도 멤버별 결과가 있으면 발행한다.
@@ -231,7 +224,6 @@ class ReportGenerationServiceTest {
         verify(textWriter).markFailed(REPORT_ID);
         verify(dataCollector, never()).collect(anyLong(), anyLong(), any(), any(), any(), anyInt());
         verify(textWriter, never()).publish(anyLong());
-        verify(eventPublisher, never()).publishEvent(any());
     }
 
     // 이미 발행된 리포트를 다시 생성하면 내려간 내용이 사후에 바뀐다.
