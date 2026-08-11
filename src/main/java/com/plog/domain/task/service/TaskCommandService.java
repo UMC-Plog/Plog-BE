@@ -280,7 +280,7 @@ public class TaskCommandService {
 
     // report 0단계 수집용 — 카드 생성 시 동봉 첨부/기존 카드 추가 첨부 모두 여기를 거친다.
     private void publishAttachmentAdded(Task task, TaskAttachment attachment) {
-        LocalDateTime occurredAt = TimeUtil.nowUtc();
+        LocalDateTime occurredAt = TimeUtil.now();
         eventPublisher.publishEvent(new TaskAttachmentAddedEvent(
                 attachment.getId(), task.getId(), task.getProjectMember().getId(), occurredAt));
     }

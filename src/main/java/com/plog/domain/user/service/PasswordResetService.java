@@ -78,7 +78,7 @@ public class PasswordResetService {
         EmailVerification verification = emailVerificationCodeService.requireVerified(email, PURPOSE);
         // requireVerified 는 가입 흐름과 동일하게 "존재 + 인증 완료"만 본다.
         // 재설정은 만료된 인증으로 비밀번호가 바뀌면 안 되므로 만료를 여기서 한 번 더 막는다.
-        if (verification.isExpired(TimeUtil.nowUtc())) {
+        if (verification.isExpired(TimeUtil.now())) {
             throw new ApiException(AuthErrorCode.EMAIL_NOT_VERIFIED);
         }
 

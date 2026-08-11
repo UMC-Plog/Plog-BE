@@ -64,7 +64,7 @@ class TaskStatusServiceTest {
         org.assertj.core.api.Assertions.assertThat(event.previousStatus()).isEqualTo(TaskStatus.TODO);
         org.assertj.core.api.Assertions.assertThat(event.newStatus()).isEqualTo(TaskStatus.DONE);
         // DONE 전이는 completedAt을 그대로 재사용해야 한다 — 재수집 스케줄러가 completedAt으로
-        // "이미 적재됐는지"를 판정하므로, 정상 경로가 별도의 nowUtc()를 쓰면 값이 어긋나
+        // "이미 적재됐는지"를 판정하므로, 정상 경로가 별도의 TimeUtil.now()를 쓰면 값이 어긋나
         // 안전망이 무력화된다.
         org.assertj.core.api.Assertions.assertThat(event.occurredAt()).isEqualTo(task.getCompletedAt());
         org.assertj.core.api.Assertions.assertThat(task.getCompletedAt()).isNotNull();

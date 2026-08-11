@@ -31,8 +31,8 @@ import com.plog.domain.user.entity.User;
 import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -142,7 +142,7 @@ class EvaluationServiceTest {
 
     @Test
     void createsAPeerEvaluationOnceTheEndDayHasPassed() {
-        Project project = project(ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC).minusDays(1));
+        Project project = project(ProjectStatus.IN_PROGRESS, TimeUtil.today().minusDays(1));
         ProjectMember evaluator = activeMember(10L, project);
         ProjectMember evaluatee = activeMember(20L, project);
         PeerEvaluationCreateRequest request = new PeerEvaluationCreateRequest(
@@ -159,7 +159,7 @@ class EvaluationServiceTest {
 
     @Test
     void rejectsAPeerEvaluationBeforeTheEndDay() {
-        Project project = project(ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC).plusDays(1),
+        Project project = project(ProjectStatus.IN_PROGRESS, TimeUtil.today().plusDays(1),
                 PeerEvaluationStatus.PENDING);
         ProjectMember evaluator = activeMember(10L, project);
         ProjectMember evaluatee = activeMember(20L, project);
@@ -176,7 +176,7 @@ class EvaluationServiceTest {
 
     @Test
     void exposesEachTargetsProfilePresetForTheAvatarList() {
-        Project project = project(ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC));
+        Project project = project(ProjectStatus.IN_PROGRESS, TimeUtil.today());
         ProjectMember currentMember = activeMember(10L, project);
         ProjectMember teammate = ProjectMember.builder()
                 .id(20L)
@@ -213,7 +213,7 @@ class EvaluationServiceTest {
 
     @Test
     void exposesFinalSubmissionAvailabilityWhenEveryRequirementIsCompleted() {
-        Project project = project(ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC));
+        Project project = project(ProjectStatus.IN_PROGRESS, TimeUtil.today());
         ProjectMember currentMember = activeMember(10L, project);
         ProjectMember teammate = ProjectMember.builder()
                 .id(20L)
@@ -241,7 +241,7 @@ class EvaluationServiceTest {
 
     @Test
     void rejectsEvaluationAccessForExitedMember() {
-        Project project = project(ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC));
+        Project project = project(ProjectStatus.IN_PROGRESS, TimeUtil.today());
         when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
                 .thenReturn(Optional.empty());

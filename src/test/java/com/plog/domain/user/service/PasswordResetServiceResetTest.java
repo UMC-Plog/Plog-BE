@@ -49,7 +49,7 @@ class PasswordResetServiceResetTest {
         EmailVerification row = EmailVerification.issue("a@plog.test",
                 EmailVerificationPurpose.PASSWORD_RESET,
                 HashUtil.sha256Hex("123456"),
-                TimeUtil.nowUtc().plusMinutes(5), TimeUtil.nowUtc());
+                TimeUtil.now().plusMinutes(5), TimeUtil.now());
         row.markVerified();
         return row;
     }
@@ -68,7 +68,7 @@ class PasswordResetServiceResetTest {
     void expiredVerificationRejected() {
         EmailVerification expired = EmailVerification.issue("a@plog.test",
                 EmailVerificationPurpose.PASSWORD_RESET, "hash",
-                TimeUtil.nowUtc().minusMinutes(1), TimeUtil.nowUtc().minusMinutes(6));
+                TimeUtil.now().minusMinutes(1), TimeUtil.now().minusMinutes(6));
         expired.markVerified();
         given(codeService.requireVerified("a@plog.test", EmailVerificationPurpose.PASSWORD_RESET))
                 .willReturn(expired);

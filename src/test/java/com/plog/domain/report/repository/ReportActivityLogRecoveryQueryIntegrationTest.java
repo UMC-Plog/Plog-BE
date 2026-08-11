@@ -30,9 +30,9 @@ import com.plog.domain.task.repository.TaskAttachmentRepository;
 import com.plog.domain.task.repository.TaskRepository;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.UserRepository;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
@@ -96,7 +96,7 @@ class ReportActivityLogRecoveryQueryIntegrationTest {
         PeerEvaluation missing = savePeerEvaluation(evaluatee, evaluator);
         activityLogRepository.save(ReportActivityLog.create(
                 evaluator, SourceDomain.EVALUATION, RawActivityType.PEER_EVALUATION_SUBMIT,
-                "feedback", LocalDateTime.now(ZoneOffset.UTC), "{}",
+                "feedback", TimeUtil.now(), "{}",
                 "peer-evaluation:" + logged.getId()));
 
         List<EvaluationLogRecoveryTarget> targets = activityLogRepository
@@ -117,7 +117,7 @@ class ReportActivityLogRecoveryQueryIntegrationTest {
         SelfFeedback missing = saveSelfFeedback(missingMember);
         activityLogRepository.save(ReportActivityLog.create(
                 loggedMember, SourceDomain.EVALUATION, RawActivityType.SELF_FEEDBACK_SUBMIT,
-                "content", LocalDateTime.now(ZoneOffset.UTC), "{}",
+                "content", TimeUtil.now(), "{}",
                 "self-feedback:" + logged.getId()));
 
         List<EvaluationLogRecoveryTarget> targets = activityLogRepository
@@ -160,7 +160,7 @@ class ReportActivityLogRecoveryQueryIntegrationTest {
         ProjectMember member = saveMember(project, "task-status-not-done", ProjectRole.MEMBER);
         taskRepository.save(Task.create(
                 member, "in progress", TaskCategory.DEVELOP, TaskStatus.IN_PROGRESS,
-                LocalDate.now(ZoneOffset.UTC).plusDays(3)));
+                TimeUtil.today().plusDays(3)));
 
         List<TaskStatusLogRecoveryTarget> targets = activityLogRepository
                 .findDoneTasksMissingActivityLog(future(), Limit.of(200));
@@ -174,7 +174,7 @@ class ReportActivityLogRecoveryQueryIntegrationTest {
         ProjectMember member = saveMember(project, "task-attachment", ProjectRole.MEMBER);
         Task task = taskRepository.save(Task.create(
                 member, "카드", TaskCategory.DEVELOP, TaskStatus.TODO,
-                LocalDate.now(ZoneOffset.UTC).plusDays(3)));
+                TimeUtil.today().plusDays(3)));
 
         TaskAttachment logged = saveLinkAttachment(task);
         TaskAttachment missing = saveLinkAttachment(task);
@@ -193,7 +193,7 @@ class ReportActivityLogRecoveryQueryIntegrationTest {
 
     private Task saveDoneTask(ProjectMember member, String suffix) {
         Task task = Task.create(member, "업무 " + suffix, TaskCategory.DEVELOP, TaskStatus.TODO,
-                LocalDate.now(ZoneOffset.UTC).plusDays(3));
+                TimeUtil.today().plusDays(3));
         task.changeStatus(TaskStatus.DONE);
         return taskRepository.save(task);
     }
@@ -204,7 +204,7 @@ class ReportActivityLogRecoveryQueryIntegrationTest {
     }
 
     private LocalDateTime future() {
-        return LocalDateTime.now(ZoneOffset.UTC).plusMinutes(1);
+        return TimeUtil.now().plusMinutes(1);
     }
 
     private PeerEvaluation savePeerEvaluation(ProjectMember evaluator, ProjectMember evaluatee) {
@@ -238,7 +238,7 @@ class ReportActivityLogRecoveryQueryIntegrationTest {
     }
 
     private Project saveProject(String suffix) {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = TimeUtil.today();
         return projectRepository.save(Project.builder()
                 .projectName("Project " + suffix)
                 .inviteTokenHash(UUID.randomUUID().toString())

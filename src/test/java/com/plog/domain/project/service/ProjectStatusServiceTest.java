@@ -25,8 +25,8 @@ import com.plog.domain.report.repository.ReportRepository;
 import com.plog.domain.report.service.ReportLifecycleService;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -281,7 +281,7 @@ class ProjectStatusServiceTest {
     }
 
     private Project projectEndedDaysAgo(int daysAgo) {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = TimeUtil.today();
         return Project.builder()
                 .id(PROJECT_ID)
                 .projectName("Plog")

@@ -59,7 +59,7 @@ public class ProfileService {
             if (!user.isNameChangeAvailable()) {
                 throw new ApiException(UserErrorCode.NAME_CHANGE_ALREADY_USED);
             }
-            user.changeName(request.name(), TimeUtil.nowUtc());
+            user.changeName(request.name(), TimeUtil.now());
         }
         if (request.nickname() != null && !request.nickname().equals(user.getNickname())) {
             if (userRepository.existsByNickname(request.nickname())) {

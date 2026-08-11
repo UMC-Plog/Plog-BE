@@ -48,6 +48,9 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	// GitHub Actions 러너는 UTC 다. 저장 기준이 KST 이므로 테스트 JVM 도 KST 로 맞춰
+	// 로컬과 CI 가 같은 결과를 내게 한다.
+	systemProperty 'user.timezone', 'Asia/Seoul'
 }
 
 tasks.withType(JavaCompile).configureEach {

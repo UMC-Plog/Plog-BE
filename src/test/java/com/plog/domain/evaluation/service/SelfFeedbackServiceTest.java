@@ -23,8 +23,8 @@ import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -98,7 +98,7 @@ class SelfFeedbackServiceTest {
     @Test
     void createsSelfFeedbackOnceTheEndDayHasPassed() {
         ProjectMember projectMember = projectMember(
-                ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC).minusDays(1));
+                ProjectStatus.IN_PROGRESS, TimeUtil.today().minusDays(1));
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
                 .thenReturn(Optional.of(projectMember));
         when(selfFeedbackRepository.findByProjectMemberId(10L)).thenReturn(Optional.empty());
@@ -114,7 +114,7 @@ class SelfFeedbackServiceTest {
     @Test
     void rejectsSelfFeedbackAfterReportPublication() {
         ProjectMember projectMember = projectMember(
-                ProjectStatus.COMPLETED, LocalDate.now(ZoneOffset.UTC).minusDays(1));
+                ProjectStatus.COMPLETED, TimeUtil.today().minusDays(1));
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
                 .thenReturn(Optional.of(projectMember));
 
@@ -128,7 +128,7 @@ class SelfFeedbackServiceTest {
     @Test
     void rejectsSelfFeedbackBeforeTheEndDay() {
         ProjectMember projectMember = projectMember(
-                ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC).plusDays(1),
+                ProjectStatus.IN_PROGRESS, TimeUtil.today().plusDays(1),
                 PeerEvaluationStatus.PENDING);
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
                 .thenReturn(Optional.of(projectMember));

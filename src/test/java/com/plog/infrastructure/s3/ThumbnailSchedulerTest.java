@@ -79,7 +79,7 @@ class ThumbnailSchedulerTest {
     @Test
     void 타임아웃_전에는_DB를_건드리지_않고_다음_틱에_다시_본다() {
         UploadedFile file = requestedFile(11L);
-        setThumbnailAt(file, TimeUtil.nowUtc().minusSeconds(5));
+        setThumbnailAt(file, TimeUtil.now().minusSeconds(5));
         stubConfirmTargets(file);
         given(fileStorageService.exists(anyString())).willReturn(false);
 
@@ -92,7 +92,7 @@ class ThumbnailSchedulerTest {
     @Test
     void 타임아웃이_지나면_시도횟수를_올리고_재요청_상태로_되돌린다() {
         UploadedFile file = requestedFile(11L);
-        setThumbnailAt(file, TimeUtil.nowUtc().minusSeconds(120));
+        setThumbnailAt(file, TimeUtil.now().minusSeconds(120));
         stubConfirmTargets(file);
         given(fileStorageService.exists(anyString())).willReturn(false);
 
@@ -146,7 +146,7 @@ class ThumbnailSchedulerTest {
     private UploadedFile requestedFile(long id) {
         UploadedFile file = pendingFile(id);
         ReflectionTestUtils.setField(file, "thumbnailKey", ThumbnailKeys.of(file.getFileKey()));
-        setThumbnailAt(file, TimeUtil.nowUtc());
+        setThumbnailAt(file, TimeUtil.now());
         return file;
     }
 

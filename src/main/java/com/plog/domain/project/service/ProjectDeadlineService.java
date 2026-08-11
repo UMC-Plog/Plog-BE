@@ -27,7 +27,7 @@ public class ProjectDeadlineService {
     @Transactional
     public void processDeadline(Long projectId) {
         Project project = projectRepository.findByIdForUpdate(projectId).orElse(null);
-        if (project == null || project.isCompleted() || TimeUtil.todayUtc().isBefore(project.getEndDay())) {
+        if (project == null || project.isCompleted() || TimeUtil.today().isBefore(project.getEndDay())) {
             return;
         }
 
@@ -56,7 +56,7 @@ public class ProjectDeadlineService {
     public void completeExternalCollection(Long projectId, IntegrationCollectionJobStatus status) {
         Project project = projectRepository.findByIdForUpdate(projectId).orElse(null);
         if (project == null || project.isCompleted()
-                || TimeUtil.todayUtc().isBefore(project.getEndDay())) {
+                || TimeUtil.today().isBefore(project.getEndDay())) {
             return;
         }
         ProjectCollectionStatus terminalStatus = switch (status) {

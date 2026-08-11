@@ -24,7 +24,7 @@ public class PostActivityLogRecoveryScheduler {
 
     @Scheduled(fixedDelay = 300_000)
     public void recollectMissing() {
-        var threshold = TimeUtil.nowUtc().minus(GRACE);
+        var threshold = TimeUtil.now().minus(GRACE);
         repository.findPostsMissingActivityLog(threshold, BATCH).forEach(target -> {
             try {
                 service.collectPostCreated(target.getPostId(), target.getMemberId(),

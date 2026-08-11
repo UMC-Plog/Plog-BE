@@ -39,7 +39,7 @@ public class EvaluationActivityLogRecoveryScheduler {
 
     @Scheduled(fixedDelay = 300_000)
     public void recollectMissing() {
-        LocalDateTime threshold = TimeUtil.nowUtc().minus(GRACE);
+        LocalDateTime threshold = TimeUtil.now().minus(GRACE);
         recollectPeerEvaluations(threshold);
         recollectSelfFeedbacks(threshold);
     }

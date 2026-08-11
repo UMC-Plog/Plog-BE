@@ -90,7 +90,7 @@ public class UserWithdrawalService {
         // user 엔티티 변경(탈퇴 시각)은 그 전에 반드시 DB에 반영돼야 한다.
         // fcmTokenRepository의 flushAutomatically 속성이나 호출 순서에만 기대면, 둘 중 하나만 바뀌어도
         // 탈퇴 시각이 조용히 유실될 수 있으므로 다른 리포지토리의 설정과 무관하게 여기서 명시적으로 flush 한다.
-        user.withdraw(TimeUtil.nowUtc());
+        user.withdraw(TimeUtil.now());
         userRepository.flush();
         refreshTokenRepository.deleteAllByUserId(userId);
         fcmTokenRepository.deleteAllByUserId(userId);
@@ -202,7 +202,7 @@ public class UserWithdrawalService {
      * 자기 클래스 메서드 호출은 프록시를 거치지 않아 격리가 걸리지 않기 때문에 빈을 분리했다.
      */
     public int purgeExpired() {
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         LocalDateTime threshold = now.minus(properties.retention());
         List<User> targets = userRepository.findAllByDeletedAtBeforeAndAnonymizedAtIsNull(threshold);
         int purged = 0;

@@ -86,7 +86,7 @@ class SocialSignupTicketServiceTest {
     @Test
     @DisplayName("만료된 티켓은 SOCIAL_TICKET_EXPIRED")
     void consumeRejectsExpiredTicket() {
-        LocalDateTime past = TimeUtil.nowUtc().minusMinutes(1);
+        LocalDateTime past = TimeUtil.now().minusMinutes(1);
         given(ticketRepository.findByTicketHash(any())).willReturn(Optional.of(ticket(past)));
 
         assertThatThrownBy(() -> service.consumeOrThrow("raw"))
@@ -99,7 +99,7 @@ class SocialSignupTicketServiceTest {
     @DisplayName("조건부 소비가 0행이면(이미 사용된 티켓) SOCIAL_TICKET_INVALID")
     void consumeRejectsAlreadyConsumedTicket() {
         given(ticketRepository.findByTicketHash(any()))
-                .willReturn(Optional.of(ticket(TimeUtil.nowUtc().plusMinutes(10))));
+                .willReturn(Optional.of(ticket(TimeUtil.now().plusMinutes(10))));
         given(ticketRepository.consume(anyLong(), any())).willReturn(0);
 
         assertThatThrownBy(() -> service.consumeOrThrow("raw"))
@@ -111,7 +111,7 @@ class SocialSignupTicketServiceTest {
     @Test
     @DisplayName("정상 티켓은 소비 후 반환한다")
     void consumeReturnsTicket() {
-        SocialSignupTicket valid = ticket(TimeUtil.nowUtc().plusMinutes(10));
+        SocialSignupTicket valid = ticket(TimeUtil.now().plusMinutes(10));
         given(ticketRepository.findByTicketHash(HashUtil.sha256Hex("raw")))
                 .willReturn(Optional.of(valid));
         given(ticketRepository.consume(eq(7L), any())).willReturn(1);

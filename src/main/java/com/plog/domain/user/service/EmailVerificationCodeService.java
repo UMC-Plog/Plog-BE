@@ -38,7 +38,7 @@ public class EmailVerificationCodeService {
 
     /** 인증 코드 발급. 재전송 쿨다운을 강제하고, 코드를 생성/해시해 저장한 뒤 원문 코드를 반환한다. */
     public String issueCode(String email, EmailVerificationPurpose purpose) {
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         EmailVerification verification = emailVerificationRepository
                 .findByEmailAndPurpose(email, purpose).orElse(null);
         if (verification != null && verification.isWithinCooldown(now, properties.resendCooldown())) {
@@ -66,7 +66,7 @@ public class EmailVerificationCodeService {
         if (verification.isAttemptExceeded(properties.maxAttempts())) {
             throw new ApiException(AuthErrorCode.VERIFICATION_ATTEMPT_EXCEEDED);
         }
-        if (verification.isExpired(TimeUtil.nowUtc())) {
+        if (verification.isExpired(TimeUtil.now())) {
             throw new ApiException(AuthErrorCode.VERIFICATION_CODE_EXPIRED);
         }
         if (!verification.matches(HashUtil.sha256Hex(rawCode))) {

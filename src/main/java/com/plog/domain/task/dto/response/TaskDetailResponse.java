@@ -4,9 +4,10 @@ import com.plog.domain.task.entity.*;
 import com.plog.domain.user.entity.ProfilePreset;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.plog.domain.report.entity.CompetencyCategory;
+import com.plog.global.util.TimeUtil;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
@@ -17,7 +18,7 @@ public record TaskDetailResponse(
         TaskCategory category,
         TaskStatus cardStatus,
         LocalDate endDate,
-        LocalDateTime completedAt, // 상태가 DONE일 때만 값 존재, 그 외 null
+        Instant completedAt, // 상태가 DONE일 때만 값 존재, 그 외 null
         int dDay,        // endDate - 오늘. 마감일이 지났으면 음수. 배너 문구는 프론트에서 조립
         boolean isOverdue,
         boolean isImminent, // 마감 D-3 ~ D-0, 완료되지 않은 경우에만 true
@@ -86,7 +87,8 @@ public record TaskDetailResponse(
                 task.getCategory(),
                 task.getCardStatus(),
                 task.getEndDate(),
-                task.getCardStatus() == TaskStatus.DONE ? task.getCompletedAt() : null,
+                task.getCardStatus() == TaskStatus.DONE
+                        ? TimeUtil.toInstant(task.getCompletedAt()) : null,
                 dDay,
                 overdue,
                 isImminent(task, dDay, overdue),
@@ -101,7 +103,7 @@ public record TaskDetailResponse(
         if (task.getEndDate() == null) {
             return 0;
         }
-        return (int) ChronoUnit.DAYS.between(LocalDate.now(), task.getEndDate());
+        return (int) ChronoUnit.DAYS.between(TimeUtil.today(), task.getEndDate());
     }
 
     // 마감이 이미 지난 경우(overdue)는 임박이 아니라 초과이므로 배타적으로 처리

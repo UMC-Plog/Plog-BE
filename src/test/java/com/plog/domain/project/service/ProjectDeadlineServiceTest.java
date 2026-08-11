@@ -17,8 +17,8 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.event.InternalActivityCollectionRequestedEvent;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -88,8 +88,8 @@ class ProjectDeadlineServiceTest {
                 .inviteTokenEncrypted("encrypted")
                 .projectType(ProjectType.DEVELOP)
                 .status(ProjectStatus.IN_PROGRESS)
-                .startDay(LocalDate.now(ZoneOffset.UTC).minusDays(10))
-                .endDay(LocalDate.now(ZoneOffset.UTC))
+                .startDay(TimeUtil.today().minusDays(10))
+                .endDay(TimeUtil.today())
                 .build();
     }
 }

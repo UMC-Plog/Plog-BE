@@ -54,7 +54,7 @@ public class ProjectCreateService {
         }
 
         String projectName = normalizeProjectName(request.projectName());
-        LocalDate startDay = TimeUtil.todayUtc();
+        LocalDate startDay = TimeUtil.today();
         validateEndDay(request.endDay(), startDay);
 
         InviteTokenService.IssuedResult<CreatedProject> issuedResult =

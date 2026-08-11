@@ -10,10 +10,10 @@ import com.plog.domain.user.entity.EmailVerificationPurpose;
 import com.plog.domain.user.repository.EmailVerificationRepository;
 import com.plog.domain.user.repository.UserRepository;
 import com.plog.global.config.EmailVerificationProperties;
+import com.plog.global.util.TimeUtil;
 import com.plog.infrastructure.mail.MailSender;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -59,6 +59,6 @@ class EmailVerificationServiceTest {
 
         org.mockito.Mockito.verify(emailVerificationRepository).save(verificationCaptor.capture());
         assertThat(verificationCaptor.getValue().getExpiresAt())
-                .isCloseTo(LocalDateTime.now(ZoneOffset.UTC).plus(TTL), within(5, ChronoUnit.SECONDS));
+                .isCloseTo(TimeUtil.now().plus(TTL), within(5, ChronoUnit.SECONDS));
     }
 }
