@@ -48,15 +48,30 @@ public class ProjectDeadlineService {
             return;
         }
 
+        if (project.getExternalCollectionStatus() == ProjectCollectionStatus.SUCCEEDED) {
+            openEvaluation(project);
+            return;
+        }
+
         project.queueExternalCollection();
         integrationCollectionJobService.enqueue(projectId, null);
     }
 
     @Transactional
-    public void completeExternalCollection(Long projectId, IntegrationCollectionJobStatus status) {
+    public void completeExternalCollection(
+            Long projectId,
+            Long jobId,
+            IntegrationCollectionJobStatus status
+    ) {
         Project project = projectRepository.findByIdForUpdate(projectId).orElse(null);
         if (project == null || project.isCompleted()
                 || TimeUtil.today().isBefore(project.getEndDay())) {
+            return;
+        }
+        boolean latestJob = jobId != null && integrationCollectionJobService.findLatest(projectId)
+                .map(job -> jobId.equals(job.getId()))
+                .orElse(false);
+        if (!latestJob || project.getExternalCollectionStatus() == ProjectCollectionStatus.SUCCEEDED) {
             return;
         }
         ProjectCollectionStatus terminalStatus = switch (status) {
@@ -66,7 +81,9 @@ public class ProjectDeadlineService {
             default -> throw new IllegalArgumentException("external collection is not finished: " + status);
         };
         project.finishExternalCollection(terminalStatus);
-        openEvaluation(project);
+        if (terminalStatus == ProjectCollectionStatus.SUCCEEDED) {
+            openEvaluation(project);
+        }
     }
 
     @Transactional

@@ -80,7 +80,6 @@ class ProjectStatusServiceTest {
         mockProject(project);
         when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
-        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(3L);
 
         ProjectStatusDto.Response response = projectStatusService.checkAndUpdateStatus(
                 PROJECT_ID,
@@ -102,7 +101,6 @@ class ProjectStatusServiceTest {
         mockProject(project);
         when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(2L);
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(2L);
-        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(2L);
         when(reportLifecycleService.startFor(project)).thenReturn(Optional.of(report));
 
         projectStatusService.checkAndUpdateStatus(PROJECT_ID, USER_ID, null);
@@ -116,7 +114,6 @@ class ProjectStatusServiceTest {
         mockProject(project);
         when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(2L);
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(2L);
-        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(2L);
 
         projectStatusService.completeAndStartReportIfAllEvaluationsSubmitted(PROJECT_ID);
 
@@ -125,19 +122,21 @@ class ProjectStatusServiceTest {
         verify(reportLifecycleService).startFor(project);
     }
 
+    // 자기 피드백은 선택 사항이다 — 팀원 간 Peer 평가가 모두 제출되면 자기 피드백이 없어도 완료된다.
     @Test
-    void checkAndUpdateStatusKeepsInProgressWhenSelfFeedbackIsMissing() {
+    void checkAndUpdateStatusCompletesWhenAllPeerEvaluationsSubmittedEvenWithoutSelfFeedback() {
         Project project = projectEndedDaysAgo(1);
         mockProject(project);
         when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
-        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(2L);
 
         ProjectStatusDto.Response response = projectStatusService.checkAndUpdateStatus(PROJECT_ID, USER_ID, null);
 
-        assertThat(response.currentStatus()).isEqualTo(ProjectStatus.IN_PROGRESS);
-        assertThat(response.isPublished()).isFalse();
-        verifyNoInteractions(reportLifecycleService);
+        assertThat(response.currentStatus()).isEqualTo(ProjectStatus.COMPLETED);
+        assertThat(response.isPublished()).isTrue();
+        assertThat(response.isTimeoutApplied()).isFalse();
+        verify(projectRepository).saveAndFlush(project);
+        verify(reportLifecycleService).startFor(project);
     }
 
     @Test
@@ -180,7 +179,6 @@ class ProjectStatusServiceTest {
         mockProject(project);
         when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
-        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(3L);
 
         ProjectStatusDto.Response response = projectStatusService.checkAndUpdateStatus(
                 PROJECT_ID,
@@ -200,7 +198,6 @@ class ProjectStatusServiceTest {
         mockProject(project);
         when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
-        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(3L);
 
         when(actorMappingStatusService.areAllActiveMemberMappingsCompleted(PROJECT_ID, 3L))
                 .thenReturn(false);
