@@ -36,7 +36,7 @@ public record ReportMemberResultResponse(
         Map<CompetencyCategory, BigDecimal> peerCompetencyScores,
         @Schema(description = "동료 평가 키워드(태그 칩). 근거 없으면 빈 배열", example = "[\"리더십\",\"책임감\"]")
         List<String> peerKeywords,
-        @Schema(description = "자기 피드백 일치도 점수", example = "70.00")
+        @Schema(description = "자기 피드백과 활동 근거의 일치도 지표. 최종 기여도 점수에는 직접 반영되지 않음", example = "70.00")
         BigDecimal selfFeedbackScore,
         @Schema(description = "가중합 최종 점수", example = "82.50")
         BigDecimal finalScore,

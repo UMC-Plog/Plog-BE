@@ -16,7 +16,6 @@ public class ReportMemberScoreService {
     private static final BigDecimal INTERNAL_WEIGHT = new BigDecimal("0.40");
     private static final BigDecimal EXTERNAL_WEIGHT = new BigDecimal("0.20");
     private static final BigDecimal PEER_WEIGHT = new BigDecimal("0.35");
-    private static final BigDecimal SELF_WEIGHT = new BigDecimal("0.05");
     private static final BigDecimal MIN_SCORE = BigDecimal.ZERO;
     private static final BigDecimal MAX_SCORE = new BigDecimal("100");
 
@@ -54,10 +53,8 @@ public class ReportMemberScoreService {
             weighted = weighted.add(peer.multiply(PEER_WEIGHT));
             availableWeight = availableWeight.add(PEER_WEIGHT);
         }
-        if (self != null) {
-            weighted = weighted.add(self.multiply(SELF_WEIGHT));
-            availableWeight = availableWeight.add(SELF_WEIGHT);
-        }
+        // 자기 피드백 일치도는 활동 맥락과 분석 신뢰도를 보완하는 값이다.
+        // 사용자가 작성한 서술만으로 최종 기여도 점수가 오르지 않도록 가중 합산에서는 제외한다.
         BigDecimal finalScore = availableWeight.signum() == 0
                 ? null
                 : weighted.divide(availableWeight, 2, RoundingMode.HALF_UP);

@@ -30,7 +30,7 @@ class ReportMemberScoreServiceTest {
     }
 
     @Test
-    void 네_점수는_40_20_35_5로_계산해_저장한다() {
+    void 자기_피드백을_제외한_세_점수를_가중_계산해_저장한다() {
         Report report = org.mockito.Mockito.mock(Report.class);
         ProjectMember member = ProjectMember.builder().id(2L).build();
         when(report.getId()).thenReturn(1L);
@@ -40,7 +40,7 @@ class ReportMemberScoreServiceTest {
                 new BigDecimal("80"), new BigDecimal("90"), new BigDecimal("70"),
                 new BigDecimal("60"), true, true, ReliabilityTier.P1, "일부 활동이 제외될 수 있어요"));
 
-        assertThat(result.getFinalScore()).isEqualByComparingTo("77.50");
+        assertThat(result.getFinalScore()).isEqualByComparingTo("78.42");
         assertThat(result.getExternalScore()).isEqualByComparingTo("90.00");
         assertThat(result.isExternalToolConnected()).isTrue();
         verify(resultRepository).save(result);
@@ -57,7 +57,7 @@ class ReportMemberScoreServiceTest {
                 new BigDecimal("80"), null, new BigDecimal("70"), new BigDecimal("60"),
                 false, false, ReliabilityTier.P2, "외부 도구가 연결되지 않았어요"));
 
-        assertThat(result.getFinalScore()).isEqualByComparingTo("74.38");
+        assertThat(result.getFinalScore()).isEqualByComparingTo("75.33");
         assertThat(result.getExternalScore()).isNull();
     }
 
@@ -72,7 +72,7 @@ class ReportMemberScoreServiceTest {
                 new BigDecimal("80"), null, new BigDecimal("70"), new BigDecimal("60"),
                 true, false, ReliabilityTier.P2, "외부 활동은 있지만 점수화 가능한 로그가 부족해요"));
 
-        assertThat(result.getFinalScore()).isEqualByComparingTo("74.38");
+        assertThat(result.getFinalScore()).isEqualByComparingTo("75.33");
         assertThat(result.getExternalScore()).isNull();
         assertThat(result.isExternalToolConnected()).isTrue();
     }
@@ -137,6 +137,43 @@ class ReportMemberScoreServiceTest {
                 false, false, ReliabilityTier.P0, null));
 
         assertThat(result.getFinalScore()).isEqualByComparingTo("84.67");
+    }
+
+    @Test
+    void 자기_피드백_일치도가_달라도_최종_점수는_같다() {
+        Report report = org.mockito.Mockito.mock(Report.class);
+        ProjectMember member = ProjectMember.builder().id(2L).build();
+        when(report.getId()).thenReturn(1L);
+        when(resultRepository.findByReportIdAndProjectMemberId(1L, 2L))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty());
+
+        ReportMemberResult lowSelfFeedback = service.calculateAndSave(report, member, new MemberScoreInput(
+                new BigDecimal("80"), new BigDecimal("90"), new BigDecimal("70"),
+                BigDecimal.ZERO, true, true, ReliabilityTier.P1, null));
+        ReportMemberResult highSelfFeedback = service.calculateAndSave(report, member, new MemberScoreInput(
+                new BigDecimal("80"), new BigDecimal("90"), new BigDecimal("70"),
+                new BigDecimal("100"), true, true, ReliabilityTier.P1, null));
+
+        assertThat(lowSelfFeedback.getSelfFeedbackScore()).isEqualByComparingTo("0.00");
+        assertThat(highSelfFeedback.getSelfFeedbackScore()).isEqualByComparingTo("100.00");
+        assertThat(lowSelfFeedback.getFinalScore()).isEqualByComparingTo("78.42");
+        assertThat(highSelfFeedback.getFinalScore()).isEqualByComparingTo("78.42");
+    }
+
+    @Test
+    void 자기_피드백만_있으면_최종_점수는_계산하지_않는다() {
+        Report report = org.mockito.Mockito.mock(Report.class);
+        ProjectMember member = ProjectMember.builder().id(2L).build();
+        when(report.getId()).thenReturn(1L);
+        when(resultRepository.findByReportIdAndProjectMemberId(1L, 2L)).thenReturn(Optional.empty());
+
+        ReportMemberResult result = service.calculateAndSave(report, member, new MemberScoreInput(
+                null, null, null, new BigDecimal("100"),
+                false, false, ReliabilityTier.P3, null));
+
+        assertThat(result.getSelfFeedbackScore()).isEqualByComparingTo("100.00");
+        assertThat(result.getFinalScore()).isNull();
     }
 
     @Test
