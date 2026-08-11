@@ -239,6 +239,34 @@ class EvaluationServiceTest {
         assertThat(response.isFinalSubmissionAvailable()).isTrue();
     }
 
+    // 자기 피드백은 선택 사항이다 — 팀원 평가와 계정 매핑을 모두 마쳤다면 자기 피드백이 없어도 최종 제출이 가능하다.
+    @Test
+    void allowsFinalSubmissionWithoutSelfFeedbackWhenPeerEvaluationsAndMappingDone() {
+        Project project = project(ProjectStatus.IN_PROGRESS, TimeUtil.today());
+        ProjectMember currentMember = activeMember(10L, project);
+        ProjectMember teammate = ProjectMember.builder()
+                .id(20L)
+                .project(project)
+                .user(user("바나", ProfilePreset.OTTER))
+                .build();
+        when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(currentMember));
+        when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(1L, MemberStatus.ACTIVE))
+                .thenReturn(List.of(currentMember, teammate));
+        when(peerEvaluationRepository.findEvaluatedTargetIds(currentMember)).thenReturn(Set.of(20L));
+        when(selfFeedbackRepository.findByProjectMemberId(10L)).thenReturn(Optional.empty());
+        when(actorMappingStatusService.isMyMappingCompleted(1L, 10L)).thenReturn(true);
+
+        EvaluationTargetResponse response = evaluationService.getEvaluationTargets(1L, 7L);
+
+        assertThat(response.completedPeerEvaluationCount()).isEqualTo(1);
+        assertThat(response.totalPeerEvaluationCount()).isEqualTo(1);
+        assertThat(response.isSelfFeedbackCompleted()).isFalse();
+        assertThat(response.isAccountMappingCompleted()).isTrue();
+        assertThat(response.isFinalSubmissionAvailable()).isTrue();
+    }
+
     @Test
     void rejectsEvaluationAccessForExitedMember() {
         Project project = project(ProjectStatus.IN_PROGRESS, TimeUtil.today());

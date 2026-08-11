@@ -17,7 +17,7 @@ spring:
       # 저장 기준이 UTC에서 KST로 바뀌어 기존 데이터를 버리고 스키마를 새로 만든다.
       # 배포·검증 직후 즉시 update 로 되돌리는 후속 PR을 올릴 것.
       # 되돌리기 전에 컨테이너가 재시작되면(restart: unless-stopped, t3.micro OOM) 그때마다 DB가 다시 비워진다.
-      ddl-auto: create
+      ddl-auto: update
     properties:
       hibernate:
         format_sql: false
