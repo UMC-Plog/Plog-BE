@@ -103,6 +103,24 @@ class ProjectLeaveServiceTest {
         verify(projectRepository, never()).delete(project);
     }
 
+    @Test
+    void permanentlyDeletesProjectWhenLastMemberIsPlainMemberAndLeaves() {
+        Project project = project();
+        ProjectMember member = member(project);
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatusForUpdate(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(member));
+        when(projectMemberRepository.countByProjectIdAndStatus(1L, MemberStatus.ACTIVE)).thenReturn(1L);
+
+        var response = projectLeaveService.leave(1L, 7L);
+
+        // 마지막 멤버가 MEMBER 역할이어도 역할과 무관하게 프로젝트를 영구 삭제한다.
+        assertThat(response.success()).isTrue();
+        verify(projectPurgeService).purge(1L);
+        verify(projectMemberRepository, never()).saveAndFlush(member);
+        verify(projectRepository, never()).delete(project);
+    }
+
     private Project project() {
         return Project.builder()
                 .id(1L)
