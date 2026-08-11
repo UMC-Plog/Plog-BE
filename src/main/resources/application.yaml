@@ -75,6 +75,9 @@ app:
       - https://umc-plog.site
 
 plog:
+  # 통합 테스트처럼 스케줄러를 호출자가 직접 구동하는 환경에서는 전체 @Scheduled 등록을 끈다.
+  scheduling:
+    enabled: ${SCHEDULING_ENABLED:true}
   invite:
     # 32바이트 AES 키를 Base64로 인코딩한 값. 누락 시 애플리케이션 시작을 중단한다.
     encryption-key-base64: ${INVITE_TOKEN_ENCRYPTION_KEY_BASE64}

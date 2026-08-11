@@ -98,6 +98,10 @@ public abstract class E2eTestBase {
         registry.add("plog.invite.encryption-key-base64", () -> INVITE_KEY);
         registry.add("plog.invite.base-url", () -> "https://plog.test/invite");
         registry.add("plog.s3.enabled", () -> "true");
+        // 여러 @SpringBootTest 컨텍스트가 하나의 Testcontainers DB를 공유한다. 이전 컨텍스트의
+        // 스케줄러가 다음 테스트의 TRUNCATE/시딩과 겹치면 advisory/row lock 교착이 날 수 있다.
+        // E2E는 필요한 배치를 테스트가 직접 호출하므로 백그라운드 스케줄링을 전부 끈다.
+        registry.add("plog.scheduling.enabled", () -> "false");
         // 30초마다 도는 태깅 잡이 @MockitoBean S3Client 를 다른 스레드에서 건드리면
         // 검증·리셋과 경합해 CI 에서 간헐 실패한다. E2E 에서는 끈다.
         registry.add("plog.s3.tag-scheduler.enabled", () -> "false");
