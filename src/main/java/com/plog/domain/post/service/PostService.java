@@ -140,11 +140,11 @@ public class PostService {
     public PostDto.UpdateResponse updatePost(Long projectId, Long postId, Long userId, PostDto.UpdateRequest request) {
         requireProject(projectId);
         ProjectMember member = requireActiveMember(projectId, userId);
-        Post post = requirePost(projectId, postId);
+        Post post = postRepository.findByIdAndProjectIdForUpdate(postId, projectId)
+                .orElseThrow(() -> new ApiException(PostErrorCode.POST_NOT_FOUND));
         if (!post.getProjectMember().getId().equals(member.getId())) {
             throw new ApiException(PostErrorCode.POST_UPDATE_PERMISSION_DENIED);
         }
-        postRepository.findByIdForUpdate(postId);
         reportActivityLogRepository.acquireSourceLock(SourceDomain.POST.name() + ":post:" + postId);
         if (request.content() != null) {
             post.updateContent(requireContent(request.content(), 5000));
@@ -184,13 +184,13 @@ public class PostService {
         ProjectMember member = requireActiveMember(projectId, userId);
         projectRepository.findByIdForUpdate(projectId)
                 .orElseThrow(() -> new ApiException(ProjectApiErrorCode.PROJECT_NOT_FOUND));
-        Post post = requirePost(projectId, postId);
+        Post post = postRepository.findByIdAndProjectIdForUpdate(postId, projectId)
+                .orElseThrow(() -> new ApiException(PostErrorCode.POST_NOT_FOUND));
         if (!post.getProjectMember().getId().equals(member.getId()) && member.getRole() != ProjectRole.OWNER) {
             throw new ApiException(PostErrorCode.POST_DELETE_PERMISSION_DENIED);
         }
         // 댓글 생성 FK insert와 게시글 삭제를 직렬화해, 삭제 대상 댓글/활동 로그가
         // 조회 직후 새로 생기는 경합을 막는다.
-        postRepository.findByIdForUpdate(postId);
         List<Long> fileIds = attachmentRepository.findFileIdsByPostId(postId);
         boolean deletedCurrentNotice = post.isNotice();
         reportActivityLogRepository.acquireSourceLock(SourceDomain.POST.name() + ":post:" + postId);

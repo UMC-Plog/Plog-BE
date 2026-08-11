@@ -193,15 +193,19 @@ class TaskCommandServiceAttachmentTest {
     @Test
     void 업무_삭제시_연결된_리포트_활동로그를_업무보다_먼저_삭제한다() {
         Long taskId = 100L;
-        Task task = Task.builder().id(taskId).build();
-        given(taskRepository.findByIdAndProjectMember_Project_Id(taskId, PROJECT_ID))
-                .willReturn(Optional.of(task));
+        Project project = org.mockito.Mockito.mock(Project.class);
+        given(project.getId()).willReturn(PROJECT_ID);
+        ProjectMember assignee = ProjectMember.builder().project(project).build();
+        Task task = Task.builder().id(taskId).projectMember(assignee).build();
+        given(taskRepository.findByIdForUpdate(taskId)).willReturn(Optional.of(task));
         given(taskAttachmentRepository.findAllByTaskId(taskId)).willReturn(List.of());
         given(taskAttachmentRepository.findFileIdsByTaskId(taskId)).willReturn(List.of());
 
         service.deleteTask(PROJECT_ID, taskId, USER_ID);
 
         InOrder deletionOrder = inOrder(reportActivityLogRepository, taskRepository);
+        deletionOrder.verify(reportActivityLogRepository).acquireSourceLock("TASK:task:" + taskId);
+        deletionOrder.verify(taskRepository).findByIdForUpdate(taskId);
         deletionOrder.verify(reportActivityLogRepository).deleteAllByLinkedTaskId(taskId);
         deletionOrder.verify(taskRepository).delete(task);
     }

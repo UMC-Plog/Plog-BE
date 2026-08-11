@@ -15,8 +15,12 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     Optional<Post> findByIdAndProjectMemberProjectId(Long id, Long projectId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select post from Post post where post.id = :postId")
-    Optional<Post> findByIdForUpdate(@Param("postId") Long postId);
+    @Query("select post from Post post "
+            + "where post.id = :postId and post.projectMember.project.id = :projectId")
+    Optional<Post> findByIdAndProjectIdForUpdate(
+            @Param("postId") Long postId,
+            @Param("projectId") Long projectId
+    );
 
     Optional<Post> findFirstByProjectMemberProjectIdAndIsNoticeTrue(Long projectId);
 

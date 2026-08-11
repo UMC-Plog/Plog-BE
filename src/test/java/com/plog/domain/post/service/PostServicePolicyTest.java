@@ -88,7 +88,7 @@ class PostServicePolicyTest {
         when(projectRepository.existsById(1L)).thenReturn(true);
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
                 .thenReturn(Optional.of(author));
-        when(postRepository.findByIdAndProjectMemberProjectId(2L, 1L)).thenReturn(Optional.of(post));
+        when(postRepository.findByIdAndProjectIdForUpdate(2L, 1L)).thenReturn(Optional.of(post));
         when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project));
         when(attachmentRepository.findFileIdsByPostId(2L)).thenReturn(List.of());
 
@@ -113,6 +113,23 @@ class PostServicePolicyTest {
                         assertThat(exception.getErrorCode()).isEqualTo(PostErrorCode.VALIDATION_ERROR));
 
         verifyNoInteractions(postRepository);
+    }
+
+    @Test
+    void 수정_잠금_전에_게시글이_삭제되면_NOT_FOUND를_반환한다() {
+        ProjectMember member = ProjectMember.builder()
+                .id(3L).role(ProjectRole.MEMBER).status(MemberStatus.ACTIVE).build();
+        when(projectRepository.existsById(1L)).thenReturn(true);
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(member));
+        when(postRepository.findByIdAndProjectIdForUpdate(2L, 1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updatePost(
+                1L, 2L, 7L, new PostDto.UpdateRequest("수정 내용", null)))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(PostErrorCode.POST_NOT_FOUND));
+
+        verifyNoInteractions(reportActivityLogRepository);
     }
 
     @Test
@@ -141,7 +158,7 @@ class PostServicePolicyTest {
         when(projectRepository.existsById(1L)).thenReturn(true);
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
                 .thenReturn(Optional.of(author));
-        when(postRepository.findByIdAndProjectMemberProjectId(2L, 1L)).thenReturn(Optional.of(post));
+        when(postRepository.findByIdAndProjectIdForUpdate(2L, 1L)).thenReturn(Optional.of(post));
         // 이 게시글이 참조 중인 파일은 1L 뿐이다.
         when(attachmentRepository.findFileIdsByPostId(2L)).thenReturn(List.of(1L));
         when(uploadedFileService.requireOwnedByResource(eq(999L), any(), any()))
@@ -162,7 +179,7 @@ class PostServicePolicyTest {
         when(projectRepository.existsById(1L)).thenReturn(true);
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
                 .thenReturn(Optional.of(author));
-        when(postRepository.findByIdAndProjectMemberProjectId(2L, 1L)).thenReturn(Optional.of(post));
+        when(postRepository.findByIdAndProjectIdForUpdate(2L, 1L)).thenReturn(Optional.of(post));
         when(attachmentRepository.findFileIdsByPostId(2L)).thenReturn(List.of(1L));
 
         assertThatThrownBy(() -> service.updatePost(1L, 2L, 7L, new PostDto.UpdateRequest(
@@ -238,7 +255,7 @@ class PostServicePolicyTest {
         when(projectRepository.existsById(1L)).thenReturn(true);
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
                 .thenReturn(Optional.of(viewer));
-        when(postRepository.findByIdAndProjectMemberProjectId(2L, 1L)).thenReturn(Optional.of(post));
+        when(postRepository.findByIdAndProjectIdForUpdate(2L, 1L)).thenReturn(Optional.of(post));
 
         assertThatThrownBy(() -> service.updatePost(
                 1L, 2L, 7L, new com.plog.domain.post.dto.PostDto.UpdateRequest("updated", null)))

@@ -149,11 +149,10 @@ public class TaskCommandService {
     public TaskDeleteResponse deleteTask(Long projectId, Long taskId, Long userId) {
         projectAccessService.requireActiveMember(projectId, userId);
 
-        Task task = taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
+        reportActivityLogRepository.acquireSourceLock(SourceDomain.TASK.name() + ":task:" + taskId);
+        Task task = taskRepository.findByIdForUpdate(taskId)
+                .filter(lockedTask -> lockedTask.getProjectMember().getProject().getId().equals(projectId))
                 .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
-        // 활동 로그 비동기 수집과 업무 삭제를 직렬화한다. 수집이 먼저면 아래 벌크 삭제가
-        // 방금 생긴 로그까지 지우고, 삭제가 먼저면 수집 측 FK insert가 더 이상 성공하지 못한다.
-        taskRepository.findByIdForUpdate(taskId);
 
         List<TaskAttachment> attachments = taskAttachmentRepository.findAllByTaskId(taskId);
         List<Long> fileIds = taskAttachmentRepository.findFileIdsByTaskId(taskId);
@@ -211,6 +210,7 @@ public class TaskCommandService {
             Long projectId, Long taskId, Long taskAttachmentId, Long userId) {
         projectAccessService.requireActiveMember(projectId, userId);
 
+        reportActivityLogRepository.acquireSourceLock(SourceDomain.TASK.name() + ":task:" + taskId);
         taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
                 .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
 

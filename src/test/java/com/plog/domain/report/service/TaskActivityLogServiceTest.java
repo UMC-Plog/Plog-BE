@@ -2,6 +2,7 @@ package com.plog.domain.report.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -51,11 +53,13 @@ class TaskActivityLogServiceTest {
         when(activityLogRepository.existsBySourceDomainAndSourceRefId(SourceDomain.TASK, sourceRefId))
                 .thenReturn(false);
         when(projectMemberRepository.findById(7L)).thenReturn(Optional.of(member));
-        when(taskRepository.getReferenceById(1L)).thenReturn(task);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
 
         service.collectStatusChanged(1L, 7L, TaskStatus.IN_PROGRESS, TaskStatus.DONE, occurredAt);
 
-        verify(activityLogRepository).acquireSourceLock("TASK:" + sourceRefId);
+        InOrder locks = inOrder(activityLogRepository);
+        locks.verify(activityLogRepository).acquireSourceLock("TASK:task:1");
+        locks.verify(activityLogRepository).acquireSourceLock("TASK:" + sourceRefId);
         ArgumentCaptor<ReportActivityLog> captor = ArgumentCaptor.forClass(ReportActivityLog.class);
         verify(activityLogRepository).save(captor.capture());
         ReportActivityLog saved = captor.getValue();
@@ -78,7 +82,7 @@ class TaskActivityLogServiceTest {
         when(activityLogRepository.existsBySourceDomainAndSourceRefId(SourceDomain.TASK, sourceRefId))
                 .thenReturn(false);
         when(projectMemberRepository.findById(7L)).thenReturn(Optional.of(member));
-        when(taskRepository.getReferenceById(1L)).thenReturn(task);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
 
         service.collectStatusChanged(1L, 7L, null, TaskStatus.DONE, occurredAt);
 
@@ -97,11 +101,13 @@ class TaskActivityLogServiceTest {
         when(activityLogRepository.existsBySourceDomainAndSourceRefId(SourceDomain.TASK, "task-attachment:9"))
                 .thenReturn(false);
         when(projectMemberRepository.findById(7L)).thenReturn(Optional.of(member));
-        when(taskRepository.getReferenceById(1L)).thenReturn(task);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
 
         service.collectAttachmentAdded(9L, 1L, 7L, occurredAt);
 
-        verify(activityLogRepository).acquireSourceLock("TASK:task-attachment:9");
+        InOrder locks = inOrder(activityLogRepository);
+        locks.verify(activityLogRepository).acquireSourceLock("TASK:task:1");
+        locks.verify(activityLogRepository).acquireSourceLock("TASK:task-attachment:9");
         ArgumentCaptor<ReportActivityLog> captor = ArgumentCaptor.forClass(ReportActivityLog.class);
         verify(activityLogRepository).save(captor.capture());
         ReportActivityLog saved = captor.getValue();
@@ -115,26 +121,42 @@ class TaskActivityLogServiceTest {
     @Test
     void 같은_원본_이벤트는_중복_저장하지_않는다() {
         LocalDateTime occurredAt = LocalDateTime.now();
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(Task.builder().id(1L).build()));
         when(taskAttachmentRepository.existsById(9L)).thenReturn(true);
         when(activityLogRepository.existsBySourceDomainAndSourceRefId(SourceDomain.TASK, "task-attachment:9"))
                 .thenReturn(true);
 
         service.collectAttachmentAdded(9L, 1L, 7L, occurredAt);
 
+        verify(activityLogRepository).acquireSourceLock("TASK:task:1");
         verify(activityLogRepository).acquireSourceLock("TASK:task-attachment:9");
         verify(projectMemberRepository, never()).findById(7L);
-        verify(taskRepository, never()).getReferenceById(1L);
         verify(activityLogRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
     void 삭제된_첨부의_늦은_비동기_이벤트는_활동로그를_만들지_않는다() {
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(Task.builder().id(1L).build()));
         when(taskAttachmentRepository.existsById(9L)).thenReturn(false);
 
         service.collectAttachmentAdded(9L, 1L, 7L, LocalDateTime.now());
 
         verify(activityLogRepository)
                 .deleteBySourceDomainAndSourceRefId(SourceDomain.TASK, "task-attachment:9");
+        verify(activityLogRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void 삭제된_업무의_늦은_상태변경_이벤트는_활동로그를_만들지_않는다() {
+        LocalDateTime occurredAt = LocalDateTime.of(2026, 8, 5, 12, 0);
+        String sourceRefId = "task-status:1:" + occurredAt;
+        when(taskRepository.findById(1L)).thenReturn(Optional.empty());
+
+        service.collectStatusChanged(1L, 7L, TaskStatus.IN_PROGRESS, TaskStatus.DONE, occurredAt);
+
+        verify(activityLogRepository).acquireSourceLock("TASK:task:1");
+        verify(activityLogRepository)
+                .deleteBySourceDomainAndSourceRefId(SourceDomain.TASK, sourceRefId);
         verify(activityLogRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 }
