@@ -50,6 +50,8 @@ public class EvaluationService {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
 
+        requireEvaluationOpen(project);
+
         ProjectMember currentMember = participantResolver.requireEvaluator(projectId, userId);
 
         List<ProjectMember> allMembers = projectMemberRepository
@@ -98,6 +100,7 @@ public class EvaluationService {
     public PeerEvaluationDetailResponse getPeerEvaluationDetail(Long projectId, Long targetMemberId, Long userId) {
 
         ProjectMember evaluator = participantResolver.requireEvaluator(projectId, userId);
+        requireEvaluationOpen(evaluator.getProject());
         ProjectMember evaluatee = participantResolver.requireEvaluatee(projectId, targetMemberId);
 
         PeerEvaluation evaluation = peerEvaluationRepository.findByEvaluatorIdAndEvaluateeId(evaluator.getId(), targetMemberId)
@@ -116,9 +119,7 @@ public class EvaluationService {
         ProjectMember evaluator = participantResolver.requireEvaluator(projectId, userId);
         ProjectMember evaluatee = participantResolver.requireEvaluatee(projectId, targetMemberId);
 
-        if (!evaluatee.getProject().isEvaluatingState(TimeUtil.todayUtc())) {
-            throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
-        }
+        requireEvaluationOpen(evaluatee.getProject());
 
         if (evaluator.getId().equals(evaluatee.getId())) {
             throw new ApiException(EvaluationErrorCode.CANNOT_EVALUATE_SELF);
@@ -159,6 +160,7 @@ public class EvaluationService {
         if (evaluatee.getProject().isCompleted()) {
             throw new ApiException(EvaluationErrorCode.CANNOT_MODIFY_EVALUATION_AFTER_PUBLISH);
         }
+        requireEvaluationOpen(evaluatee.getProject());
 
         PeerEvaluation evaluation = peerEvaluationRepository
                 .findByEvaluatorIdAndEvaluateeId(evaluator.getId(), evaluatee.getId())
@@ -201,5 +203,11 @@ public class EvaluationService {
         return firstScore == request.initiativeScore() &&
                 firstScore == request.communicationScore() &&
                 firstScore == request.outputScore();
+    }
+
+    private void requireEvaluationOpen(Project project) {
+        if (!project.isEvaluatingState(TimeUtil.todayUtc())) {
+            throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
+        }
     }
 }

@@ -15,6 +15,7 @@ import com.plog.domain.report.repository.ReportRepository;
 import com.plog.domain.report.service.ReportLifecycleService;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
 import java.util.Optional;
@@ -54,6 +55,10 @@ public class ProjectStatusService {
 
         if (project.isCompleted()) {
             return toResponse(project, false);
+        }
+
+        if (!project.isEvaluatingState(TimeUtil.todayUtc())) {
+            throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
         }
 
         long activeMemberCount = projectMemberRepository.countByProjectIdAndStatus(projectId, MemberStatus.ACTIVE);

@@ -26,6 +26,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 
     List<Post> findAllByProjectMemberProjectIdAndIsNoticeTrue(Long projectId);
 
+    List<Post> findAllByProjectMemberProjectIdOrderByCreatedAtAscIdAsc(Long projectId);
+
     List<Post> findAllByProjectMemberProjectIdAndNoticedAtIsNotNullOrderByNoticedAtDescIdDesc(Long projectId);
 
     Optional<Post> findFirstByProjectMemberProjectIdAndNoticedAtIsNotNullOrderByNoticedAtDescIdDesc(Long projectId);

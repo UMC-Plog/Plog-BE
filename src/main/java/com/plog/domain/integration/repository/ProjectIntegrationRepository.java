@@ -15,6 +15,11 @@ public interface ProjectIntegrationRepository extends JpaRepository<ProjectInteg
 
     List<ProjectIntegration> findAllByProjectIdOrderByLinkTypeAsc(Long projectId);
 
+    default boolean hasConnectedIntegration(Long projectId) {
+        return findAllByProjectIdOrderByLinkTypeAsc(projectId).stream()
+                .anyMatch(ProjectIntegration::isConnected);
+    }
+
     List<ProjectIntegration> findAllByLinkTypeAndExternalAccountIdAndConnectionStatus(
             LinkType linkType,
             String externalAccountId,

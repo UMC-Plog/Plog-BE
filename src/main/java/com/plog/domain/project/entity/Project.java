@@ -63,6 +63,21 @@ public class Project extends BaseEntity {
     @Column(name = "end_day", nullable = false)
     private LocalDate endDay;
 
+    @Getter(AccessLevel.NONE)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "peer_evaluation_status")
+    private PeerEvaluationStatus peerEvaluationStatus = PeerEvaluationStatus.PENDING;
+
+    @Getter(AccessLevel.NONE)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "internal_collection_status")
+    private ProjectCollectionStatus internalCollectionStatus = ProjectCollectionStatus.NOT_STARTED;
+
+    @Getter(AccessLevel.NONE)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "external_collection_status")
+    private ProjectCollectionStatus externalCollectionStatus = ProjectCollectionStatus.NOT_STARTED;
+
     @Builder
     private Project(
             Long id,
@@ -72,7 +87,10 @@ public class Project extends BaseEntity {
             ProjectType projectType,
             ProjectStatus status,
             LocalDate startDay,
-            LocalDate endDay
+            LocalDate endDay,
+            PeerEvaluationStatus peerEvaluationStatus,
+            ProjectCollectionStatus internalCollectionStatus,
+            ProjectCollectionStatus externalCollectionStatus
     ) {
         validateInviteTokenValues(inviteTokenHash, inviteTokenEncrypted);
         this.id = id;
@@ -83,6 +101,12 @@ public class Project extends BaseEntity {
         this.status = status;
         this.startDay = startDay;
         this.endDay = endDay;
+        this.peerEvaluationStatus = peerEvaluationStatus == null
+                ? PeerEvaluationStatus.PENDING : peerEvaluationStatus;
+        this.internalCollectionStatus = internalCollectionStatus == null
+                ? ProjectCollectionStatus.NOT_STARTED : internalCollectionStatus;
+        this.externalCollectionStatus = externalCollectionStatus == null
+                ? ProjectCollectionStatus.NOT_STARTED : externalCollectionStatus;
     }
 
     public void updateSettings(String projectName, LocalDate endDay, ProjectType projectType) {
@@ -105,10 +129,80 @@ public class Project extends BaseEntity {
 
     public void complete() {
         this.status = ProjectStatus.COMPLETED;
+        closePeerEvaluation();
     }
 
     public boolean isCompleted() {
         return this.status == ProjectStatus.COMPLETED;
+    }
+
+    public PeerEvaluationStatus getPeerEvaluationStatus() {
+        return peerEvaluationStatus == null ? PeerEvaluationStatus.PENDING : peerEvaluationStatus;
+    }
+
+    public ProjectCollectionStatus getInternalCollectionStatus() {
+        return internalCollectionStatus == null
+                ? ProjectCollectionStatus.NOT_STARTED : internalCollectionStatus;
+    }
+
+    public ProjectCollectionStatus getExternalCollectionStatus() {
+        return externalCollectionStatus == null
+                ? ProjectCollectionStatus.NOT_STARTED : externalCollectionStatus;
+    }
+
+    public void queueInternalCollection() {
+        if (getInternalCollectionStatus() == ProjectCollectionStatus.NOT_STARTED) {
+            internalCollectionStatus = ProjectCollectionStatus.PENDING;
+        }
+    }
+
+    public void startInternalCollection() {
+        if (getInternalCollectionStatus() == ProjectCollectionStatus.PENDING
+                || getInternalCollectionStatus() == ProjectCollectionStatus.FAILED) {
+            internalCollectionStatus = ProjectCollectionStatus.RUNNING;
+        }
+    }
+
+    public void finishInternalCollection(boolean succeeded) {
+        internalCollectionStatus = succeeded
+                ? ProjectCollectionStatus.SUCCEEDED : ProjectCollectionStatus.FAILED;
+    }
+
+    public void queueExternalCollection() {
+        if (getExternalCollectionStatus() == ProjectCollectionStatus.NOT_STARTED) {
+            externalCollectionStatus = ProjectCollectionStatus.PENDING;
+        }
+    }
+
+    public void startExternalCollection() {
+        if (getExternalCollectionStatus() == ProjectCollectionStatus.PENDING) {
+            externalCollectionStatus = ProjectCollectionStatus.RUNNING;
+        }
+    }
+
+    public void skipExternalCollection() {
+        externalCollectionStatus = ProjectCollectionStatus.NOT_REQUIRED;
+    }
+
+    public void finishExternalCollection(ProjectCollectionStatus terminalStatus) {
+        if (terminalStatus != ProjectCollectionStatus.SUCCEEDED
+                && terminalStatus != ProjectCollectionStatus.PARTIAL_FAILED
+                && terminalStatus != ProjectCollectionStatus.FAILED) {
+            throw new IllegalArgumentException("external collection status must be terminal");
+        }
+        externalCollectionStatus = terminalStatus;
+    }
+
+    public boolean openPeerEvaluation() {
+        if (getPeerEvaluationStatus() != PeerEvaluationStatus.PENDING || isCompleted()) {
+            return false;
+        }
+        peerEvaluationStatus = PeerEvaluationStatus.OPEN;
+        return true;
+    }
+
+    public void closePeerEvaluation() {
+        peerEvaluationStatus = PeerEvaluationStatus.CLOSED;
     }
 
     private static void validateInviteTokenValues(String inviteTokenHash, String inviteTokenEncrypted) {
@@ -126,7 +220,7 @@ public class Project extends BaseEntity {
      * 리포트가 발행되면(COMPLETED) 더 이상 평가 대기가 아니다.
      */
     public boolean isEvaluatingState(LocalDate today) {
-        return !isCompleted() && !today.isBefore(this.endDay);
+        return !isCompleted() && getPeerEvaluationStatus() == PeerEvaluationStatus.OPEN;
     }
 
     /** 평가가 닫히는 날. 이 날짜부터는 미제출자가 있어도 더 기다리지 않는다. */

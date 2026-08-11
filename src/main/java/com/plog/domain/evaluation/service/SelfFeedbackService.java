@@ -34,6 +34,7 @@ public class SelfFeedbackService {
     public SelfFeedbackResponse getMySelfFeedback(Long projectId, Long userId) {
 
         ProjectMember projectMember = participantResolver.requireEvaluator(projectId, userId);
+        requireEvaluationOpen(projectMember);
 
         SelfFeedback selfFeedback = selfFeedbackRepository.findByProjectMemberId(projectMember.getId())
                 .orElseThrow(() -> new ApiException(EvaluationErrorCode.SELF_FEEDBACK_NOT_FOUND));
@@ -45,9 +46,7 @@ public class SelfFeedbackService {
     public SelfFeedbackResponse createSelfFeedback(Long projectId, Long userId, SelfFeedbackCreateRequest request) {
         ProjectMember projectMember = participantResolver.requireEvaluator(projectId, userId);
 
-        if (!projectMember.getProject().isEvaluatingState(TimeUtil.todayUtc())) {
-            throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
-        }
+        requireEvaluationOpen(projectMember);
 
         if (selfFeedbackRepository.findByProjectMemberId(projectMember.getId()).isPresent()) {
             throw new ApiException(EvaluationErrorCode.ALREADY_SUBMITTED_SELF_FEEDBACK);
@@ -77,6 +76,7 @@ public class SelfFeedbackService {
         if (projectMember.getProject().isCompleted()) {
             throw new ApiException(EvaluationErrorCode.CANNOT_MODIFY_FEEDBACK_AFTER_PUBLISH);
         }
+        requireEvaluationOpen(projectMember);
 
         SelfFeedback selfFeedback = selfFeedbackRepository.findByProjectMemberId(projectMember.getId())
                 .orElseThrow(() -> new ApiException(EvaluationErrorCode.SELF_FEEDBACK_NOT_FOUND));
@@ -93,5 +93,11 @@ public class SelfFeedbackService {
                 selfFeedback.getCreatedAt() != null ? selfFeedback.getCreatedAt() : TimeUtil.nowUtc()));
 
         return new SelfFeedbackUpdateResponse(selfFeedback.getId());
+    }
+
+    private void requireEvaluationOpen(ProjectMember projectMember) {
+        if (!projectMember.getProject().isEvaluatingState(TimeUtil.todayUtc())) {
+            throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
+        }
     }
 }

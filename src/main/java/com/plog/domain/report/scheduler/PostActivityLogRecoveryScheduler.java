@@ -8,10 +8,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Limit;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "plog.report.activity.realtime-collection.enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class PostActivityLogRecoveryScheduler {
 

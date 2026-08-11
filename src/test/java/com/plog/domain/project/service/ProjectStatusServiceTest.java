@@ -15,6 +15,7 @@ import com.plog.domain.project.dto.ProjectStatusDto;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectStatus;
+import com.plog.domain.project.entity.PeerEvaluationStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
@@ -290,6 +291,7 @@ class ProjectStatusServiceTest {
                 .status(ProjectStatus.IN_PROGRESS)
                 .startDay(today.minusDays(30))
                 .endDay(today.minusDays(daysAgo))
+                .peerEvaluationStatus(PeerEvaluationStatus.OPEN)
                 .build();
     }
 }

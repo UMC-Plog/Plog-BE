@@ -46,6 +46,7 @@ public class ProjectPurgeService {
         delete("delete from ProjectIntegration integration "
                 + "where integration.project.id = :projectId", projectId);
         delete("delete from TaskAttachment attachment where attachment.task.projectMember.project.id = :projectId", projectId);
+        delete("delete from TaskStatusHistory history where history.task.projectMember.project.id = :projectId", projectId);
         delete("delete from Task task where task.projectMember.project.id = :projectId", projectId);
         delete("delete from PostLike postLike where postLike.post.projectMember.project.id = :projectId", projectId);
         delete("delete from PostAttachment attachment where attachment.post.projectMember.project.id = :projectId", projectId);
