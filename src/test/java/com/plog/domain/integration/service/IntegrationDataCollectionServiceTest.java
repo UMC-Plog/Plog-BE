@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.plog.domain.integration.entity.IntegrationCredentialType;
+import com.plog.domain.integration.entity.CollectionPhase;
 import com.plog.domain.integration.entity.IntegrationResource;
 import com.plog.domain.integration.entity.IntegrationResourceStatus;
 import com.plog.domain.integration.entity.IntegrationResourceType;
@@ -285,6 +286,53 @@ class IntegrationDataCollectionServiceTest {
     }
 
     @Test
+    void finalCollectionRecordsRateLimitAndContinuesWithRemainingResources() {
+        Long projectId = 1L;
+        Project project = project(projectId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.RETRY_AFTER, "3600");
+        IntegrationResource limited = resource(project, LinkType.GITHUB, "limited-repo", 101L);
+        IntegrationResource available = resource(project, LinkType.GITHUB, "available-repo", 102L);
+        IntegrationResourceCollector mixedCollector = new IntegrationResourceCollector() {
+            @Override
+            public List<LinkType> providers() {
+                return List.of(LinkType.GITHUB);
+            }
+
+            @Override
+            public void collect(
+                    IntegrationResource resource,
+                    ProjectIntegration verifiedIntegration,
+                    CollectionContext context
+            ) {
+                if (resource.getId().equals(limited.getId())) {
+                    throw new ProviderResourceAccessException(429, new RestClientResponseException(
+                            "rate limited", 429, "Too Many Requests", headers,
+                            "{}".getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8));
+                }
+            }
+        };
+        IntegrationDataCollectionService service = serviceWith(mixedCollector);
+        given(integrationResourceRepository
+                .findAllByProjectIntegrationProjectIdAndResourceStatusOrderByIdAsc(
+                        projectId, IntegrationResourceStatus.ACTIVE))
+                .willReturn(List.of(limited, available));
+
+        IntegrationDataCollectionService.CollectionOutcome outcome =
+                service.runCollection(projectId, finalCollectionContext());
+
+        assertEquals(2, outcome.requestedResourceCount());
+        assertEquals(1, outcome.collectedResourceCount());
+        assertEquals("provider rate limit exceeded", outcome.failures().getFirst().reason());
+        verify(resourceCollectionStateService).markFailed(
+                org.mockito.ArgumentMatchers.eq(101L),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("provider rate limit exceeded"));
+        verify(resourceCollectionStateService).markCollected(
+                org.mockito.ArgumentMatchers.eq(102L), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void repositorySynchronizationOutageRequeuesJobInsteadOfFailingIt() {
         Long projectId = 1L;
         willThrow(new ApiException(IntegrationErrorCode.PROVIDER_TEMPORARILY_UNAVAILABLE))
@@ -372,9 +420,14 @@ class IntegrationDataCollectionServiceTest {
     }
 
     private IntegrationResource resource(Project project, LinkType linkType, String providerResourceId) {
+        return resource(project, linkType, providerResourceId, 101L);
+    }
+
+    private IntegrationResource resource(
+            Project project, LinkType linkType, String providerResourceId, Long resourceId) {
         ProjectIntegration integration = googleIntegration(project, linkType, 20L);
         return IntegrationResource.builder()
-                .id(101L)
+                .id(resourceId)
                 .projectIntegration(integration)
                 .resourceType(IntegrationResourceType.GOOGLE_DOCUMENT)
                 .providerResourceId(providerResourceId)
@@ -382,6 +435,32 @@ class IntegrationDataCollectionServiceTest {
                 .resourceUrl("https://docs.google.com/document/d/" + providerResourceId)
                 .resourceStatus(IntegrationResourceStatus.ACTIVE)
                 .build();
+    }
+
+    private CollectionContext finalCollectionContext() {
+        return new CollectionContext() {
+            @Override
+            public boolean finalCollection() {
+                return true;
+            }
+
+            @Override
+            public CollectionCursor cursor() {
+                return CollectionCursor.start();
+            }
+
+            @Override
+            public void enterResource(Long resourceId) {
+            }
+
+            @Override
+            public void advance(CollectionPhase phase, int itemNumber) {
+            }
+
+            @Override
+            public void heartbeat() {
+            }
+        };
     }
 
     private static final class CountingFailureCollector implements IntegrationResourceCollector {

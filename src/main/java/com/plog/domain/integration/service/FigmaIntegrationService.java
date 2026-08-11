@@ -35,7 +35,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class FigmaIntegrationService {
     private static final String API_BASE_URL = "https://api.figma.com";
     private static final String[] SCOPES = {
-            "current_user:read", "file_metadata:read", "file_content:read",
+            "current_user:read", "file_metadata:read",
             "file_versions:read", "file_comments:read"
     };
 
