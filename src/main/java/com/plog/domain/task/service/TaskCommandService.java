@@ -5,6 +5,8 @@ import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.report.entity.SourceDomain;
+import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.domain.task.dto.request.TaskAttachmentAddRequest;
 import com.plog.domain.task.dto.request.TaskCreateRequest;
 import com.plog.domain.task.dto.request.TaskUpdateRequest;
@@ -36,6 +38,7 @@ public class TaskCommandService {
 
     private final TaskRepository taskRepository;
     private final TaskAttachmentRepository taskAttachmentRepository;
+    private final ReportActivityLogRepository reportActivityLogRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectAccessService projectAccessService;
     private final AttachmentPolicy attachmentPolicy;
@@ -45,6 +48,7 @@ public class TaskCommandService {
 
     public TaskCommandService(TaskRepository taskRepository,
                               TaskAttachmentRepository taskAttachmentRepository,
+                              ReportActivityLogRepository reportActivityLogRepository,
                               ProjectMemberRepository projectMemberRepository,
                               ProjectAccessService projectAccessService,
                               AttachmentPolicy attachmentPolicy,
@@ -53,6 +57,7 @@ public class TaskCommandService {
                               ApplicationEventPublisher eventPublisher) {
         this.taskRepository = taskRepository;
         this.taskAttachmentRepository = taskAttachmentRepository;
+        this.reportActivityLogRepository = reportActivityLogRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.projectAccessService = projectAccessService;
         this.attachmentPolicy = attachmentPolicy;
@@ -146,9 +151,16 @@ public class TaskCommandService {
 
         Task task = taskRepository.findByIdAndProjectMember_Project_Id(taskId, projectId)
                 .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+        // 활동 로그 비동기 수집과 업무 삭제를 직렬화한다. 수집이 먼저면 아래 벌크 삭제가
+        // 방금 생긴 로그까지 지우고, 삭제가 먼저면 수집 측 FK insert가 더 이상 성공하지 못한다.
+        taskRepository.findByIdForUpdate(taskId);
 
         List<TaskAttachment> attachments = taskAttachmentRepository.findAllByTaskId(taskId);
         List<Long> fileIds = taskAttachmentRepository.findFileIdsByTaskId(taskId);
+
+        // 리포트 생성 여부와 무관하게 상태 변경/첨부 활동 로그가 업무를 FK로 참조한다.
+        // 업무 삭제 전에 해당 원천 활동도 함께 제거해야 tasks 삭제가 FK 제약에 막히지 않는다.
+        reportActivityLogRepository.deleteAllByLinkedTaskId(taskId);
 
         taskAttachmentRepository.deleteAll(attachments);
         taskAttachmentRepository.flush();
@@ -207,6 +219,12 @@ public class TaskCommandService {
 
         UploadedFile file = attachment.getUploadedFile();
 
+        // 삭제된 산출물이 이후 리포트에서 DELIVERABLE_SUBMIT 근거로 집계되지 않도록
+        // 첨부 원천 로그도 같은 트랜잭션에서 제거한다.
+        reportActivityLogRepository.acquireSourceLock(
+                SourceDomain.TASK.name() + ":task-attachment:" + taskAttachmentId);
+        reportActivityLogRepository.deleteBySourceDomainAndSourceRefId(
+                SourceDomain.TASK, "task-attachment:" + taskAttachmentId);
         taskAttachmentRepository.delete(attachment);
         taskAttachmentRepository.flush();
 

@@ -20,6 +20,8 @@ import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.exception.ProjectApiErrorCode;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.domain.report.entity.SourceDomain;
+import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.common.AttachmentDownloadUrlFactory;
 import com.plog.global.util.TimeUtil;
@@ -54,6 +56,7 @@ public class PostService {
     private final PostLikeRepository postLikeRepository;
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
+    private final ReportActivityLogRepository reportActivityLogRepository;
     private final AttachmentDownloadUrlFactory downloadUrlFactory;
     private final AttachmentPolicy attachmentPolicy;
     private final UploadedFileService uploadedFileService;
@@ -141,6 +144,8 @@ public class PostService {
         if (!post.getProjectMember().getId().equals(member.getId())) {
             throw new ApiException(PostErrorCode.POST_UPDATE_PERMISSION_DENIED);
         }
+        postRepository.findByIdForUpdate(postId);
+        reportActivityLogRepository.acquireSourceLock(SourceDomain.POST.name() + ":post:" + postId);
         if (request.content() != null) {
             post.updateContent(requireContent(request.content(), 5000));
         }
@@ -168,6 +173,8 @@ public class PostService {
             resultingAttachments = attachmentRepository.findAllByPostIdOrderByIdAsc(postId);
         }
         postRepository.saveAndFlush(post);
+        reportActivityLogRepository.refreshSourceSnapshot(
+                SourceDomain.POST.name(), "post:" + postId, post.getContent(), postMetadata(postId));
         return toUpdateResponse(post, member, resultingAttachments);
     }
 
@@ -181,8 +188,18 @@ public class PostService {
         if (!post.getProjectMember().getId().equals(member.getId()) && member.getRole() != ProjectRole.OWNER) {
             throw new ApiException(PostErrorCode.POST_DELETE_PERMISSION_DENIED);
         }
+        // 댓글 생성 FK insert와 게시글 삭제를 직렬화해, 삭제 대상 댓글/활동 로그가
+        // 조회 직후 새로 생기는 경합을 막는다.
+        postRepository.findByIdForUpdate(postId);
         List<Long> fileIds = attachmentRepository.findFileIdsByPostId(postId);
         boolean deletedCurrentNotice = post.isNotice();
+        reportActivityLogRepository.acquireSourceLock(SourceDomain.POST.name() + ":post:" + postId);
+        commentRepository.findAllByPostIdOrderByCreatedAtAscIdAsc(postId).stream()
+                .map(Comment::getId)
+                .sorted()
+                .forEach(commentId -> reportActivityLogRepository.acquireSourceLock(
+                        SourceDomain.POST.name() + ":comment:" + commentId));
+        reportActivityLogRepository.deletePostAndCommentActivities(postId);
         postRepository.delete(post);
         postRepository.flush();
         if (deletedCurrentNotice) {
@@ -253,6 +270,9 @@ public class PostService {
         if (!comment.getProjectMember().getId().equals(member.getId()) && member.getRole() != ProjectRole.OWNER) {
             throw new ApiException(PostErrorCode.COMMENT_DELETE_PERMISSION_DENIED);
         }
+        reportActivityLogRepository.acquireSourceLock(SourceDomain.POST.name() + ":comment:" + commentId);
+        reportActivityLogRepository.deleteBySourceDomainAndSourceRefId(
+                SourceDomain.POST, "comment:" + commentId);
         commentRepository.delete(comment);
         return new PostDto.DeletedResponse(true);
     }
@@ -446,6 +466,10 @@ public class PostService {
     private Post requirePost(Long projectId, Long postId) {
         return postRepository.findByIdAndProjectMemberProjectId(postId, projectId)
                 .orElseThrow(() -> new ApiException(PostErrorCode.POST_NOT_FOUND));
+    }
+
+    private String postMetadata(Long postId) {
+        return "{\"postId\":" + postId + "}";
     }
 
     private Instant toInstant(LocalDateTime value) {

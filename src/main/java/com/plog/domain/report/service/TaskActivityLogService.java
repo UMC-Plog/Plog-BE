@@ -9,6 +9,7 @@ import com.plog.domain.report.entity.SourceDomain;
 import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskStatus;
+import com.plog.domain.task.repository.TaskAttachmentRepository;
 import com.plog.domain.task.repository.TaskRepository;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class TaskActivityLogService {
     private final ReportActivityLogRepository activityLogRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final TaskRepository taskRepository;
+    private final TaskAttachmentRepository taskAttachmentRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -53,6 +55,7 @@ public class TaskActivityLogService {
         if (metadata == null) {
             return;
         }
+        activityLogRepository.acquireSourceLock(SourceDomain.TASK.name() + ":" + sourceRefId);
         collect(memberId, taskId, RawActivityType.TASK_STATUS_CHANGE, occurredAt, sourceRefId, metadata);
     }
 
@@ -61,6 +64,11 @@ public class TaskActivityLogService {
         String sourceRefId = "task-attachment:" + attachmentId;
         String metadata = writeMetadata(TaskAttachmentAddMetadata.of(taskId, attachmentId));
         if (metadata == null) {
+            return;
+        }
+        activityLogRepository.acquireSourceLock(SourceDomain.TASK.name() + ":" + sourceRefId);
+        if (!taskAttachmentRepository.existsById(attachmentId)) {
+            activityLogRepository.deleteBySourceDomainAndSourceRefId(SourceDomain.TASK, sourceRefId);
             return;
         }
         collect(memberId, taskId, RawActivityType.TASK_ATTACHMENT_ADD, occurredAt, sourceRefId, metadata);
@@ -74,7 +82,6 @@ public class TaskActivityLogService {
             String sourceRefId,
             String metadata
     ) {
-        activityLogRepository.acquireSourceLock(SourceDomain.TASK.name() + ":" + sourceRefId);
         if (activityLogRepository.existsBySourceDomainAndSourceRefId(SourceDomain.TASK, sourceRefId)) {
             return;
         }

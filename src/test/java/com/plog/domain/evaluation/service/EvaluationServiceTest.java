@@ -23,7 +23,11 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
+<<<<<<< Updated upstream
 import com.plog.domain.project.service.ProjectAccessService;
+=======
+import com.plog.domain.report.repository.ReportActivityLogRepository;
+>>>>>>> Stashed changes
 import com.plog.domain.user.entity.ProfilePreset;
 import com.plog.domain.user.entity.User;
 import com.plog.global.api.error.EvaluationErrorCode;
@@ -62,6 +66,9 @@ class EvaluationServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private ReportActivityLogRepository reportActivityLogRepository;
+
     private EvaluationService evaluationService;
     private EvaluationParticipantResolver participantResolver;
 
@@ -77,6 +84,7 @@ class EvaluationServiceTest {
                 selfFeedbackRepository,
                 actorMappingStatusService,
                 participantResolver,
+                reportActivityLogRepository,
                 eventPublisher
         );
     }
@@ -111,6 +119,11 @@ class EvaluationServiceTest {
         assertThat(evaluation.getCollaborationScore()).isEqualTo(4);
         assertThat(evaluation.getKeywords()).containsExactly("소통능력");
         assertThat(evaluation.getFeedback()).isEqualTo("수정된 동료 평가");
+        verify(reportActivityLogRepository).refreshSourceSnapshot(
+                "EVALUATION", "peer-evaluation:105", "수정된 동료 평가",
+                "{\"evaluationId\":105,\"evaluatorId\":10,\"evaluateeId\":20,"
+                        + "\"collaborationScore\":4,\"initiativeScore\":4,"
+                        + "\"communicationScore\":5,\"outputScore\":4}");
     }
 
     @Test

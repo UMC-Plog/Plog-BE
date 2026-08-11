@@ -15,6 +15,7 @@ import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskStatus;
 import com.plog.domain.task.repository.TaskRepository;
+import com.plog.domain.task.repository.TaskAttachmentRepository;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +30,7 @@ class TaskActivityLogServiceTest {
     @Mock private ReportActivityLogRepository activityLogRepository;
     @Mock private ProjectMemberRepository projectMemberRepository;
     @Mock private TaskRepository taskRepository;
+    @Mock private TaskAttachmentRepository taskAttachmentRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private TaskActivityLogService service;
@@ -36,7 +38,8 @@ class TaskActivityLogServiceTest {
     @BeforeEach
     void setUp() {
         service = new TaskActivityLogService(
-                activityLogRepository, projectMemberRepository, taskRepository, objectMapper);
+                activityLogRepository, projectMemberRepository, taskRepository,
+                taskAttachmentRepository, objectMapper);
     }
 
     @Test
@@ -90,6 +93,7 @@ class TaskActivityLogServiceTest {
         ProjectMember member = ProjectMember.builder().id(7L).build();
         Task task = Task.builder().id(1L).build();
         LocalDateTime occurredAt = LocalDateTime.of(2026, 8, 5, 11, 0);
+        when(taskAttachmentRepository.existsById(9L)).thenReturn(true);
         when(activityLogRepository.existsBySourceDomainAndSourceRefId(SourceDomain.TASK, "task-attachment:9"))
                 .thenReturn(false);
         when(projectMemberRepository.findById(7L)).thenReturn(Optional.of(member));
@@ -111,6 +115,7 @@ class TaskActivityLogServiceTest {
     @Test
     void 같은_원본_이벤트는_중복_저장하지_않는다() {
         LocalDateTime occurredAt = LocalDateTime.now();
+        when(taskAttachmentRepository.existsById(9L)).thenReturn(true);
         when(activityLogRepository.existsBySourceDomainAndSourceRefId(SourceDomain.TASK, "task-attachment:9"))
                 .thenReturn(true);
 
@@ -119,6 +124,17 @@ class TaskActivityLogServiceTest {
         verify(activityLogRepository).acquireSourceLock("TASK:task-attachment:9");
         verify(projectMemberRepository, never()).findById(7L);
         verify(taskRepository, never()).getReferenceById(1L);
+        verify(activityLogRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void 삭제된_첨부의_늦은_비동기_이벤트는_활동로그를_만들지_않는다() {
+        when(taskAttachmentRepository.existsById(9L)).thenReturn(false);
+
+        service.collectAttachmentAdded(9L, 1L, 7L, LocalDateTime.now());
+
+        verify(activityLogRepository)
+                .deleteBySourceDomainAndSourceRefId(SourceDomain.TASK, "task-attachment:9");
         verify(activityLogRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 }

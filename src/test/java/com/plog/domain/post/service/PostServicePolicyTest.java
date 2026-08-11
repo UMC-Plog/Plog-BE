@@ -26,6 +26,7 @@ import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.exception.ProjectApiErrorCode;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.global.api.exception.ApiException;
 import com.plog.infrastructure.s3.AttachmentPolicy;
 import com.plog.infrastructure.s3.FileStorageErrorCode;
@@ -52,6 +53,7 @@ class PostServicePolicyTest {
     @Mock private PostLikeRepository postLikeRepository;
     @Mock private ProjectRepository projectRepository;
     @Mock private ProjectMemberRepository projectMemberRepository;
+    @Mock private ReportActivityLogRepository reportActivityLogRepository;
     @Mock private AttachmentDownloadUrlFactory downloadUrlFactory;
     @Mock private AttachmentPolicy attachmentPolicy;
     @Mock private UploadedFileService uploadedFileService;
@@ -68,6 +70,7 @@ class PostServicePolicyTest {
                 postLikeRepository,
                 projectRepository,
                 projectMemberRepository,
+                reportActivityLogRepository,
                 downloadUrlFactory,
                 attachmentPolicy,
                 uploadedFileService,
@@ -92,6 +95,7 @@ class PostServicePolicyTest {
         service.deletePost(1L, 2L, 7L);
 
         verify(projectRepository).findByIdForUpdate(1L);
+        verify(reportActivityLogRepository).deletePostAndCommentActivities(2L);
         verify(postRepository)
                 .findFirstByProjectMemberProjectIdAndNoticedAtIsNotNullOrderByNoticedAtDescIdDesc(1L);
     }
