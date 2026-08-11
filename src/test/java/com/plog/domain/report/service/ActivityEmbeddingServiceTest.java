@@ -19,6 +19,7 @@ import com.plog.domain.report.entity.ReportActivityLog;
 import com.plog.domain.report.entity.SourceDomain;
 import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.domain.report.repository.projection.EmbeddingClaimProjection;
+import com.plog.global.util.TimeUtil;
 import com.plog.infrastructure.ai.embedding.EmbeddingClient;
 import com.plog.infrastructure.ai.embedding.EmbeddingGenerationException;
 import com.plog.infrastructure.ai.embedding.EmbeddingRateLimitException;
@@ -142,7 +143,7 @@ class ActivityEmbeddingServiceTest {
                 .thenReturn(new EmbeddingResponse(List.of(0.1f), "gemini-embedding-001"));
         ReportActivityLog log = refinedChatLog("업무 관련 문장입니다");
         when(activityLogRepository.findById(1L)).thenReturn(Optional.of(log));
-        LocalDateTime beforeCall = LocalDateTime.now();
+        LocalDateTime beforeCall = TimeUtil.now();
 
         service.embedBatch();
 

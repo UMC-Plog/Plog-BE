@@ -6,6 +6,7 @@ import com.plog.domain.report.entity.SourceDomain;
 import com.plog.domain.report.entity.ReportActivityLog;
 import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.domain.report.repository.projection.EmbeddingClaimProjection;
+import com.plog.global.util.TimeUtil;
 import com.plog.infrastructure.ai.embedding.EmbeddingClient;
 import com.plog.infrastructure.ai.embedding.EmbeddingRateLimitException;
 import com.plog.infrastructure.ai.embedding.EmbeddingResponse;
@@ -157,7 +158,7 @@ public class ActivityEmbeddingService {
     /** 짧은 트랜잭션 — FOR UPDATE SKIP LOCKED로 선점하고 곧바로 리스+토큰을 찍은 뒤 커밋한다. */
     private List<EmbeddingClaimProjection> claimBatch(String leaseToken) {
         return transactionTemplate.execute(status -> {
-            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime now = TimeUtil.now();
             List<EmbeddingClaimProjection> claimed =
                     activityLogRepository.selectClaimableEmbeddingActivities(now, BATCH_SIZE);
             if (claimed.isEmpty()) {
@@ -184,7 +185,7 @@ public class ActivityEmbeddingService {
             return;
         }
         transactionTemplate.executeWithoutResult(status ->
-                activityLogRepository.renewEmbeddingLease(ids, leaseToken, LocalDateTime.now().plus(LEASE_DURATION)));
+                activityLogRepository.renewEmbeddingLease(ids, leaseToken, TimeUtil.now().plus(LEASE_DURATION)));
     }
 
     private enum EmbedResult {

@@ -12,6 +12,7 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.report.entity.Report;
 import com.plog.domain.report.entity.ReportStatus;
 import com.plog.domain.report.repository.ReportRepository;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -134,7 +135,7 @@ class ReportBatchServiceTest {
                 eq(ReportStatus.restartBlockingStatuses()),
                 any(Pageable.class)
         );
-        LocalDate today = LocalDate.now(java.time.ZoneOffset.UTC);
+        LocalDate today = TimeUtil.today();
         assertThat(bound.getValue()).isEqualTo(Project.latestEndDayWithClosedEvaluation(today));
         // 마감 당일(유예 0일)은 아직 대상이 아니다 — 상한이 오늘보다 과거여야 한다.
         assertThat(bound.getValue()).isBefore(today);

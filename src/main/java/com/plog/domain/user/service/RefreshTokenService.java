@@ -37,7 +37,7 @@ public class RefreshTokenService {
     @Transactional
     public String issue(User user) {
         String rawToken = generateRawToken();
-        LocalDateTime expiresAt = TimeUtil.nowUtc().plus(jwtProperties.refreshTokenTtl());
+        LocalDateTime expiresAt = TimeUtil.now().plus(jwtProperties.refreshTokenTtl());
         refreshTokenRepository.save(RefreshToken.issue(user, HashUtil.sha256Hex(rawToken), expiresAt));
         return rawToken;
     }
@@ -47,7 +47,7 @@ public class RefreshTokenService {
     public RefreshToken validateOrThrow(String rawToken) {
         RefreshToken token = refreshTokenRepository.findByTokenHash(HashUtil.sha256Hex(rawToken))
                 .orElseThrow(() -> new ApiException(AuthErrorCode.INVALID_REFRESH_TOKEN));
-        if (token.isExpired(TimeUtil.nowUtc())) {
+        if (token.isExpired(TimeUtil.now())) {
             throw new ApiException(AuthErrorCode.INVALID_REFRESH_TOKEN);
         }
         return token;

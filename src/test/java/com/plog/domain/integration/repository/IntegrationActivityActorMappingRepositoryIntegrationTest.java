@@ -35,10 +35,10 @@ import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskCategory;
 import com.plog.domain.task.entity.TaskStatus;
 import com.plog.domain.user.entity.User;
+import com.plog.global.util.TimeUtil;
 import com.plog.infrastructure.s3.UploadedFileService;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -390,7 +390,7 @@ class IntegrationActivityActorMappingRepositoryIntegrationTest {
                 .actorProviderId("people/commenter-1")
                 .actorLogin("Commenter")
                 .actorEmail("commenter@example.com")
-                .occurredAt(project.getStartDay().atTime(12, 0).toInstant(ZoneOffset.UTC))
+                .occurredAt(project.getStartDay().atTime(12, 0).toInstant(TimeUtil.STORAGE_ZONE))
                 .providerPayload("{\"id\":\"google-comment-1\",\"deleted\":false}")
                 .build());
         entityManager.flush();

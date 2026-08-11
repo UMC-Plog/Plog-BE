@@ -75,7 +75,7 @@ public class ProjectListService {
                 .stream()
                 .collect(Collectors.toMap(ProjectTaskProgress::getProjectId, progress -> progress));
 
-        LocalDate today = TimeUtil.todayUtc();
+        LocalDate today = TimeUtil.today();
         List<ProjectListResponse> summaries = projects.stream()
                 .map(project -> summary(
                         project,

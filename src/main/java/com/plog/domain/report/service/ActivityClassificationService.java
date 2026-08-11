@@ -7,6 +7,7 @@ import com.plog.domain.report.entity.RawActivityType;
 import com.plog.domain.report.entity.ReportActivityLog;
 import com.plog.domain.report.entity.SourceDomain;
 import com.plog.domain.report.repository.ReportActivityLogRepository;
+import com.plog.global.util.TimeUtil;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -68,7 +69,7 @@ public class ActivityClassificationService {
 
     @Transactional
     public int classifyBatch() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = TimeUtil.now();
         List<ReportActivityLog> targets = activityLogRepository
                 .findClassificationTargets(CLASSIFIABLE_DOMAINS, now, BATCH_LIMIT);
         if (targets.isEmpty()) {
@@ -106,7 +107,7 @@ public class ActivityClassificationService {
         }
 
         Duration backoff = backoffFor(attemptNumber);
-        LocalDateTime nextRetryAt = LocalDateTime.now().plus(backoff);
+        LocalDateTime nextRetryAt = TimeUtil.now().plus(backoff);
         activity.scheduleClassificationRetry(nextRetryAt);
         log.error("activity_classification_row_failed id={} attempt={} nextRetryAt={} — backoff 후 재처리 대상으로 남겨둡니다",
                 activity.getId(), attemptNumber, nextRetryAt, e);

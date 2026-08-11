@@ -81,7 +81,7 @@ public class ThumbnailScheduler {
      */
     @Scheduled(fixedDelay = 3_000)
     public void confirmReady() {
-        LocalDateTime threshold = TimeUtil.nowUtc().minus(MIN_AGE);
+        LocalDateTime threshold = TimeUtil.now().minus(MIN_AGE);
         List<UploadedFile> targets = uploadedFileRepository
                 .findByThumbnailStatusAndThumbnailAtBefore(
                         ThumbnailStatus.PENDING, threshold, BATCH);
@@ -110,7 +110,7 @@ public class ThumbnailScheduler {
         // 아직 만드는 중일 수 있다. 창 안이면 DB 를 건드리지 않고 다음 틱에 다시 본다 —
         // 여기서 thumbnailAt 을 비우면 이 행이 폴링 대상에서 빠진다(INVOKE_TIMEOUT 참조).
         if (file.getThumbnailAt() != null
-                && file.getThumbnailAt().isAfter(TimeUtil.nowUtc().minus(INVOKE_TIMEOUT))) {
+                && file.getThumbnailAt().isAfter(TimeUtil.now().minus(INVOKE_TIMEOUT))) {
             return;
         }
         uploadedFileRepository.recordThumbnailAttempt(

@@ -14,8 +14,8 @@ import com.plog.domain.user.entity.ProfilePreset;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.SliceResponse;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,7 +72,7 @@ class ChatChannelListServiceTest {
         assertThat(response.content()).hasSize(1);
         assertThat(response.content().getFirst().projectId()).isEqualTo(10L);
         assertThat(response.content().getFirst().latestMessageAt())
-                .isEqualTo(latestMessageAt.toInstant(ZoneOffset.UTC));
+                .isEqualTo(latestMessageAt.toInstant(TimeUtil.STORAGE_ZONE));
         assertThat(response.content().getFirst().hasUnreadMessage()).isTrue();
         assertThat(response.content().getFirst().unreadMessageCount()).isEqualTo(2L);
         assertThat(response.content().getFirst().participants()).containsExactly(

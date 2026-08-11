@@ -22,10 +22,11 @@ public final class TaskOverdueCalculator {
         if (task.getCardStatus() == TaskStatus.DONE) {
             return isCompletedAfterDeadline(task);
         }
-        return task.getEndDate().isBefore(LocalDate.now());
+        return task.getEndDate().isBefore(TimeUtil.today());
     }
 
-    // completedAt은 UTC 저장값이라 마감일(KST 달력 기준)과 비교하려면 표시 타임존으로 환산해야 한다.
+    // completedAt은 저장 기준 값이라 마감일(KST 달력 기준)과 비교하려면 표시 타임존으로 환산한다.
+    // 두 기준이 같아진 지금은 항등이지만, 환산을 지우면 기준이 갈릴 때 조용히 어긋난다.
     private static boolean isCompletedAfterDeadline(Task task) {
         if (task.getCompletedAt() == null) {
             return false;

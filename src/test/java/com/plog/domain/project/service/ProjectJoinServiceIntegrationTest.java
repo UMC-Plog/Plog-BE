@@ -19,6 +19,7 @@ import com.plog.domain.user.repository.UserRepository;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.HashUtil;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -141,7 +142,7 @@ class ProjectJoinServiceIntegrationTest {
         assertThat(reactivated.getStatus()).isEqualTo(MemberStatus.ACTIVE);
         assertThat(reactivated.getUpdatedAt()).isAfter(previousUpdatedAt);
         assertThat(response.joinedAt())
-                .isCloseTo(reactivated.getUpdatedAt().toInstant(java.time.ZoneOffset.UTC),
+                .isCloseTo(reactivated.getUpdatedAt().toInstant(TimeUtil.STORAGE_ZONE),
                         within(1, ChronoUnit.MICROS));
     }
 

@@ -53,7 +53,7 @@ public class UploadedFileTagScheduler {
                             file.getFileKey(), file.getStatus());
                 }
                 applyThumbnailState(file);
-                uploadedFileRepository.markTagged(file.getId(), TimeUtil.nowUtc());
+                uploadedFileRepository.markTagged(file.getId(), TimeUtil.now());
             } catch (RuntimeException exception) {
                 log.warn("s3_tag_failed fileKey={} status={}",
                         file.getFileKey(), file.getStatus(), exception);
@@ -87,7 +87,7 @@ public class UploadedFileTagScheduler {
     @Scheduled(cron = "0 10 3 * * *")
     @Transactional
     public void reclaimAbandonedPending() {
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         int reclaimed = uploadedFileRepository.releaseAbandonedPending(
                 now, now.minusDays(ABANDONED_PENDING_DAYS),
                 UploadedFileStatus.ORPHANED, UploadedFileStatus.PENDING);
@@ -99,7 +99,7 @@ public class UploadedFileTagScheduler {
     @Scheduled(cron = "0 20 3 * * *")
     @Transactional
     public void purgeReleasedRows() {
-        LocalDateTime threshold = TimeUtil.nowUtc().minusDays(RELEASED_ROW_RETENTION_DAYS);
+        LocalDateTime threshold = TimeUtil.now().minusDays(RELEASED_ROW_RETENTION_DAYS);
         List<UploadedFile> targets = uploadedFileRepository.findByStatusAndReleasedAtBefore(
                 UploadedFileStatus.ORPHANED, threshold, BATCH);
         uploadedFileRepository.deleteAll(targets);

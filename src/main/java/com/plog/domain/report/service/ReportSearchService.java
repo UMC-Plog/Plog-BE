@@ -55,10 +55,10 @@ public class ReportSearchService {
         }
         validateDateRange(startDate, endDate);
         String projectNamePattern = toSearchPattern(keyword);
-        // 사용자가 보낸 날짜는 KST 달력 기준이다. 저장값이 UTC라 경계를 옮겨서 넘겨야
-        // "7월 21일 리포트"가 한국 기준 하루와 일치한다.
-        LocalDateTime startAt = startDate == null ? null : TimeUtil.startOfDayUtc(startDate);
-        LocalDateTime endExclusive = endDate == null ? null : TimeUtil.startOfDayUtc(endDate.plusDays(1));
+        // 사용자가 보낸 날짜는 KST 달력 기준이고 저장값도 KST라 지금은 경계가 그대로 맞는다.
+        // 그래도 TimeUtil을 경유해 둔다 — 두 기준이 다시 갈리면 여기가 어긋나는 지점이다.
+        LocalDateTime startAt = startDate == null ? null : TimeUtil.startOfDay(startDate);
+        LocalDateTime endExclusive = endDate == null ? null : TimeUtil.startOfDay(endDate.plusDays(1));
         Slice<ReportSummary> reportSlice = reportRepository.searchAccessibleReportSlice(
                 userId,
                 MemberStatus.ACTIVE,

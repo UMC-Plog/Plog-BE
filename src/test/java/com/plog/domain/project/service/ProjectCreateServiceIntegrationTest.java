@@ -22,8 +22,8 @@ import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.UserRepository;
 import com.plog.global.util.HashUtil;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.Base64;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -106,7 +106,7 @@ class ProjectCreateServiceIntegrationTest {
     @Test
     void persistsTheProjectOwnerAndInviteInOneCommittedTransaction() {
         User creator = saveCreator("success");
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = TimeUtil.today();
         LocalDate endDay = today.plusDays(30);
         InviteTokenGenerator generator = mock(InviteTokenGenerator.class);
         given(generator.generate()).willReturn(RAW_INVITE_TOKEN);
@@ -168,7 +168,7 @@ class ProjectCreateServiceIntegrationTest {
                 new ProjectCreateRequest(
                         "Plog API",
                         ProjectType.GENERAL,
-                        LocalDate.now(ZoneOffset.UTC).plusDays(30)
+                        TimeUtil.today().plusDays(30)
                 )
         )).isSameAs(memberFailure);
 
@@ -201,7 +201,7 @@ class ProjectCreateServiceIntegrationTest {
                 new ProjectCreateRequest(
                         "Plog API",
                         ProjectType.GENERAL,
-                        LocalDate.now(ZoneOffset.UTC).plusDays(30)
+                        TimeUtil.today().plusDays(30)
                 )
         )).isSameAs(chatRoomFailure);
 

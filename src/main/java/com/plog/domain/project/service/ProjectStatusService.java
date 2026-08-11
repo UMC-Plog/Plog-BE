@@ -57,7 +57,7 @@ public class ProjectStatusService {
             return toResponse(project, false);
         }
 
-        if (!project.isEvaluatingState(TimeUtil.todayUtc())) {
+        if (!project.isEvaluatingState(TimeUtil.today())) {
             throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
         }
 
@@ -68,7 +68,7 @@ public class ProjectStatusService {
             throw new ApiException(ProjectErrorCode.ACTOR_MAPPING_REQUIRED);
         }
         boolean allSubmitted = allEvaluationsSubmitted;
-        boolean timeoutApplied = !allSubmitted && project.isEvaluationClosed(TimeUtil.todayUtc());
+        boolean timeoutApplied = !allSubmitted && project.isEvaluationClosed(TimeUtil.today());
 
         if (allSubmitted || timeoutApplied) {
             project.complete();

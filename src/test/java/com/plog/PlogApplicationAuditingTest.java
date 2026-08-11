@@ -3,9 +3,9 @@ package com.plog;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+import com.plog.global.util.TimeUtil;
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.auditing.DateTimeProvider;
@@ -15,11 +15,11 @@ class PlogApplicationAuditingTest {
 
     @Test
     void stampsAuditingTimestampsInUtc() {
-        DateTimeProvider provider = new PlogApplication().utcDateTimeProvider();
+        DateTimeProvider provider = new PlogApplication().dateTimeProvider();
 
         LocalDateTime stamped = LocalDateTime.from(provider.getNow().orElseThrow());
 
-        assertThat(stamped).isCloseTo(LocalDateTime.now(ZoneOffset.UTC), within(5, ChronoUnit.SECONDS));
+        assertThat(stamped).isCloseTo(TimeUtil.now(), within(5, ChronoUnit.SECONDS));
     }
 
     /**
@@ -32,12 +32,12 @@ class PlogApplicationAuditingTest {
         EnableJpaAuditing auditing = PlogApplication.class.getAnnotation(EnableJpaAuditing.class);
 
         assertThat(auditing).isNotNull();
-        assertThat(auditing.dateTimeProviderRef()).isEqualTo("utcDateTimeProvider");
+        assertThat(auditing.dateTimeProviderRef()).isEqualTo("dateTimeProvider");
     }
 
     @Test
     void exposesTheReferencedProviderAsABeanOnTheSameClass() throws Exception {
-        Method beanMethod = PlogApplication.class.getDeclaredMethod("utcDateTimeProvider");
+        Method beanMethod = PlogApplication.class.getDeclaredMethod("dateTimeProvider");
 
         assertThat(beanMethod.isAnnotationPresent(org.springframework.context.annotation.Bean.class)).isTrue();
         assertThat(beanMethod.getReturnType()).isEqualTo(DateTimeProvider.class);

@@ -86,7 +86,7 @@ public class Task extends BaseEntity {
                 .endDate(endDate)
                 .completedAt(
                         cardStatus == TaskStatus.DONE
-                                ? TimeUtil.nowUtc()
+                                ? TimeUtil.now()
                                 : null
                 )
                 .build();
@@ -128,7 +128,7 @@ public class Task extends BaseEntity {
         TaskStatus previousStatus = this.cardStatus;
         this.cardStatus = cardStatus;
         if (cardStatus == TaskStatus.DONE && previousStatus != TaskStatus.DONE) {
-            this.completedAt = TimeUtil.nowUtc();
+            this.completedAt = TimeUtil.now();
         } else if (cardStatus != TaskStatus.DONE) {
             this.completedAt = null;
         }

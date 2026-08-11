@@ -24,7 +24,7 @@ public class PeerEvaluationNotificationScheduler {
     @Scheduled(cron = "${plog.notification.peer-evaluation.cron:0 0 0 * * *}")
     public void processDueProjects() {
         List<Long> projectIds = projectRepository.findProjectsAwaitingDeadlineProcessing(
-                TimeUtil.todayUtc(), PageRequest.of(0, BATCH_SIZE));
+                TimeUtil.today(), PageRequest.of(0, BATCH_SIZE));
         processDeadlineForProjects(projectIds);
         if (!projectIds.isEmpty()) {
             log.info("project_deadline_processing_requested count={}", projectIds.size());
@@ -37,7 +37,7 @@ public class PeerEvaluationNotificationScheduler {
             Long lastProjectId = 0L;
             while (true) {
                 List<Long> projectIds = projectRepository.findProjectsAwaitingDeadlineProcessingAfterId(
-                        TimeUtil.todayUtc(), lastProjectId, PageRequest.of(0, BATCH_SIZE));
+                        TimeUtil.today(), lastProjectId, PageRequest.of(0, BATCH_SIZE));
                 if (projectIds.isEmpty()) {
                     break;
                 }

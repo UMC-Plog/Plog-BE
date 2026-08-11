@@ -15,8 +15,8 @@ import com.plog.domain.task.repository.TaskRepository;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.error.TaskErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.util.TimeUtil;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -92,7 +92,7 @@ public class TaskQueryService {
         projectAccessService.requireActiveMember(projectId, userId);
 
         List<Task> tasks = taskRepository.findOverdueTasksByProjectId(
-                projectId, LocalDate.now(), TaskStatus.DONE);
+                projectId, TimeUtil.today(), TaskStatus.DONE);
         return buildTaskListResponse(tasks);
     }
 

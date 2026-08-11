@@ -20,6 +20,7 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.report.service.IntegrationActivityReportLogAdapter;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -86,7 +87,7 @@ class ProjectSettingsServiceTest {
 
     @Test
     void ownerCanSetTodayAsExpectedEndDate() {
-        LocalDate today = LocalDate.now(java.time.ZoneOffset.UTC);
+        LocalDate today = TimeUtil.today();
         Project project = project();
         ProjectMember owner = ProjectMember.builder()
                 .id(3L).role(ProjectRole.OWNER).status(MemberStatus.ACTIVE).build();
@@ -104,7 +105,7 @@ class ProjectSettingsServiceTest {
 
     @Test
     void endDayChangeResynchronizesExistingIntegrationActivities() {
-        LocalDate newEndDay = LocalDate.now(java.time.ZoneOffset.UTC).plusDays(1);
+        LocalDate newEndDay = TimeUtil.today().plusDays(1);
         LocalDate previousEndDay = LocalDate.of(2026, 8, 1);
         Project project = project();
         ProjectMember member = ProjectMember.builder()
@@ -131,7 +132,7 @@ class ProjectSettingsServiceTest {
 
         assertThatThrownBy(() -> service.updateSettings(
                 1L, 7L, new ProjectSettingsDto.UpdateRequest(
-                        null, LocalDate.now(java.time.ZoneOffset.UTC).minusDays(1), null)))
+                        null, TimeUtil.today().minusDays(1), null)))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(ProjectApiErrorCode.VALIDATION_ERROR));
     }

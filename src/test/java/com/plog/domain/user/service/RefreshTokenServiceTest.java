@@ -9,9 +9,9 @@ import com.plog.domain.user.entity.RefreshToken;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.RefreshTokenRepository;
 import com.plog.global.security.jwt.JwtProperties;
+import com.plog.global.util.TimeUtil;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,7 +46,7 @@ class RefreshTokenServiceTest {
 
         org.mockito.Mockito.verify(refreshTokenRepository).save(tokenCaptor.capture());
         assertThat(tokenCaptor.getValue().getExpiresAt())
-                .isCloseTo(LocalDateTime.now(ZoneOffset.UTC).plus(REFRESH_TTL),
+                .isCloseTo(TimeUtil.now().plus(REFRESH_TTL),
                         within(5, ChronoUnit.SECONDS));
     }
 }

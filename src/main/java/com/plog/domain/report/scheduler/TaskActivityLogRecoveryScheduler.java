@@ -51,7 +51,7 @@ public class TaskActivityLogRecoveryScheduler {
 
     @Scheduled(fixedDelay = 300_000)
     public void recollectMissing() {
-        LocalDateTime threshold = TimeUtil.nowUtc().minus(GRACE);
+        LocalDateTime threshold = TimeUtil.now().minus(GRACE);
         recollectStatusChanges(threshold);
         recollectAttachments(threshold);
     }

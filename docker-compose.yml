@@ -11,8 +11,9 @@ services:
       - .env                        # DB_* / JWT_SECRET / MAIL_* 주입
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      # 저장·연산은 UTC 기준(TimeUtil). 컨테이너 기본값에 기대지 않고 명시해 로그도 DB와 같은 기준으로 남긴다.
-      TZ: UTC
+      # 저장·연산은 KST 기준(TimeUtil). 컨테이너 기본값에 기대지 않고 명시해
+      # 로그·cron·DB 가 같은 기준으로 정렬되게 한다.
+      TZ: Asia/Seoul
     volumes:
       # CD가 GitHub Secret에서 복원한 Firebase Admin 인증 파일. 이미지에는 포함하지 않는다.
       - ./.secrets/firebase-service-account.json:/run/secrets/firebase-service-account.json:ro

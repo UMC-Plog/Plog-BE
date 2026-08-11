@@ -212,7 +212,7 @@ public interface ReportActivityLogRepository extends JpaRepository<ReportActivit
     // LocalDateTime#toString()이 어긋날 위험이 있다 — 대신 sourceRefId를 재구성하지 않고
     // linkedTask+occurredAt 값 자체로 "이미 적재됐는지"를 판정한다.
     // TaskStatusService가 DONE 전이 시 completedAt을 그대로 이벤트의 occurredAt으로 재사용하므로
-    // (별도로 TimeUtil.nowUtc()를 다시 부르지 않음) 이 값이 정확히 일치한다.
+    // (별도로 TimeUtil.now()를 다시 부르지 않음) 이 값이 정확히 일치한다.
     // 비-DONE 전이(TODO↔IN_PROGRESS)는 Task에 전이 시각을 담는 컬럼이 없어 재수집 대상에서
     // 제외한다 — updatedAt은 상태 변경이 아닌 다른 필드 수정에도 갱신돼 신뢰할 수 없다.
     @Query("""
