@@ -5,7 +5,9 @@ import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskAttachment;
 import com.plog.domain.task.entity.TaskCategory;
 import com.plog.domain.task.entity.TaskStatus;
+import com.plog.domain.report.entity.CompetencyCategory;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -16,6 +18,12 @@ public record TaskCreateResponse(
         TaskStatus cardStatus,
         LocalDate endDate,
         Long projectMemberId,
+        @Schema(description = "업무 제목으로 추론한 예상 역량. 실제 역량 발휘 증거가 아니며 분류 실패 시 null")
+        CompetencyCategory inferredCompetency,
+        @Schema(description = "확률이 아닌 선택된 anchor와의 코사인 유사도(0~1). 내부 판단값으로 사용")
+        BigDecimal competencyConfidence,
+        @Schema(description = "업무 제목 역량 분류 anchor/규칙 버전. 분류 실패 시 null")
+        String competencyClassifierVersion,
         List<AttachmentResponse> attachments
 ) {
 
@@ -54,6 +62,9 @@ public record TaskCreateResponse(
                 task.getCardStatus(),
                 task.getEndDate(),
                 task.getProjectMember().getId(),
+                task.getInferredCompetency(),
+                task.getCompetencyConfidence(),
+                task.getCompetencyClassifierVersion(),
                 attachments
         );
     }

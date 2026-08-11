@@ -5,6 +5,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.lenient;
 
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
@@ -20,6 +21,7 @@ import com.plog.domain.task.dto.request.TaskCreateRequest;
 import com.plog.domain.task.entity.AttachmentType;
 import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskCategory;
+import com.plog.domain.task.entity.TaskCompetencyClassification;
 import com.plog.domain.task.entity.TaskStatus;
 import com.plog.domain.task.event.TaskAttachmentAddedEvent;
 import com.plog.domain.task.repository.TaskAttachmentRepository;
@@ -76,6 +78,9 @@ class TaskCommandServiceAttachmentTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private TaskTitleCompetencyClassifier competencyClassifier;
+
     private TaskCommandService service;
 
     @BeforeEach
@@ -83,7 +88,9 @@ class TaskCommandServiceAttachmentTest {
         service = new TaskCommandService(taskRepository, taskAttachmentRepository,
                 reportActivityLogRepository,
                 projectMemberRepository, projectAccessService,
-                attachmentPolicy, uploadedFileService, urlResolver, eventPublisher);
+                attachmentPolicy, uploadedFileService, urlResolver, eventPublisher, competencyClassifier);
+        lenient().when(competencyClassifier.classify(any()))
+                .thenReturn(TaskCompetencyClassification.unclassified());
     }
 
     private void givenAssignee() {

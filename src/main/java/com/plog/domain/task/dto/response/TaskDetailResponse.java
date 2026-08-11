@@ -3,6 +3,8 @@ package com.plog.domain.task.dto.response;
 import com.plog.domain.task.entity.*;
 import com.plog.domain.user.entity.ProfilePreset;
 import io.swagger.v3.oas.annotations.media.Schema;
+import com.plog.domain.report.entity.CompetencyCategory;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -19,6 +21,12 @@ public record TaskDetailResponse(
         int dDay,        // endDate - 오늘. 마감일이 지났으면 음수. 배너 문구는 프론트에서 조립
         boolean isOverdue,
         boolean isImminent, // 마감 D-3 ~ D-0, 완료되지 않은 경우에만 true
+        @Schema(description = "업무 제목으로 추론한 예상 역량. 실제 역량 발휘 증거가 아니며 분류 실패 시 null")
+        CompetencyCategory inferredCompetency,
+        @Schema(description = "확률이 아닌 선택된 anchor와의 코사인 유사도(0~1). 내부 판단값으로 사용")
+        BigDecimal competencyConfidence,
+        @Schema(description = "업무 제목 역량 분류 anchor/규칙 버전. 분류 실패 시 null")
+        String competencyClassifierVersion,
         List<AttachmentResponse> attachments
 ) {
 
@@ -82,6 +90,9 @@ public record TaskDetailResponse(
                 dDay,
                 overdue,
                 isImminent(task, dDay, overdue),
+                task.getInferredCompetency(),
+                task.getCompetencyConfidence(),
+                task.getCompetencyClassifierVersion(),
                 attachments
         );
     }
