@@ -86,6 +86,18 @@ class IntegrationCollectionJobServiceTest {
     }
 
     @Test
+    void 실행_중인_수동_잡도_프로젝트가_마감_수집으로_전환되면_최종_수집으로_판단한다() {
+        Project project = mock(Project.class);
+        given(project.getExternalCollectionStatus()).willReturn(ProjectCollectionStatus.PENDING);
+        given(projectRepository.findById(7L)).willReturn(Optional.of(project));
+        IntegrationCollectionJobService.ClaimedJob claimed = new IntegrationCollectionJobService.ClaimedJob(
+                42L, 7L, "token", 1, false, CollectionCursor.start());
+        IntegrationCollectionJobService service = service();
+
+        assertThat(service.isFinalCollectionExpected(claimed)).isTrue();
+    }
+
+    @Test
     void 잡_성공_트랜잭션에서_수집_요청자의_완료_이벤트를_발행한다() {
         Project project = mock(Project.class);
         given(project.getId()).willReturn(7L);

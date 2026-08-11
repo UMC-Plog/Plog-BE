@@ -175,6 +175,17 @@ public class IntegrationCollectionJobService {
                 .findFirst();
     }
 
+    /** 수동으로 시작된 실행 중 잡이 프로젝트 마감 후 최종 수집으로 승격됐는지 다시 확인한다. */
+    @Transactional(readOnly = true)
+    public boolean isFinalCollectionExpected(ClaimedJob job) {
+        if (job.finalCollection()) {
+            return true;
+        }
+        return projectRepository.findById(job.projectId())
+                .map(this::isFinalCollectionExpected)
+                .orElse(false);
+    }
+
     private IntegrationCollectionJob locked(ClaimedJob job) {
         return integrationCollectionJobRepository.findByIdForUpdate(job.jobId())
                 .orElseThrow(() -> new DataRetrievalFailureException(
@@ -182,9 +193,13 @@ public class IntegrationCollectionJobService {
     }
 
     private boolean isFinalCollectionExpected(IntegrationCollectionJob job) {
-        ProjectCollectionStatus status = job.getProject().getExternalCollectionStatus();
         return job.getRequestedByProjectMember() == null
-                || status == ProjectCollectionStatus.PENDING
+                || isFinalCollectionExpected(job.getProject());
+    }
+
+    private boolean isFinalCollectionExpected(Project project) {
+        ProjectCollectionStatus status = project.getExternalCollectionStatus();
+        return status == ProjectCollectionStatus.PENDING
                 || status == ProjectCollectionStatus.RUNNING;
     }
 

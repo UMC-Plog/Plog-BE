@@ -64,7 +64,7 @@ class IntegrationCollectionJobWorker {
         try {
             outcome = collectionService.runCollection(job.projectId(), new WorkerCollectionContext(job));
         } catch (CollectionRetryableException retryable) {
-            if (job.finalCollection()) {
+            if (isFinalCollectionExpected(job)) {
                 jobService.fail(job, Instant.now(), retryable.getMessage() + " (final collection not deferred)");
                 return;
             }
@@ -85,6 +85,10 @@ class IntegrationCollectionJobWorker {
             return;
         }
         jobService.fail(job, now, summary);
+    }
+
+    private boolean isFinalCollectionExpected(IntegrationCollectionJobService.ClaimedJob job) {
+        return job.finalCollection() || jobService.isFinalCollectionExpected(job);
     }
 
     /** 커서를 남긴 채 다음 시도로 넘긴다. 시도 예산을 다 쓴 경우에만 실패로 확정한다. */
@@ -129,7 +133,7 @@ class IntegrationCollectionJobWorker {
 
         @Override
         public boolean finalCollection() {
-            return job.finalCollection();
+            return isFinalCollectionExpected(job);
         }
 
         @Override

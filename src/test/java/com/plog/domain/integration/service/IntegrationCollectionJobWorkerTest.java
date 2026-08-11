@@ -1,5 +1,6 @@
 package com.plog.domain.integration.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -95,6 +96,26 @@ class IntegrationCollectionJobWorkerTest {
         givenSingleClaim(job);
         willThrow(new CollectionRetryableException("rate limited", RESET_AT))
                 .given(collectionService).runCollection(eq(7L), any());
+
+        worker(5).processDueJobs();
+
+        then(jobService).should().fail(eq(job), any(),
+                eq("rate limited (final collection not deferred)"));
+        then(jobService).should(never()).retry(any(), any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("실행 중 수동 잡이 마감 수집으로 승격되면 rate limit 대기로 다시 미루지 않는다")
+    void doesNotDeferManualJobPromotedToFinalCollection() {
+        IntegrationCollectionJobService.ClaimedJob job = claim(1);
+        givenSingleClaim(job);
+        given(jobService.isFinalCollectionExpected(job)).willReturn(true);
+        given(collectionService.runCollection(eq(7L), any()))
+                .willAnswer(invocation -> {
+                    CollectionContext context = invocation.getArgument(1);
+                    assertThat(context.finalCollection()).isTrue();
+                    throw new CollectionRetryableException("rate limited", RESET_AT);
+                });
 
         worker(5).processDueJobs();
 
