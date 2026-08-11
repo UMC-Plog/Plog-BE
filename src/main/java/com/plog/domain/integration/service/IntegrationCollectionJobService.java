@@ -7,7 +7,6 @@ import com.plog.domain.integration.entity.IntegrationCollectionJobStatus;
 import com.plog.domain.integration.event.ExternalCollectionFinishedEvent;
 import com.plog.domain.integration.event.ExternalCollectionStartedEvent;
 import com.plog.domain.integration.repository.IntegrationCollectionJobRepository;
-import com.plog.domain.notification.event.IntegrationCollectionCompletedEvent;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectCollectionStatus;
 import com.plog.domain.project.entity.ProjectMember;
@@ -120,14 +119,9 @@ public class IntegrationCollectionJobService {
     public void succeed(ClaimedJob job, Instant now, int requestedCount, int collectedCount) {
         IntegrationCollectionJob entity = locked(job);
         entity.succeed(job.claimToken(), now, requestedCount, collectedCount);
-        ProjectMember requestedBy = entity.getRequestedByProjectMember();
         if (isFinalCollectionExpected(entity)) {
             eventPublisher.publishEvent(new ExternalCollectionFinishedEvent(
                     entity.getProject().getId(), IntegrationCollectionJobStatus.SUCCEEDED));
-        }
-        if (requestedBy != null) {
-            eventPublisher.publishEvent(new IntegrationCollectionCompletedEvent(
-                    entity.getProject().getId(), entity.getId(), requestedBy.getId()));
         }
     }
 
@@ -200,7 +194,9 @@ public class IntegrationCollectionJobService {
     private boolean isFinalCollectionExpected(Project project) {
         ProjectCollectionStatus status = project.getExternalCollectionStatus();
         return status == ProjectCollectionStatus.PENDING
-                || status == ProjectCollectionStatus.RUNNING;
+                || status == ProjectCollectionStatus.RUNNING
+                || status == ProjectCollectionStatus.PARTIAL_FAILED
+                || status == ProjectCollectionStatus.FAILED;
     }
 
     public record ClaimedJob(

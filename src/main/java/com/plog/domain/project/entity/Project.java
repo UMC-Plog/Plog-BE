@@ -169,13 +169,19 @@ public class Project extends BaseEntity {
     }
 
     public void queueExternalCollection() {
-        if (getExternalCollectionStatus() == ProjectCollectionStatus.NOT_STARTED) {
+        ProjectCollectionStatus status = getExternalCollectionStatus();
+        if (status == ProjectCollectionStatus.NOT_STARTED
+                || status == ProjectCollectionStatus.PARTIAL_FAILED
+                || status == ProjectCollectionStatus.FAILED) {
             externalCollectionStatus = ProjectCollectionStatus.PENDING;
         }
     }
 
     public void startExternalCollection() {
-        if (getExternalCollectionStatus() == ProjectCollectionStatus.PENDING) {
+        ProjectCollectionStatus status = getExternalCollectionStatus();
+        if (status == ProjectCollectionStatus.PENDING
+                || status == ProjectCollectionStatus.PARTIAL_FAILED
+                || status == ProjectCollectionStatus.FAILED) {
             externalCollectionStatus = ProjectCollectionStatus.RUNNING;
         }
     }

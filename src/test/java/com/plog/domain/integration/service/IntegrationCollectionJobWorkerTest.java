@@ -90,8 +90,8 @@ class IntegrationCollectionJobWorkerTest {
     }
 
     @Test
-    @DisplayName("최종 수집은 rate limit 대기로 평가 시작을 미루지 않는다")
-    void failsFinalCollectionInsteadOfDeferringRetry() {
+    @DisplayName("최종 수집도 retryable 오류는 즉시 실패하지 않고 재큐한다")
+    void requeuesFinalCollectionWhenRetryableErrorOccurs() {
         IntegrationCollectionJobService.ClaimedJob job = claim(1, true);
         givenSingleClaim(job);
         willThrow(new CollectionRetryableException("rate limited", RESET_AT))
@@ -99,14 +99,13 @@ class IntegrationCollectionJobWorkerTest {
 
         worker(5).processDueJobs();
 
-        then(jobService).should().fail(eq(job), any(),
-                eq("rate limited (final collection not deferred)"));
-        then(jobService).should(never()).retry(any(), any(), any(), anyString());
+        then(jobService).should().retry(eq(job), any(), eq(RESET_AT), eq("rate limited"));
+        then(jobService).should(never()).fail(any(), any(), anyString());
     }
 
     @Test
-    @DisplayName("실행 중 수동 잡이 마감 수집으로 승격되면 rate limit 대기로 다시 미루지 않는다")
-    void doesNotDeferManualJobPromotedToFinalCollection() {
+    @DisplayName("실행 중 수동 잡이 마감 수집으로 승격되어도 retryable 오류는 재큐한다")
+    void requeuesManualJobPromotedToFinalCollectionWhenRetryableErrorOccurs() {
         IntegrationCollectionJobService.ClaimedJob job = claim(1);
         givenSingleClaim(job);
         given(jobService.isFinalCollectionExpected(job)).willReturn(true);
@@ -119,9 +118,8 @@ class IntegrationCollectionJobWorkerTest {
 
         worker(5).processDueJobs();
 
-        then(jobService).should().fail(eq(job), any(),
-                eq("rate limited (final collection not deferred)"));
-        then(jobService).should(never()).retry(any(), any(), any(), anyString());
+        then(jobService).should().retry(eq(job), any(), eq(RESET_AT), eq("rate limited"));
+        then(jobService).should(never()).fail(any(), any(), anyString());
     }
 
     @Test

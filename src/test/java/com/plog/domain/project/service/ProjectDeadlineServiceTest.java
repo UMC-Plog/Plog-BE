@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.plog.domain.integration.entity.IntegrationCollectionJobStatus;
@@ -69,18 +70,113 @@ class ProjectDeadlineServiceTest {
     }
 
     @Test
-    void opensEvaluationWhenExternalCollectionPartiallyFails() {
+    void opensEvaluationOnlyWhenExternalCollectionSucceeds() {
+        Project project = project();
+        given(projectRepository.findByIdForUpdate(1L)).willReturn(Optional.of(project));
+
+        service.completeExternalCollection(1L, IntegrationCollectionJobStatus.SUCCEEDED);
+
+        assertThat(project.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.SUCCEEDED);
+        assertThat(project.getPeerEvaluationStatus()).isEqualTo(PeerEvaluationStatus.OPEN);
+        verify(eventPublisher).publishEvent(new PeerEvaluationStartedEvent(1L, null));
+    }
+
+    @Test
+    void ignoresDuplicateExternalCollectionSuccessAfterEvaluationIsOpen() {
+        Project project = project();
+        given(projectRepository.findByIdForUpdate(1L)).willReturn(Optional.of(project));
+
+        service.completeExternalCollection(1L, IntegrationCollectionJobStatus.SUCCEEDED);
+        service.completeExternalCollection(1L, IntegrationCollectionJobStatus.SUCCEEDED);
+
+        assertThat(project.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.SUCCEEDED);
+        assertThat(project.getPeerEvaluationStatus()).isEqualTo(PeerEvaluationStatus.OPEN);
+        verify(eventPublisher, times(1)).publishEvent(new PeerEvaluationStartedEvent(1L, null));
+    }
+
+    @Test
+    void keepsEvaluationPendingWhenExternalCollectionPartiallyFails() {
         Project project = project();
         given(projectRepository.findByIdForUpdate(1L)).willReturn(Optional.of(project));
 
         service.completeExternalCollection(1L, IntegrationCollectionJobStatus.PARTIAL_FAILED);
 
         assertThat(project.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.PARTIAL_FAILED);
+        assertThat(project.getPeerEvaluationStatus()).isEqualTo(PeerEvaluationStatus.PENDING);
+        verify(eventPublisher, never()).publishEvent(new PeerEvaluationStartedEvent(1L, null));
+    }
+
+    @Test
+    void keepsEvaluationPendingWhenExternalCollectionFails() {
+        Project project = project();
+        given(projectRepository.findByIdForUpdate(1L)).willReturn(Optional.of(project));
+
+        service.completeExternalCollection(1L, IntegrationCollectionJobStatus.FAILED);
+
+        assertThat(project.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.FAILED);
+        assertThat(project.getPeerEvaluationStatus()).isEqualTo(PeerEvaluationStatus.PENDING);
+        verify(eventPublisher, never()).publishEvent(new PeerEvaluationStartedEvent(1L, null));
+    }
+
+    @Test
+    void opensEvaluationWithoutNewJobWhenExternalCollectionAlreadySucceeded() {
+        Project project = project(ProjectCollectionStatus.SUCCEEDED);
+        given(projectRepository.findByIdForUpdate(1L)).willReturn(Optional.of(project));
+        given(integrationRepository.hasConnectedIntegration(1L)).willReturn(true);
+
+        service.processDeadline(1L);
+
         assertThat(project.getPeerEvaluationStatus()).isEqualTo(PeerEvaluationStatus.OPEN);
+        assertThat(project.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.SUCCEEDED);
+        verify(collectionJobService, never()).enqueue(1L, null);
         verify(eventPublisher).publishEvent(new PeerEvaluationStartedEvent(1L, null));
     }
 
+    @Test
+    void retriesExternalCollectionWhenPreviousFinalCollectionPartiallyFailed() {
+        Project project = project(ProjectCollectionStatus.PARTIAL_FAILED);
+        given(projectRepository.findByIdForUpdate(1L)).willReturn(Optional.of(project));
+        given(integrationRepository.hasConnectedIntegration(1L)).willReturn(true);
+
+        service.processDeadline(1L);
+
+        assertThat(project.getPeerEvaluationStatus()).isEqualTo(PeerEvaluationStatus.PENDING);
+        assertThat(project.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.PENDING);
+        verify(collectionJobService).enqueue(1L, null);
+        verify(eventPublisher, never()).publishEvent(new PeerEvaluationStartedEvent(1L, null));
+    }
+
+    @Test
+    void retriesExternalCollectionWhenPreviousFinalCollectionFailed() {
+        Project project = project(ProjectCollectionStatus.FAILED);
+        given(projectRepository.findByIdForUpdate(1L)).willReturn(Optional.of(project));
+        given(integrationRepository.hasConnectedIntegration(1L)).willReturn(true);
+
+        service.processDeadline(1L);
+
+        assertThat(project.getPeerEvaluationStatus()).isEqualTo(PeerEvaluationStatus.PENDING);
+        assertThat(project.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.PENDING);
+        verify(collectionJobService).enqueue(1L, null);
+        verify(eventPublisher, never()).publishEvent(new PeerEvaluationStartedEvent(1L, null));
+    }
+
+    @Test
+    void startsExternalCollectionFromRetryableTerminalStatus() {
+        Project partialFailedProject = project(ProjectCollectionStatus.PARTIAL_FAILED);
+        Project failedProject = project(ProjectCollectionStatus.FAILED);
+
+        partialFailedProject.startExternalCollection();
+        failedProject.startExternalCollection();
+
+        assertThat(partialFailedProject.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.RUNNING);
+        assertThat(failedProject.getExternalCollectionStatus()).isEqualTo(ProjectCollectionStatus.RUNNING);
+    }
+
     private Project project() {
+        return project(ProjectCollectionStatus.NOT_STARTED);
+    }
+
+    private Project project(ProjectCollectionStatus externalCollectionStatus) {
         return Project.builder()
                 .id(1L)
                 .projectName("Plog")
@@ -90,6 +186,7 @@ class ProjectDeadlineServiceTest {
                 .status(ProjectStatus.IN_PROGRESS)
                 .startDay(TimeUtil.today().minusDays(10))
                 .endDay(TimeUtil.today())
+                .externalCollectionStatus(externalCollectionStatus)
                 .build();
     }
 }

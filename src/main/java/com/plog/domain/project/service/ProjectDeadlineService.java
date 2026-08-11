@@ -48,6 +48,11 @@ public class ProjectDeadlineService {
             return;
         }
 
+        if (project.getExternalCollectionStatus() == ProjectCollectionStatus.SUCCEEDED) {
+            openEvaluation(project);
+            return;
+        }
+
         project.queueExternalCollection();
         integrationCollectionJobService.enqueue(projectId, null);
     }
@@ -66,7 +71,9 @@ public class ProjectDeadlineService {
             default -> throw new IllegalArgumentException("external collection is not finished: " + status);
         };
         project.finishExternalCollection(terminalStatus);
-        openEvaluation(project);
+        if (terminalStatus == ProjectCollectionStatus.SUCCEEDED) {
+            openEvaluation(project);
+        }
     }
 
     @Transactional
