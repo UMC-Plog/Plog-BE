@@ -33,11 +33,21 @@ public class ProjectLeaveService {
         long activeMemberCount =
                 projectMemberRepository.countByProjectIdAndStatus(projectId, MemberStatus.ACTIVE);
 
+        // 생성자(OWNER)가 다른 팀원을 남겨두고 나가는 경우, 프로젝트에 OWNER가 항상 1명 존재해야 하는
+        // 도메인 불변식을 유지하기 위해 가장 먼저 합류한 활성 멤버에게 소유권을 자동 위임한 뒤 나간다.
         if (projectMember.getRole() == ProjectRole.OWNER && activeMemberCount > 1) {
-            throw new ApiException(ProjectErrorCode.OWNER_MUST_TRANSFER);
+            ProjectMember successor = projectMemberRepository
+                    .findAllByProjectIdAndStatusOrderByIdAsc(projectId, MemberStatus.ACTIVE)
+                    .stream()
+                    .filter(candidate -> !candidate.getId().equals(projectMember.getId()))
+                    .findFirst()
+                    .orElseThrow(() -> new ApiException(ProjectErrorCode.OWNER_MUST_TRANSFER));
+            projectMember.transferOwnershipTo(successor);
+            projectMemberRepository.saveAndFlush(successor);
         }
 
         if (activeMemberCount == 1) {
+            // 마지막 활성 멤버가 나가면 역할(OWNER/MEMBER)과 무관하게 프로젝트를 영구 삭제한다.
             // purge가 하위 데이터와 프로젝트 행까지 벌크로 삭제한다.
             // findByIdForUpdate로 잡은 비관적 락은 그대로 유효하다(락만 걸고 벌크 삭제).
             projectPurgeService.purge(projectId);

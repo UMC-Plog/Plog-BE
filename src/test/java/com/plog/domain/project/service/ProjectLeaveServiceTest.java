@@ -1,7 +1,6 @@
 package com.plog.domain.project.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,9 +13,8 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
-import com.plog.global.api.error.ProjectErrorCode;
-import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,21 +43,26 @@ class ProjectLeaveServiceTest {
     }
 
     @Test
-    void ownerMustTransferOwnershipBeforeLeavingWhenOtherMembersRemain() {
+    void ownerDelegatesOwnershipToEarliestMemberAndLeavesWhenOtherMembersRemain() {
         Project project = project();
         ProjectMember owner = owner(project);
+        ProjectMember successor = member(project);
         when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project));
         when(projectMemberRepository.findByProjectIdAndUserIdAndStatusForUpdate(1L, 7L, MemberStatus.ACTIVE))
                 .thenReturn(Optional.of(owner));
         when(projectMemberRepository.countByProjectIdAndStatus(1L, MemberStatus.ACTIVE)).thenReturn(2L);
+        when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(1L, MemberStatus.ACTIVE))
+                .thenReturn(List.of(owner, successor));
 
-        assertThatThrownBy(() -> projectLeaveService.leave(1L, 7L))
-                .isInstanceOf(ApiException.class)
-                .extracting(exception -> ((ApiException) exception).getErrorCode())
-                .isEqualTo(ProjectErrorCode.OWNER_MUST_TRANSFER);
+        var response = projectLeaveService.leave(1L, 7L);
 
-        assertThat(owner.getStatus()).isEqualTo(MemberStatus.ACTIVE);
-        verify(projectMemberRepository, never()).saveAndFlush(owner);
+        assertThat(response.success()).isTrue();
+        // 소유권이 가장 먼저 합류한 활성 멤버에게 이전되고, 기존 OWNER는 EXIT 처리된다.
+        assertThat(successor.getRole()).isEqualTo(ProjectRole.OWNER);
+        assertThat(owner.getRole()).isEqualTo(ProjectRole.MEMBER);
+        assertThat(owner.getStatus()).isEqualTo(MemberStatus.EXIT);
+        verify(projectMemberRepository).saveAndFlush(successor);
+        verify(projectMemberRepository).saveAndFlush(owner);
         verify(projectPurgeService, never()).purge(1L);
         verify(projectRepository, never()).delete(project);
     }
@@ -97,6 +100,24 @@ class ProjectLeaveServiceTest {
         // 벌크 delete가 남긴 managed ProjectMember가 REMOVED project를 참조해
         // flush 시 TransientObjectException(500)이 나므로, delete()는 호출하지 않는다.
         verify(projectPurgeService).purge(1L);
+        verify(projectRepository, never()).delete(project);
+    }
+
+    @Test
+    void permanentlyDeletesProjectWhenLastMemberIsPlainMemberAndLeaves() {
+        Project project = project();
+        ProjectMember member = member(project);
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project));
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatusForUpdate(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(member));
+        when(projectMemberRepository.countByProjectIdAndStatus(1L, MemberStatus.ACTIVE)).thenReturn(1L);
+
+        var response = projectLeaveService.leave(1L, 7L);
+
+        // 마지막 멤버가 MEMBER 역할이어도 역할과 무관하게 프로젝트를 영구 삭제한다.
+        assertThat(response.success()).isTrue();
+        verify(projectPurgeService).purge(1L);
+        verify(projectMemberRepository, never()).saveAndFlush(member);
         verify(projectRepository, never()).delete(project);
     }
 
