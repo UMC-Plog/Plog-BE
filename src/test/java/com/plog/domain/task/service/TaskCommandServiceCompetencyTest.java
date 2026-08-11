@@ -15,6 +15,7 @@ import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.domain.report.entity.CompetencyCategory;
+import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.domain.task.dto.request.TaskCreateRequest;
 import com.plog.domain.task.dto.request.TaskUpdateRequest;
 import com.plog.domain.task.entity.Task;
@@ -43,6 +44,7 @@ class TaskCommandServiceCompetencyTest {
     private static final long USER_ID = 1L;
     @Mock TaskRepository taskRepository;
     @Mock TaskAttachmentRepository taskAttachmentRepository;
+    @Mock ReportActivityLogRepository reportActivityLogRepository;
     @Mock ProjectMemberRepository projectMemberRepository;
     @Mock ProjectAccessService projectAccessService;
     @Mock AttachmentPolicy attachmentPolicy;
@@ -55,8 +57,9 @@ class TaskCommandServiceCompetencyTest {
 
     @BeforeEach
     void setUp() {
-        service = new TaskCommandService(taskRepository, taskAttachmentRepository, projectMemberRepository,
-                projectAccessService, attachmentPolicy, uploadedFileService, urlResolver, eventPublisher, classifier);
+        service = new TaskCommandService(taskRepository, taskAttachmentRepository, reportActivityLogRepository,
+                projectMemberRepository, projectAccessService, attachmentPolicy, uploadedFileService,
+                urlResolver, eventPublisher, classifier);
         Project project = Project.builder().id(PROJECT_ID).projectName("Plog")
                 .inviteTokenHash("hash").inviteTokenEncrypted("encrypted")
                 .projectType(ProjectType.GENERAL).status(ProjectStatus.IN_PROGRESS)
