@@ -2,6 +2,7 @@ package com.plog.domain.project.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.plog.domain.project.entity.ProjectStatus;
+import com.plog.domain.report.entity.ReportStatus;
 
 public final class ProjectStatusDto {
     private ProjectStatusDto() {
@@ -18,7 +19,9 @@ public final class ProjectStatusDto {
             @JsonProperty("isTimeoutApplied")
             boolean isTimeoutApplied,
             @JsonProperty("isPublished")
-            boolean isPublished
+            boolean isPublished,
+            Long reportId,
+            ReportStatus reportStatus
     ) {
     }
 }

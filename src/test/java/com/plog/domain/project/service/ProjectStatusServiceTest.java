@@ -18,9 +18,10 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
-import com.plog.domain.report.service.ReportLifecycleService;
 import com.plog.domain.report.entity.Report;
 import com.plog.domain.report.event.ReportGenerationRequestedEvent;
+import com.plog.domain.report.repository.ReportRepository;
+import com.plog.domain.report.service.ReportLifecycleService;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
@@ -62,6 +63,9 @@ class ProjectStatusServiceTest {
 
     @Mock
     private ReportLifecycleService reportLifecycleService;
+
+    @Mock
+    private ReportRepository reportRepository;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -107,14 +111,14 @@ class ProjectStatusServiceTest {
     }
 
     @Test
-    void checkAndCompleteAutomaticallyCompletesAfterTheLastSubmission() {
+    void completeAndStartReportAutomaticallyCompletesAfterTheLastSubmission() {
         Project project = projectEndedDaysAgo(1);
         mockProject(project);
         when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(2L);
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(2L);
         when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(2L);
 
-        projectStatusService.checkAndComplete(PROJECT_ID);
+        projectStatusService.completeAndStartReportIfAllEvaluationsSubmitted(PROJECT_ID);
 
         assertThat(project.getStatus()).isEqualTo(ProjectStatus.COMPLETED);
         verify(projectRepository).saveAndFlush(project);

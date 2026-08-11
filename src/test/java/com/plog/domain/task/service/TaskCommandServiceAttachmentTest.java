@@ -13,10 +13,13 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
+import com.plog.domain.task.dto.request.TaskAttachmentAddRequest;
 import com.plog.domain.task.dto.request.TaskCreateRequest;
 import com.plog.domain.task.entity.AttachmentType;
+import com.plog.domain.task.entity.Task;
 import com.plog.domain.task.entity.TaskCategory;
 import com.plog.domain.task.entity.TaskStatus;
+import com.plog.domain.task.event.TaskAttachmentAddedEvent;
 import com.plog.domain.task.repository.TaskAttachmentRepository;
 import com.plog.domain.task.repository.TaskRepository;
 import com.plog.global.api.error.TaskErrorCode;
@@ -30,8 +33,10 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class TaskCommandServiceAttachmentTest {
@@ -62,13 +67,16 @@ class TaskCommandServiceAttachmentTest {
     @Mock
     private TaskAttachmentUrlResolver urlResolver;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private TaskCommandService service;
 
     @BeforeEach
     void setUp() {
         service = new TaskCommandService(taskRepository, taskAttachmentRepository,
                 projectMemberRepository, projectAccessService,
-                attachmentPolicy, uploadedFileService, urlResolver);
+                attachmentPolicy, uploadedFileService, urlResolver, eventPublisher);
     }
 
     private void givenAssignee() {
@@ -134,5 +142,44 @@ class TaskCommandServiceAttachmentTest {
         service.createTask(PROJECT_ID, USER_ID, requestWith(eleven));
 
         verify(attachmentPolicy).validateCount(11, TaskErrorCode.TASK_ATTACHMENT_LIMIT_EXCEEDED);
+    }
+
+    @Test
+    void 카드_생성시_동봉한_첨부마다_리포트_이벤트를_발행한다() {
+        givenAssignee();
+
+        service.createTask(PROJECT_ID, USER_ID, requestWith(fileAttachment(), fileAttachment()));
+
+        ArgumentCaptor<TaskAttachmentAddedEvent> captor = ArgumentCaptor.forClass(TaskAttachmentAddedEvent.class);
+        verify(eventPublisher, org.mockito.Mockito.times(2)).publishEvent(captor.capture());
+        captor.getAllValues().forEach(event ->
+                org.assertj.core.api.Assertions.assertThat(event.projectMemberId()).isEqualTo(ASSIGNEE_ID));
+    }
+
+    @Test
+    void 첨부가_없으면_리포트_이벤트를_발행하지_않는다() {
+        givenAssignee();
+
+        service.createTask(PROJECT_ID, USER_ID, requestWith());
+
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void 기존_카드에_첨부를_추가하면_리포트_이벤트를_발행한다() {
+        Long taskId = 100L;
+        ProjectMember assignee = ProjectMember.builder().id(ASSIGNEE_ID).build();
+        Task task = Task.builder().id(taskId).projectMember(assignee).build();
+        given(taskRepository.findByIdAndProjectMember_Project_Id(taskId, PROJECT_ID))
+                .willReturn(Optional.of(task));
+
+        service.addAttachment(PROJECT_ID, taskId, USER_ID, new TaskAttachmentAddRequest(
+                AttachmentType.LINK, "설계 노션", null, "https://example.com/doc", null));
+
+        ArgumentCaptor<TaskAttachmentAddedEvent> captor = ArgumentCaptor.forClass(TaskAttachmentAddedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        TaskAttachmentAddedEvent event = captor.getValue();
+        org.assertj.core.api.Assertions.assertThat(event.taskId()).isEqualTo(taskId);
+        org.assertj.core.api.Assertions.assertThat(event.projectMemberId()).isEqualTo(ASSIGNEE_ID);
     }
 }

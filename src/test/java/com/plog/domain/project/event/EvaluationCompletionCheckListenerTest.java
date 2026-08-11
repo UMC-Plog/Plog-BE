@@ -22,6 +22,6 @@ class EvaluationCompletionCheckListenerTest {
     void checksProjectCompletionAfterSubmissionCommit() {
         listener.onEvaluationSubmitted(new EvaluationCompletionCheckRequestedEvent(1L));
 
-        verify(projectStatusService).checkAndComplete(1L);
+        verify(projectStatusService).completeAndStartReportIfAllEvaluationsSubmitted(1L);
     }
 }

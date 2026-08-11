@@ -21,8 +21,8 @@ public class ReportLlmResponseParser {
 
     public MemberReportText parseMember(String raw) {
         MemberReportText parsed = parse(raw, MemberReportText.class);
-        // headline 은 두 화면(팀 카드·개인 상단)이 모두 쓰는 최소 산출물이다.
-        // 이것마저 비면 이 멤버의 리포트는 보여줄 게 없으므로 실패로 본다(호출부가 1회 재시도).
+        // 개인 headline은 최소 산출물이다. teamMemberHeadline은 과거 응답에 한해 headline으로
+        // 폴백하고, 최신 구조화 스키마에서는 별도 필드로 강제한다.
         if (parsed.headline() == null || parsed.headline().isBlank()) {
             throw new LlmGenerationException("LLM 응답에 headline 이 없습니다: " + preview(raw));
         }

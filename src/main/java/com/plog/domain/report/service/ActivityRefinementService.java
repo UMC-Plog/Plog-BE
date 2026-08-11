@@ -1,5 +1,6 @@
 package com.plog.domain.report.service;
 
+import com.plog.domain.chat.repository.ChatMessageRepository;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.report.entity.ReportActivityLog;
 import com.plog.domain.report.entity.SourceDomain;
@@ -36,6 +37,7 @@ public class ActivityRefinementService {
     private static final Limit BATCH_LIMIT = Limit.of(500);
 
     private final ReportActivityLogRepository activityLogRepository;
+    private final ChatMessageRepository chatMessageRepository;
 
     /**
      * 아직 정제되지 않은 활동 로그를 배치로 가져와 노이즈 여부를 확정한다.
@@ -54,8 +56,10 @@ public class ActivityRefinementService {
         // 자연스럽게 살아남는다 — 별도 Java 정렬이 필요 없다.
         Set<String> seenDedupeKeysInBatch = new HashSet<>();
         for (ReportActivityLog activity : targets) {
-            RefinedContent refined = ActivityContentRefiner.refine(activity.getContent());
-            boolean noise = refined.noise() || isDuplicate(activity, refined, seenDedupeKeysInBatch);
+            String rawContent = resolveContent(activity);
+            RefinedContent refined = ActivityContentRefiner.refine(rawContent);
+            boolean noise = refined.noise()
+                    || isDuplicate(activity, rawContent, refined, seenDedupeKeysInBatch);
             activity.applyNoiseFilter(noise);
         }
 
@@ -72,7 +76,12 @@ public class ActivityRefinementService {
      * 있어 중복 판정에서 완전히 제외한다 — null을 키에 그대로 넣으면 서로 무관한 로그가 같은
      * dedupe key로 묶여 두 번째 이후 로그가 잘못 노이즈 처리될 수 있다.
      */
-    private boolean isDuplicate(ReportActivityLog activity, RefinedContent refined, Set<String> seenDedupeKeysInBatch) {
+    private boolean isDuplicate(
+            ReportActivityLog activity,
+            String rawContent,
+            RefinedContent refined,
+            Set<String> seenDedupeKeysInBatch
+    ) {
         if (!refined.hasCleanContent()) {
             return false;
         }
@@ -86,8 +95,39 @@ public class ActivityRefinementService {
             return true; // 이번 배치 안에서 이미 나온 동일 메시지
         }
 
+        // 개인정보 정책상 CHAT 원문은 활동 로그 content에 저장하지 않는다. 따라서 기존 content
+        // 컬럼 기반 배치 경계 중복 쿼리를 실행하면 null인 모든 채팅이 같은 내용으로 오인된다.
+        // CHAT은 현재 배치 안의 원본 비교만 적용하고, 배치 경계 중복 제거는 원문 복제 없이
+        // 별도 source 조회 쿼리를 마련하기 전까지 생략한다.
+        if (activity.getSourceDomain() == SourceDomain.CHAT && activity.getContent() == null) {
+            return false;
+        }
+
         // 배치 경계를 넘는 중복: 더 이전에 이미 노이즈 아님으로 확정된 동일 원문이 있는지 DB로 확인.
         return activityLogRepository.existsByProjectMember_IdAndSourceDomainAndContentAndNoiseFilteredFalseAndIdLessThan(
-                member.getId(), activity.getSourceDomain(), activity.getContent(), activity.getId());
+                member.getId(), activity.getSourceDomain(), rawContent, activity.getId());
+    }
+
+    /** CHAT 원문은 로그에 복제하지 않고 정제 순간에만 원본 메시지에서 읽는다. */
+    private String resolveContent(ReportActivityLog activity) {
+        if (activity.getSourceDomain() != SourceDomain.CHAT || activity.getContent() != null) {
+            return activity.getContent();
+        }
+        if (chatMessageRepository == null) {
+            return null;
+        }
+        String sourceRefId = activity.getSourceRefId();
+        if (sourceRefId == null || !sourceRefId.startsWith("chat:")) {
+            return null;
+        }
+        try {
+            Long messageId = Long.valueOf(sourceRefId.substring("chat:".length()));
+            return chatMessageRepository.findById(messageId)
+                    .map(message -> message.getMessage())
+                    .orElse(null);
+        } catch (NumberFormatException exception) {
+            log.warn("chat_activity_invalid_source_ref sourceRefId={}", sourceRefId);
+            return null;
+        }
     }
 }

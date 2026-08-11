@@ -11,13 +11,13 @@ import java.util.List;
  * LLM 이 개인을 지목하는 문장을 쓸 수 없게 한다.
  *
  * @param memberFinalScores 멤버별 최종 점수(이름 없음). 편차를 보고 "고르게 기여" 같은 서술을 하도록
- * @param memberHeadlines   멤버별 한줄 평가(이름 없음). 팀 전체 흐름을 요약할 재료
+ * @param memberHeadlines   팀 카드용 멤버별 활동 요약(이름 없음). 개인 리포트 headline은 넣지 않는다
  */
 public record TeamLlmInput(
         ProjectType projectType,
         int teamSize,
-        double teamCompletionRate,
-        double teamDeadlineComplianceRate,
+        Double teamCompletionRate,
+        Double teamDeadlineComplianceRate,
         List<BigDecimal> memberFinalScores,
         List<String> memberHeadlines,
         boolean externalToolConnected

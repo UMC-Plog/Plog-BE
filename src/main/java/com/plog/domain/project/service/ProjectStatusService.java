@@ -11,12 +11,15 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
+import com.plog.domain.report.entity.Report;
 import com.plog.domain.report.event.ReportGenerationRequestedEvent;
+import com.plog.domain.report.repository.ReportRepository;
 import com.plog.domain.report.service.ReportLifecycleService;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -36,6 +39,7 @@ public class ProjectStatusService {
     private final ProjectIntegrationRepository projectIntegrationRepository;
     private final IntegrationActivityRepository integrationActivityRepository;
     private final ReportLifecycleService reportLifecycleService;
+    private final ReportRepository reportRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
@@ -75,25 +79,29 @@ public class ProjectStatusService {
     }
 
     /**
-     * 평가 또는 자기 피드백 제출 커밋 후 호출되는 자동 완료 경로다.
-     * 원 제출 트랜잭션과 분리해 상태 후처리 실패가 제출 자체를 롤백하지 않도록 한다.
+     * 마지막 Peer 평가 또는 자기 피드백 제출 후 전원 제출 조건을 만족하면 평가를 닫는다.
+     * 원 제출 트랜잭션과 분리해 자동 완료 실패가 제출 자체를 롤백하지 않도록 한다.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void checkAndComplete(Long projectId) {
+    public Optional<Long> completeAndStartReportIfAllEvaluationsSubmitted(Long projectId) {
         Project project = projectRepository.findByIdForUpdate(projectId)
                 .orElseThrow(() -> new ApiException(ProjectErrorCode.PROJECT_ACCESS_DENIED_OR_NOT_FOUND));
         if (project.isCompleted()) {
-            return;
+            return Optional.empty();
         }
 
         long activeMemberCount = projectMemberRepository.countByProjectIdAndStatus(projectId, MemberStatus.ACTIVE);
         if (!isAllEvaluationSubmitted(projectId, activeMemberCount) || hasUnmappedActivityActors(projectId)) {
-            return;
+            return Optional.empty();
         }
 
         project.complete();
         projectRepository.saveAndFlush(project);
-        startReport(project);
+        return startReport(project).map(Report::getId);
+    }
+
+    private void requestGeneration(Report report) {
+        eventPublisher.publishEvent(new ReportGenerationRequestedEvent(report.getId()));
     }
 
     private void validateRequestedStatus(ProjectStatusDto.Request request) {
@@ -117,10 +125,10 @@ public class ProjectStatusService {
         return submittedSelfFeedbackCount >= activeMemberCount;
     }
 
-    private void startReport(Project project) {
-        reportLifecycleService.startFor(project)
-                .ifPresent(report -> eventPublisher.publishEvent(
-                        new ReportGenerationRequestedEvent(report.getId())));
+    private Optional<Report> startReport(Project project) {
+        Optional<Report> report = reportLifecycleService.startFor(project);
+        report.ifPresent(this::requestGeneration);
+        return report;
     }
 
     private boolean hasUnmappedActivityActors(Long projectId) {
@@ -131,11 +139,14 @@ public class ProjectStatusService {
     }
 
     private ProjectStatusDto.Response toResponse(Project project, boolean timeoutApplied) {
+        Report report = reportRepository.findFirstByProjectIdOrderByIdDesc(project.getId()).orElse(null);
         return new ProjectStatusDto.Response(
                 project.getId(),
                 project.getStatus(),
                 timeoutApplied,
-                project.isCompleted()
+                project.isCompleted(),
+                report == null ? null : report.getId(),
+                report == null ? null : report.getStatus()
         );
     }
 }

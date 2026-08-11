@@ -11,12 +11,42 @@ import com.plog.domain.report.port.ExternalReportData;
 import com.plog.domain.report.port.InternalReportData;
 import com.plog.domain.report.port.PeerEvaluationSummary;
 import com.plog.domain.report.port.SelfFeedbackMatchSummary;
+import com.plog.domain.report.port.TaskSummary;
+import com.plog.domain.task.entity.TaskCategory;
+import com.plog.domain.task.entity.TaskStatus;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class MemberLlmInputTest {
+
+    @Test
+    void 원문_업무명_대신_구조화_통계와_서버_계산값을_LLM_입력에_포함한다() {
+        InternalReportData internal = new InternalReportData(
+                List.of(new TaskSummary("고객 이름이 포함된 원문 업무명", TaskCategory.DEVELOP,
+                        TaskStatus.DONE, LocalDate.of(2026, 8, 10), true)),
+                1, 1, 1, 1, 1.0, 1.0,
+                List.of("산출물 1건 첨부"), Map.of(), Map.of(), new BigDecimal("80"));
+
+        MemberLlmInput input = MemberLlmInput.of(
+                ProjectType.DEVELOP, 4, internal, ExternalReportData.notConnected(),
+                PeerEvaluationSummary.none(), SelfFeedbackMatchSummary.notSubmitted(),
+                new BigDecimal("80")).withTeamAnalysis(
+                new BigDecimal("84.00"), new BigDecimal("65.00"),
+                CompetencyCategory.COMMUNICATION);
+
+        assertThat(input.completionRate()).isEqualTo(100.0);
+        assertThat(input.deadlineComplianceRate()).isEqualTo(100.0);
+        assertThat(input.deadlineMetTaskCount()).isEqualTo(1);
+        assertThat(input.deadlineTargetTaskCount()).isEqualTo(1);
+        assertThat(input.taskCategorySummary()).containsEntry(TaskCategory.DEVELOP.name(), 1L);
+        assertThat(input.collaborationStability()).isEqualByComparingTo("84.00");
+        assertThat(input.vulnerability()).isEqualByComparingTo("65.00");
+        assertThat(input.vulnerableCompetency()).isEqualTo(CompetencyCategory.COMMUNICATION);
+        assertThat(input.toString()).doesNotContain("고객 이름이 포함된 원문 업무명");
+    }
 
     @Test
     void 외부_점수_가능_여부와_역량별_활동_건수를_LLM_입력에_포함한다() {

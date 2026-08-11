@@ -169,6 +169,10 @@ public abstract class E2eTestBase {
                 });
     }
 
+    protected void awaitAsyncTasks() {
+        taskExecutor.awaitIdle();
+    }
+
     protected Long saveUser(String suffix) {
         return jdbc.queryForObject("""
                 insert into tb_user (email, password, name, nickname, created_at, updated_at)

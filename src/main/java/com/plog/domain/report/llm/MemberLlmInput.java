@@ -25,11 +25,13 @@ import java.util.TreeMap;
 public record MemberLlmInput(
         ProjectType projectType,
         int teamSize,
-        double completionRate,
-        double deadlineComplianceRate,
+        Double completionRate,
+        Double deadlineComplianceRate,
         int totalTaskCount,
         int completedTaskCount,
-        List<String> taskTitles,
+        int deadlineMetTaskCount,
+        int deadlineTargetTaskCount,
+        Map<String, Long> taskCategorySummary,
         List<String> deliverables,
         Map<String, Integer> activityTypeSummary,
         Map<String, Long> externalActivityCountByDomain,
@@ -45,7 +47,10 @@ public record MemberLlmInput(
         boolean externalToolConnected,
         boolean externalScoreAvailable,
         ReliabilityTier reliabilityTier,
-        String cautionText
+        String cautionText,
+        BigDecimal collaborationStability,
+        BigDecimal vulnerability,
+        CompetencyCategory vulnerableCompetency
 ) {
 
     /**
@@ -65,11 +70,14 @@ public record MemberLlmInput(
         return new MemberLlmInput(
                 projectType,
                 teamSize,
-                internal.completionRate(),
-                internal.deadlineComplianceRate(),
+                toPercent(internal.completionRate()),
+                toPercent(internal.deadlineComplianceRate()),
                 internal.totalTaskCount(),
                 internal.completedTaskCount(),
-                internal.taskCardSummary().stream().map(task -> task.title()).toList(),
+                internal.deadlineMetTaskCount(),
+                internal.deadlineTargetTaskCount(),
+                internal.taskCardSummary().stream().collect(java.util.stream.Collectors.groupingBy(
+                        task -> task.category().name(), TreeMap::new, java.util.stream.Collectors.counting())),
                 internal.deliverableAttachmentInfo(),
                 toStringKeyed(internal.activityTypeSummary()),
                 toStringKeyed(external.activityCountByDomain()),
@@ -85,8 +93,32 @@ public record MemberLlmInput(
                 external.externalToolConnected(),
                 external.externalScore() != null,
                 external.reliabilityTier(),
-                external.cautionText()
+                external.cautionText(),
+                null,
+                null,
+                null
         );
+    }
+
+    /** 팀 전체 상대 지표 계산이 끝난 뒤, 서버가 확정한 분석값만 LLM 입력에 덧붙인다. */
+    public MemberLlmInput withTeamAnalysis(
+            BigDecimal collaborationStability,
+            BigDecimal vulnerability,
+            CompetencyCategory vulnerableCompetency
+    ) {
+        return new MemberLlmInput(
+                projectType, teamSize, completionRate, deadlineComplianceRate,
+                totalTaskCount, completedTaskCount, deadlineMetTaskCount, deadlineTargetTaskCount,
+                taskCategorySummary, deliverables, activityTypeSummary, externalActivityCountByDomain,
+                externalCompetencyActivityCount, competencyEvidence, finalScore, peerCategoryScores,
+                peerAverage, peerEvaluatorCount, peerKeywords, selfFeedbackSubmitted,
+                selfFeedbackMatchRatio, externalToolConnected, externalScoreAvailable,
+                reliabilityTier, cautionText, collaborationStability, vulnerability,
+                vulnerableCompetency);
+    }
+
+    private static Double toPercent(Double ratio) {
+        return ratio == null ? null : ratio * 100.0;
     }
 
     private static <K extends Enum<K>, V> Map<String, V> toStringKeyed(Map<K, V> source) {

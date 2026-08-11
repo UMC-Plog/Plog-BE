@@ -12,19 +12,23 @@ import java.util.Map;
  * @param taskCardSummary            담당 업무카드 요약
  * @param totalTaskCount             부여된 전체 업무 수 (팀 리포트 표의 "전체")
  * @param completedTaskCount         완료한 업무 수 (팀 리포트 표의 "완료")
- * @param completionRate             완료율 0.0~1.0
- * @param deadlineComplianceRate     마감 준수율 0.0~1.0
+ * @param deadlineMetTaskCount       마감일 안에 완료한 업무 수
+ * @param deadlineTargetTaskCount    마감일이 있어 준수율 계산 대상인 업무 수
+ * @param completionRate             완료율 0.0~1.0. 업무가 없으면 null
+ * @param deadlineComplianceRate     마감 준수율 0.0~1.0. 마감 대상 업무가 없으면 null
  * @param deliverableAttachmentInfo  산출물 첨부 요약 문자열. 파일명 등 식별정보는 제외할 것
  * @param activityTypeSummary        2단계 분류 유형별 건수. 분류되지 않은 유형은 키를 생략해도 된다
  * @param competencyEvidence         역량축 근거. 상완 쪽 외부 활동 근거와 병합되어 LLM 에 전달된다
- * @param internalScore              4-내부 점수 0~100. 미계산이면 null
+ * @param internalScore              4-내부 점수 0~100, scale 2. 계산 가능한 내부 축이 없으면 null
  */
 public record InternalReportData(
         List<TaskSummary> taskCardSummary,
         int totalTaskCount,
         int completedTaskCount,
-        double completionRate,
-        double deadlineComplianceRate,
+        int deadlineMetTaskCount,
+        int deadlineTargetTaskCount,
+        Double completionRate,
+        Double deadlineComplianceRate,
         List<String> deliverableAttachmentInfo,
         Map<ActivityCategory, Integer> activityTypeSummary,
         Map<CompetencyCategory, List<String>> competencyEvidence,
@@ -38,8 +42,31 @@ public record InternalReportData(
         competencyEvidence = competencyEvidence == null ? Map.of() : Map.copyOf(competencyEvidence);
     }
 
-    /** 데이터가 아직 없는 멤버(참여 활동 0건 등)를 표현하는 빈 값. */
+    /**
+     * 데이터가 아직 없는 멤버(업무카드·활동 로그 모두 0건)를 표현하는 빈 값.
+     * 업무·활동이 모두 없으므로 비율과 internalScore는 실제 0이 아니라 측정 불가(null)다.
+     */
     public static InternalReportData empty() {
-        return new InternalReportData(List.of(), 0, 0, 0.0, 0.0, List.of(), Map.of(), Map.of(), null);
+        return new InternalReportData(
+                List.of(), 0, 0, 0, 0, null, null, List.of(), Map.of(), Map.of(), null);
+    }
+
+    /** 기존 조립 코드 호환용. 마감 대상/준수 건수는 업무 요약에서 파생한다. */
+    public InternalReportData(
+            List<TaskSummary> taskCardSummary,
+            int totalTaskCount,
+            int completedTaskCount,
+            Double completionRate,
+            Double deadlineComplianceRate,
+            List<String> deliverableAttachmentInfo,
+            Map<ActivityCategory, Integer> activityTypeSummary,
+            Map<CompetencyCategory, List<String>> competencyEvidence,
+            BigDecimal internalScore
+    ) {
+        this(taskCardSummary, totalTaskCount, completedTaskCount,
+                taskCardSummary == null ? 0 : (int) taskCardSummary.stream().filter(TaskSummary::metDeadline).count(),
+                taskCardSummary == null ? 0 : (int) taskCardSummary.stream().filter(task -> task.deadline() != null).count(),
+                completionRate, deadlineComplianceRate, deliverableAttachmentInfo,
+                activityTypeSummary, competencyEvidence, internalScore);
     }
 }

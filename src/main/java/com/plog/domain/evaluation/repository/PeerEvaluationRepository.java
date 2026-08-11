@@ -19,6 +19,15 @@ public interface PeerEvaluationRepository extends JpaRepository<PeerEvaluation, 
 
     List<PeerEvaluation> findAllByEvaluateeProjectId(Long projectId);
 
+    /**
+     * 멤버 1명이 받은 평가 전부. Peer 집계(평균·역량점수·키워드·평가자 수) 계산에 쓴다.
+     * <p>
+     * 제출 시각 오름차순 + id 오름차순으로 정렬을 고정한다. 평균·평가자 수는 순서와 무관하지만,
+     * 키워드 태그 칩은 최초 등장 순서로 모으므로(distinctKeywords) 행 순서가 확정돼야
+     * peer_keywords 가 실행마다 뒤바뀌지 않는다. createdAt 이 같을 때를 대비해 id 를 tie-breaker 로 둔다.
+     */
+    List<PeerEvaluation> findAllByEvaluateeIdOrderByCreatedAtAscIdAsc(Long evaluateeId);
+
     @Query("""
             select count(peerEvaluation)
             from PeerEvaluation peerEvaluation

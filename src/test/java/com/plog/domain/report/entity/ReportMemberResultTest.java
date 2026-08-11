@@ -46,4 +46,17 @@ class ReportMemberResultTest {
         assertThat(result.getCompletedTaskCount()).isEqualTo(12);
         assertThat(result.getDeadlineMetTaskCount()).isEqualTo(11);
     }
+
+    @Test
+    void 개인과_팀원_headline이_모두_있어야_LLM_완료로_판정한다() {
+        ReportMemberResult result = ReportMemberResult.create(Report.start(project), member);
+
+        result.applyLlmText(new ReportMemberResult.LlmTextPayload(
+                "개인 headline", null, null, null, null, null, "{}", "stub"));
+        assertThat(result.hasLlmText()).isFalse();
+
+        result.applyLlmText(new ReportMemberResult.LlmTextPayload(
+                "개인 headline", "팀원 headline", null, null, null, null, "{}", "stub"));
+        assertThat(result.hasLlmText()).isTrue();
+    }
 }

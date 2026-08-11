@@ -30,7 +30,7 @@ class ReportMemberScoreServiceTest {
     }
 
     @Test
-    void 외부_연동_점수는_35_15_35_15로_계산해_저장한다() {
+    void 네_점수는_40_20_35_5로_계산해_저장한다() {
         Report report = org.mockito.Mockito.mock(Report.class);
         ProjectMember member = ProjectMember.builder().id(2L).build();
         when(report.getId()).thenReturn(1L);
@@ -40,7 +40,7 @@ class ReportMemberScoreServiceTest {
                 new BigDecimal("80"), new BigDecimal("90"), new BigDecimal("70"),
                 new BigDecimal("60"), true, true, ReliabilityTier.P1, "일부 활동이 제외될 수 있어요"));
 
-        assertThat(result.getFinalScore()).isEqualByComparingTo("75.00");
+        assertThat(result.getFinalScore()).isEqualByComparingTo("77.50");
         assertThat(result.getExternalScore()).isEqualByComparingTo("90.00");
         assertThat(result.isExternalToolConnected()).isTrue();
         verify(resultRepository).save(result);
@@ -57,7 +57,7 @@ class ReportMemberScoreServiceTest {
                 new BigDecimal("80"), null, new BigDecimal("70"), new BigDecimal("60"),
                 false, false, ReliabilityTier.P2, "외부 도구가 연결되지 않았어요"));
 
-        assertThat(result.getFinalScore()).isEqualByComparingTo("72.35");
+        assertThat(result.getFinalScore()).isEqualByComparingTo("74.38");
         assertThat(result.getExternalScore()).isNull();
     }
 
@@ -72,19 +72,21 @@ class ReportMemberScoreServiceTest {
                 new BigDecimal("80"), null, new BigDecimal("70"), new BigDecimal("60"),
                 true, false, ReliabilityTier.P2, "외부 활동은 있지만 점수화 가능한 로그가 부족해요"));
 
-        assertThat(result.getFinalScore()).isEqualByComparingTo("72.35");
+        assertThat(result.getFinalScore()).isEqualByComparingTo("74.38");
         assertThat(result.getExternalScore()).isNull();
         assertThat(result.isExternalToolConnected()).isTrue();
     }
 
     @Test
-    void 필수_점수_누락이나_범위_초과는_거부한다() {
+    void null_점수는_분모에서_제외하고_범위_초과는_거부한다() {
         Report report = org.mockito.Mockito.mock(Report.class);
         ProjectMember member = ProjectMember.builder().id(2L).build();
 
-        assertThatThrownBy(() -> service.calculateAndSave(report, member, new MemberScoreInput(
-                null, null, BigDecimal.TEN, BigDecimal.TEN, false, false, ReliabilityTier.P3, "제한")))
-                .isInstanceOf(IllegalArgumentException.class);
+        when(report.getId()).thenReturn(1L);
+        when(resultRepository.findByReportIdAndProjectMemberId(1L, 2L)).thenReturn(Optional.empty());
+        ReportMemberResult partial = service.calculateAndSave(report, member, new MemberScoreInput(
+                null, null, BigDecimal.TEN, BigDecimal.TEN, false, false, ReliabilityTier.P3, "제한"));
+        assertThat(partial.getFinalScore()).isEqualByComparingTo("10.00");
         assertThatThrownBy(() -> service.calculateAndSave(report, member, new MemberScoreInput(
                 BigDecimal.TEN, new BigDecimal("101"), BigDecimal.TEN, BigDecimal.TEN,
                 true, true, ReliabilityTier.P0, null)))
@@ -121,5 +123,32 @@ class ReportMemberScoreServiceTest {
 
         assertThat(zero.getFinalScore()).isEqualByComparingTo("0.00");
         assertThat(hundred.getFinalScore()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    void 내부와_Peer만_있으면_40대35_가중치를_비례_재분배한다() {
+        Report report = org.mockito.Mockito.mock(Report.class);
+        ProjectMember member = ProjectMember.builder().id(2L).build();
+        when(report.getId()).thenReturn(1L);
+        when(resultRepository.findByReportIdAndProjectMemberId(1L, 2L)).thenReturn(Optional.empty());
+
+        ReportMemberResult result = service.calculateAndSave(report, member, new MemberScoreInput(
+                new BigDecimal("80"), null, new BigDecimal("90"), null,
+                false, false, ReliabilityTier.P0, null));
+
+        assertThat(result.getFinalScore()).isEqualByComparingTo("84.67");
+    }
+
+    @Test
+    void 모든_축이_null이면_finalScore도_null이고_실제_0점과_구분된다() {
+        Report report = org.mockito.Mockito.mock(Report.class);
+        ProjectMember member = ProjectMember.builder().id(2L).build();
+        when(report.getId()).thenReturn(1L);
+        when(resultRepository.findByReportIdAndProjectMemberId(1L, 2L)).thenReturn(Optional.empty());
+
+        ReportMemberResult unavailable = service.calculateAndSave(report, member, new MemberScoreInput(
+                null, null, null, null, false, false, ReliabilityTier.P0, null));
+
+        assertThat(unavailable.getFinalScore()).isNull();
     }
 }

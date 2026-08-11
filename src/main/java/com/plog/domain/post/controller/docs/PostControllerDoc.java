@@ -17,7 +17,7 @@ public interface PostControllerDoc {
             description = """
                     본문은 1~5000자이며 앞뒤 공백은 제거되어 저장됩니다.
 
-                    **공지(`isNotice=true`)는 OWNER만 지정할 수 있고, 프로젝트당 1개입니다.**
+                    **공지(`isNotice=true`)는 모든 ACTIVE 멤버가 작성할 수 있고, 프로젝트당 1개입니다.**
                     새 공지를 올리면 기존 공지는 자동으로 해제됩니다.
 
                     ### 첨부 (최대 10개)
@@ -38,8 +38,7 @@ public interface PostControllerDoc {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "401", description = "인증 필요 (COMMON401)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "403", description = "활성 멤버 아님 (PROJECT_MEMBER_REQUIRED) "
-                            + "또는 OWNER가 아닌데 공지 지정 (NOTICE_PERMISSION_DENIED)"),
+                    responseCode = "403", description = "활성 멤버 아님 (PROJECT_MEMBER_REQUIRED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "404", description = "프로젝트 없음 (PROJECT_NOT_FOUND)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(

@@ -265,7 +265,9 @@ class ProjectControllerTest {
                 eq(projectId),
                 eq(userId),
                 any(ProjectStatusDto.Request.class)
-        )).willReturn(new ProjectStatusDto.Response(projectId, ProjectStatus.COMPLETED, true, true));
+        )).willReturn(new ProjectStatusDto.Response(
+                projectId, ProjectStatus.COMPLETED, true, true, 20L,
+                com.plog.domain.report.entity.ReportStatus.GENERATING));
 
         mockMvc.perform(patch("/api/projects/{projectId}/status", projectId)
                         .contentType(MediaType.APPLICATION_JSON)

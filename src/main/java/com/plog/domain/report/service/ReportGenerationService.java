@@ -1,6 +1,5 @@
 package com.plog.domain.report.service;
 
-import com.plog.domain.notification.event.ReportPublishedEvent;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
@@ -22,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -53,8 +51,10 @@ public class ReportGenerationService {
     private final ExternalReportDataProvider externalDataProvider;
     private final ReportMemberDataCollector dataCollector;
     private final ReportTextWriter textWriter;
+    private final ReportTeamMetricService teamMetricService;
     private final ReportLlmGateway llmGateway;
-    private final ApplicationEventPublisher eventPublisher;
+    private final ReportPdfArchiveService pdfArchiveService;
+    private final ReportActivityPreparationService activityPreparationService;
 
     /**
      * 비동기 생성. API 는 즉시 202 를 돌려주고 프론트는 조회 API 를 폴링한다 —
@@ -80,17 +80,29 @@ public class ReportGenerationService {
             return new ReportGenerationResult(reportId, 0, 0, false);
         }
 
+        try {
+            activityPreparationService.prepare(target.projectId(), target.snapshotAt());
+        } catch (RuntimeException exception) {
+            log.error("리포트 활동 준비 실패: reportId={}", reportId, exception);
+            textWriter.markFailed(reportId);
+            return new ReportGenerationResult(reportId, target.members().size(), 0, false);
+        }
+
         List<BigDecimal> finalScores = new ArrayList<>();
         List<String> headlines = new ArrayList<>();
+        List<ReportMemberDataCollector.CollectedMember> collectedMembers = new ArrayList<>();
         double completionRateSum = 0.0;
         double complianceRateSum = 0.0;
+        int completionRateCount = 0;
+        int complianceRateCount = 0;
         boolean externalConnected = false;
         int succeeded = 0;
         Map<Long, ExternalReportData> externalDataByMember;
         try {
             externalDataByMember = externalDataProvider.provide(
                     target.projectId(),
-                    target.members().stream().map(ProjectMember::getId).toList()
+                    target.members().stream().map(ProjectMember::getId).toList(),
+                    target.snapshotAt()
             );
             validateExternalData(target.members(), externalDataByMember);
         } catch (RuntimeException e) {
@@ -104,7 +116,8 @@ public class ReportGenerationService {
             try {
                 ExternalReportData external = externalDataByMember.get(member.getId());
                 collected = dataCollector.collect(
-                        reportId, target.projectId(), target.projectType(), member, external, target.members().size());
+                        reportId, target.projectId(), target.projectType(), member, external,
+                        target.members().size(), target.snapshotAt());
             } catch (RuntimeException e) {
                 // 점수 수집 실패는 텍스트 실패보다 무겁지만, 여기서도 멤버 단위로 격리한다.
                 log.error("리포트 멤버 데이터 수집 실패: reportId={}, projectMemberId={}",
@@ -112,17 +125,48 @@ public class ReportGenerationService {
                 continue;
             }
 
-            finalScores.add(collected.finalScore());
-            completionRateSum += collected.internal().completionRate();
-            complianceRateSum += collected.internal().deadlineComplianceRate();
+            collectedMembers.add(collected);
+            if (collected.finalScore() != null) {
+                finalScores.add(collected.finalScore());
+            }
+            if (collected.internal().completionRate() != null) {
+                completionRateSum += collected.internal().completionRate();
+                completionRateCount++;
+            }
+            if (collected.internal().deadlineComplianceRate() != null) {
+                complianceRateSum += collected.internal().deadlineComplianceRate();
+                complianceRateCount++;
+            }
             externalConnected |= collected.llmInput().externalToolConnected();
+        }
 
+        Map<Long, ReportTeamMetricService.MemberAnalysis> memberAnalysis;
+        try {
+            memberAnalysis = teamMetricService.calculateAndApply(reportId, target.members().size());
+        } catch (RuntimeException e) {
+            // 팀 상대 지표는 nullable 부가 정보다. 실패해도 개인 점수·텍스트 생성을 계속해
+            // 리포트가 GENERATING 상태에 영구 잔류하지 않도록 한다.
+            log.error("팀 지표 계산 실패(개인 리포트 생성은 계속합니다): reportId={}", reportId, e);
+            memberAnalysis = Map.of();
+        }
+        if (memberAnalysis == null) {
+            memberAnalysis = Map.of();
+        }
+
+        for (ReportMemberDataCollector.CollectedMember collected : collectedMembers) {
             try {
+                ReportTeamMetricService.MemberAnalysis analysis = memberAnalysis.get(collected.projectMemberId());
+                var llmInput = analysis == null
+                        ? collected.llmInput()
+                        : collected.llmInput().withTeamAnalysis(
+                                analysis.collaborationStability(),
+                                analysis.vulnerability(),
+                                analysis.vulnerableCompetency());
                 // 트랜잭션 밖. 여기서 수 초~수십 초가 걸린다.
                 ReportLlmGateway.GeneratedMemberText generated =
-                        llmGateway.generateMemberText(collected.llmInput());
+                        llmGateway.generateMemberText(llmInput);
                 textWriter.writeMemberText(reportId, collected.projectMemberId(), generated);
-                headlines.add(generated.text().headline());
+                headlines.add(generated.text().teamMemberHeadline());
                 succeeded++;
             } catch (RuntimeException e) {
                 // 텍스트만 비고 점수는 남는다 — 이 멤버 카드는 점수만 나온다.
@@ -138,10 +182,17 @@ public class ReportGenerationService {
         }
 
         writeTeamInsight(reportId, target, finalScores, headlines,
-                completionRateSum, complianceRateSum, externalConnected);
+                completionRateSum, completionRateCount,
+                complianceRateSum, complianceRateCount,
+                collectedMembers.size() == target.members().size(), externalConnected);
 
         textWriter.publish(reportId);
-        eventPublisher.publishEvent(new ReportPublishedEvent(target.projectId(), reportId));
+        try {
+            pdfArchiveService.generateAndAttach(reportId);
+        } catch (RuntimeException exception) {
+            // PDF는 재생성 가능한 부가 산출물이다. 본문 발행을 되돌리지 않고 다운로드만 비활성화한다.
+            log.error("리포트 PDF ZIP 생성 실패(리포트 발행은 유지합니다): reportId={}", reportId, exception);
+        }
         log.info("리포트 발행 완료: reportId={}, 멤버 {}명 중 {}명 텍스트 생성",
                 reportId, target.members().size(), succeeded);
         return new ReportGenerationResult(reportId, target.members().size(), succeeded, true);
@@ -157,7 +208,10 @@ public class ReportGenerationService {
             List<BigDecimal> finalScores,
             List<String> headlines,
             double completionRateSum,
+            int completionRateCount,
             double complianceRateSum,
+            int complianceRateCount,
+            boolean completePopulation,
             boolean externalConnected
     ) {
         int memberCount = target.members().size();
@@ -165,10 +219,12 @@ public class ReportGenerationService {
             TeamReportText teamText = llmGateway.generateTeamText(new TeamLlmInput(
                     target.projectType(),
                     memberCount,
-                    completionRateSum / memberCount,
-                    complianceRateSum / memberCount,
-                    finalScores,
-                    headlines,
+                    !completePopulation || completionRateCount == 0
+                            ? null : completionRateSum / completionRateCount * 100.0,
+                    !completePopulation || complianceRateCount == 0
+                            ? null : complianceRateSum / complianceRateCount * 100.0,
+                    completePopulation ? finalScores : List.of(),
+                    headlines.size() == memberCount ? headlines : List.of(),
                     externalConnected
             ));
             textWriter.writeTeamInsight(reportId, teamText);
@@ -205,12 +261,13 @@ public class ReportGenerationService {
         Project project = report.getProject();
         List<ProjectMember> members = projectMemberRepository
                 .findAllByProjectIdAndStatusOrderByIdAsc(project.getId(), MemberStatus.ACTIVE);
-        return new GenerationTarget(project.getId(), project.getProjectType(), members);
+        return new GenerationTarget(project.getId(), project.getProjectType(), report.getSnapshotAt(), members);
     }
 
     private record GenerationTarget(
             Long projectId,
             com.plog.domain.project.entity.ProjectType projectType,
+            java.time.LocalDateTime snapshotAt,
             List<ProjectMember> members
     ) {
     }

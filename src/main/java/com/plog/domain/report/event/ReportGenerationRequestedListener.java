@@ -13,7 +13,7 @@ public class ReportGenerationRequestedListener {
     private final ReportGenerationService reportGenerationService;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onReportGenerationRequested(ReportGenerationRequestedEvent event) {
+    public void onRequested(ReportGenerationRequestedEvent event) {
         reportGenerationService.generateAsync(event.reportId());
     }
 }

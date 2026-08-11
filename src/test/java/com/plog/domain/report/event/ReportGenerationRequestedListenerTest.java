@@ -13,15 +13,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ReportGenerationRequestedListenerTest {
 
     @Mock
-    private ReportGenerationService reportGenerationService;
+    private ReportGenerationService generationService;
 
     @InjectMocks
     private ReportGenerationRequestedListener listener;
 
     @Test
-    void startsAsynchronousGenerationAfterReportCommit() {
-        listener.onReportGenerationRequested(new ReportGenerationRequestedEvent(50L));
+    void startsGenerationForCommittedReport() {
+        listener.onRequested(new ReportGenerationRequestedEvent(15L));
 
-        verify(reportGenerationService).generateAsync(50L);
+        verify(generationService).generateAsync(15L);
     }
 }

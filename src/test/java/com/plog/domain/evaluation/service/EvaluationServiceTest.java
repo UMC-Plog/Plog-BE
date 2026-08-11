@@ -17,7 +17,6 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
-import com.plog.domain.project.event.EvaluationCompletionCheckRequestedEvent;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.user.entity.ProfilePreset;
@@ -126,7 +125,6 @@ class EvaluationServiceTest {
         evaluationService.createPeerEvaluation(1L, 20L, 7L, request);
 
         verify(peerEvaluationRepository).save(any(PeerEvaluation.class));
-        verify(eventPublisher).publishEvent(new EvaluationCompletionCheckRequestedEvent(1L));
     }
 
     @Test

@@ -10,7 +10,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.plog.domain.notification.event.ReportPublishedEvent;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
@@ -18,6 +17,7 @@ import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.report.entity.Report;
+import com.plog.domain.report.entity.CompetencyCategory;
 import com.plog.domain.report.llm.MemberLlmInput;
 import com.plog.domain.report.llm.MemberReportText;
 import com.plog.domain.report.llm.ReportLlmGateway;
@@ -42,7 +42,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -63,10 +62,13 @@ class ReportGenerationServiceTest {
     @Mock
     private ReportTextWriter textWriter;
     @Mock
+    private ReportTeamMetricService teamMetricService;
+    @Mock
     private ReportLlmGateway llmGateway;
     @Mock
-    private ApplicationEventPublisher eventPublisher;
-
+    private ReportPdfArchiveService pdfArchiveService;
+    @Mock
+    private ReportActivityPreparationService activityPreparationService;
     @InjectMocks
     private ReportGenerationService service;
 
@@ -87,8 +89,7 @@ class ReportGenerationServiceTest {
         verify(textWriter).writeMemberText(eq(REPORT_ID), eq(2L), any());
         verify(textWriter).writeTeamInsight(eq(REPORT_ID), any(TeamReportText.class));
         verify(textWriter).publish(REPORT_ID);
-        verify(eventPublisher).publishEvent(new ReportPublishedEvent(PROJECT_ID, REPORT_ID));
-        verify(externalDataProvider).provide(eq(PROJECT_ID), eq(List.of(1L, 2L)));
+        verify(externalDataProvider).provide(eq(PROJECT_ID), eq(List.of(1L, 2L)), any());
     }
 
     // 승인된 실패 정책 — 멤버 1명 LLM 실패는 그 멤버 텍스트만 비우고 리포트는 발행한다.
@@ -123,7 +124,6 @@ class ReportGenerationServiceTest {
         assertThat(result.published()).isFalse();
         verify(textWriter).markFailed(REPORT_ID);
         verify(textWriter, never()).publish(anyLong());
-        verify(eventPublisher, never()).publishEvent(any());
     }
 
     // 팀 인사이트는 부가 정보다 — 실패해도 멤버별 결과가 있으면 발행한다.
@@ -145,9 +145,9 @@ class ReportGenerationServiceTest {
     @Test
     void skipsMembersWhoseDataCollectionFails() {
         givenReportWithMembers(1L, 2L);
-        when(dataCollector.collect(anyLong(), anyLong(), any(), any(), any(), anyInt()))
+        when(dataCollector.collect(anyLong(), anyLong(), any(), any(), any(), anyInt(), any()))
                 .thenThrow(new IllegalStateException("포트 실패"))
-                .thenReturn(collected(2L));
+                .thenReturn(collected(2L, internalWithRates()));
         when(llmGateway.generateMemberText(any())).thenReturn(generatedText("두 번째"));
         when(llmGateway.generateTeamText(any())).thenReturn(new TeamReportText("잘함", "제안"));
 
@@ -156,6 +156,32 @@ class ReportGenerationServiceTest {
         assertThat(result.published()).isTrue();
         assertThat(result.textSucceeded()).isEqualTo(1);
         verify(textWriter).writeMemberText(eq(REPORT_ID), eq(2L), any());
+
+        org.mockito.ArgumentCaptor<TeamLlmInput> captor =
+                org.mockito.ArgumentCaptor.forClass(TeamLlmInput.class);
+        verify(llmGateway).generateTeamText(captor.capture());
+        assertThat(captor.getValue().teamCompletionRate()).isNull();
+        assertThat(captor.getValue().teamDeadlineComplianceRate()).isNull();
+        assertThat(captor.getValue().memberFinalScores()).isEmpty();
+        assertThat(captor.getValue().memberHeadlines()).isEmpty();
+    }
+
+    @Test
+    void 팀_지표_계산이_실패해도_개인_리포트를_생성하고_발행한다() {
+        givenReportWithMembers(1L);
+        givenCollectionSucceeds();
+        when(teamMetricService.calculateAndApply(REPORT_ID, 1))
+                .thenThrow(new IllegalStateException("팀 지표 실패"));
+        when(llmGateway.generateMemberText(any())).thenReturn(generatedText("한 줄"));
+        when(llmGateway.generateTeamText(any())).thenReturn(new TeamReportText("잘함", "제안"));
+
+        ReportGenerationResult result = service.generate(REPORT_ID);
+
+        assertThat(result.published()).isTrue();
+        assertThat(result.textSucceeded()).isEqualTo(1);
+        verify(textWriter).writeMemberText(eq(REPORT_ID), eq(1L), any());
+        verify(textWriter).publish(REPORT_ID);
+        verify(textWriter, never()).markFailed(REPORT_ID);
     }
 
     @Test
@@ -173,7 +199,7 @@ class ReportGenerationServiceTest {
     @Test
     void failsTheReportWhenExternalBatchCollectionFails() {
         givenReportWithMembers(1L, 2L);
-        when(externalDataProvider.provide(eq(PROJECT_ID), any()))
+        when(externalDataProvider.provide(eq(PROJECT_ID), any(), any()))
                 .thenThrow(new IllegalStateException("외부 집계 실패"));
 
         ReportGenerationResult result = service.generate(REPORT_ID);
@@ -188,7 +214,7 @@ class ReportGenerationServiceTest {
     @Test
     void failsTheReportWhenExternalBatchOmitsRequestedMember() {
         givenReportWithMembers(1L, 2L);
-        when(externalDataProvider.provide(eq(PROJECT_ID), any()))
+        when(externalDataProvider.provide(eq(PROJECT_ID), any(), any()))
                 .thenReturn(Map.of(1L, com.plog.domain.report.port.ExternalReportData.notConnected()));
 
         ReportGenerationResult result = service.generate(REPORT_ID);
@@ -198,7 +224,6 @@ class ReportGenerationServiceTest {
         verify(textWriter).markFailed(REPORT_ID);
         verify(dataCollector, never()).collect(anyLong(), anyLong(), any(), any(), any(), anyInt());
         verify(textWriter, never()).publish(anyLong());
-        verify(eventPublisher, never()).publishEvent(any());
     }
 
     // 이미 발행된 리포트를 다시 생성하면 내려간 내용이 사후에 바뀐다.
@@ -244,35 +269,67 @@ class ReportGenerationServiceTest {
         assertThat(teamInput.projectType()).isEqualTo(ProjectType.DEVELOP);
     }
 
+    @Test
+    void 서버에서_확정한_팀_분석값을_개인_LLM_입력에_전달한다() {
+        givenReportWithMembers(1L);
+        givenCollectionSucceeds();
+        when(teamMetricService.calculateAndApply(REPORT_ID, 1)).thenReturn(Map.of(
+                1L, new ReportTeamMetricService.MemberAnalysis(
+                        new BigDecimal("84.00"), new BigDecimal("65.00"),
+                        CompetencyCategory.COMMUNICATION)));
+        when(llmGateway.generateMemberText(any())).thenReturn(generatedText("한 줄"));
+        when(llmGateway.generateTeamText(any())).thenReturn(new TeamReportText("잘함", "제안"));
+
+        service.generate(REPORT_ID);
+
+        org.mockito.ArgumentCaptor<MemberLlmInput> captor =
+                org.mockito.ArgumentCaptor.forClass(MemberLlmInput.class);
+        verify(llmGateway).generateMemberText(captor.capture());
+        assertThat(captor.getValue().collaborationStability()).isEqualByComparingTo("84.00");
+        assertThat(captor.getValue().vulnerability()).isEqualByComparingTo("65.00");
+        assertThat(captor.getValue().vulnerableCompetency())
+                .isEqualTo(CompetencyCategory.COMMUNICATION);
+    }
+
     private void givenReportWithMembers(Long... memberIds) {
         when(reportRepository.findWithProjectById(REPORT_ID)).thenReturn(Optional.of(report()));
         when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(PROJECT_ID, MemberStatus.ACTIVE))
                 .thenReturn(java.util.Arrays.stream(memberIds).map(this::member).toList());
-        when(externalDataProvider.provide(eq(PROJECT_ID), any()))
+        when(externalDataProvider.provide(eq(PROJECT_ID), any(), any()))
                 .thenReturn(java.util.Arrays.stream(memberIds)
                         .collect(java.util.stream.Collectors.toMap(id -> id, id -> com.plog.domain.report.port.ExternalReportData.notConnected())));
     }
 
     private void givenCollectionSucceeds() {
-        when(dataCollector.collect(anyLong(), anyLong(), any(), any(), any(), anyInt()))
+        when(dataCollector.collect(anyLong(), anyLong(), any(), any(), any(), anyInt(), any()))
                 .thenAnswer(invocation -> collected(
                         ((ProjectMember) invocation.getArgument(3)).getId()));
     }
 
     private ReportMemberDataCollector.CollectedMember collected(Long memberId) {
+        return collected(memberId, InternalReportData.empty());
+    }
+
+    private ReportMemberDataCollector.CollectedMember collected(Long memberId, InternalReportData internal) {
         return new ReportMemberDataCollector.CollectedMember(
                 memberId,
                 MemberLlmInput.of(
                         ProjectType.DEVELOP, 2,
-                        InternalReportData.empty(),
+                        internal,
                         com.plog.domain.report.port.ExternalReportData.notConnected(),
                         com.plog.domain.report.port.PeerEvaluationSummary.none(),
                         com.plog.domain.report.port.SelfFeedbackMatchSummary.notSubmitted(),
                         new BigDecimal("82.50")
                 ),
                 new BigDecimal("82.50"),
-                InternalReportData.empty()
+                internal
         );
+    }
+
+    private InternalReportData internalWithRates() {
+        return new InternalReportData(
+                List.of(), 1, 1, 1, 1, 1.0, 0.75,
+                List.of(), Map.of(), Map.of(), new BigDecimal("80.00"));
     }
 
     private ReportLlmGateway.GeneratedMemberText generatedText(String headline) {

@@ -14,6 +14,6 @@ public class EvaluationCompletionCheckListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onEvaluationSubmitted(EvaluationCompletionCheckRequestedEvent event) {
-        projectStatusService.checkAndComplete(event.projectId());
+        projectStatusService.completeAndStartReportIfAllEvaluationsSubmitted(event.projectId());
     }
 }

@@ -16,6 +16,10 @@ RUN ./gradlew clean bootJar --no-daemon
 FROM eclipse-temurin:21-jre AS runtime
 WORKDIR /app
 
+# 서버에서 생성하는 한글 리포트 PDF 글꼴.
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/*
+
 # plain jar를 껐으므로 build/libs 에는 실행 가능한 jar 하나만 존재
 COPY --from=builder /app/build/libs/*.jar app.jar
 
