@@ -7,12 +7,9 @@ import com.plog.domain.evaluation.entity.SelfFeedback;
 import com.plog.domain.evaluation.event.SelfFeedbackSubmittedEvent;
 import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
 import com.plog.domain.project.entity.ProjectMember;
-<<<<<<< Updated upstream
 import com.plog.domain.project.event.EvaluationCompletionCheckRequestedEvent;
-=======
 import com.plog.domain.report.entity.SourceDomain;
 import com.plog.domain.report.repository.ReportActivityLogRepository;
->>>>>>> Stashed changes
 import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;

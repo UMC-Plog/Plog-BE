@@ -17,11 +17,8 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.event.EvaluationCompletionCheckRequestedEvent;
 import com.plog.domain.project.repository.ProjectMemberRepository;
-<<<<<<< Updated upstream
 import com.plog.domain.project.service.ProjectAccessService;
-=======
 import com.plog.domain.report.repository.ReportActivityLogRepository;
->>>>>>> Stashed changes
 import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -56,14 +53,10 @@ class SelfFeedbackServiceTest {
     void setUp() {
         selfFeedbackService = new SelfFeedbackService(
                 selfFeedbackRepository,
-<<<<<<< Updated upstream
                 new EvaluationParticipantResolver(
                         projectMemberRepository,
                         new ProjectAccessService(projectMemberRepository)),
-=======
-                new EvaluationParticipantResolver(projectMemberRepository),
                 reportActivityLogRepository,
->>>>>>> Stashed changes
                 eventPublisher
         );
     }
