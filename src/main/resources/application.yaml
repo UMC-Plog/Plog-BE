@@ -21,6 +21,9 @@ spring:
     properties:
       hibernate:
         jdbc:
+          # 저장 기준(TimeUtil.STORAGE_ZONE)은 KST지만 이 설정은 UTC로 둔다.
+          # 이 값은 LocalDateTime 바인딩에는 관여하지 않고 Instant 계열만 관장하는데,
+          # Instant 컬럼(integration 도메인)은 절대시각이라 UTC로 다루는 것이 맞다.
           time_zone: UTC
   # Gmail SMTP. 계정/앱비밀번호는 literal 금지 → 환경변수로만 주입
   mail:
@@ -223,7 +226,7 @@ plog:
       font-path: ${REPORT_PDF_FONT_PATH:/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc}
     scheduler:
       enabled: ${REPORT_SCHEDULER_ENABLED:false}
-      # 초 분 시 일 월 요일 (Spring 6필드). 컨테이너 TZ=UTC 기준.
+      # 초 분 시 일 월 요일 (Spring 6필드). 컨테이너 TZ=Asia/Seoul 기준.
       cron: ${REPORT_SCHEDULER_CRON:0 40 3 * * *}
     # 리포트 파이프라인 1단계(Rule 기반 정제) 배치.
     # 계속 돌며 밀려있는 미정제 행을 조금씩 비워나가는 구조라 IntegrationCollectionJobWorker와 같이

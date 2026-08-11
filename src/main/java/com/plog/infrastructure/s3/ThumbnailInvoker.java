@@ -61,7 +61,7 @@ public class ThumbnailInvoker {
         // 해서, 즉시 Invoke 와 스케줄러 안전망이 같은 행을 동시에 집어도 한쪽만 1을 받는다.
         // 진 쪽이 그냥 발사하면 Lambda 가 두 번 돌고 같은 객체를 두 번 쓴다.
         int claimed = uploadedFileRepository.markThumbnailRequested(
-                file.getId(), targetKey, TimeUtil.nowUtc(), ThumbnailStatus.PENDING);
+                file.getId(), targetKey, TimeUtil.now(), ThumbnailStatus.PENDING);
         if (claimed == 0) {
             return;
         }

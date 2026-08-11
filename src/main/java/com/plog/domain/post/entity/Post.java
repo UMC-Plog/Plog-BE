@@ -2,6 +2,7 @@ package com.plog.domain.post.entity;
 
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.global.common.BaseEntity;
+import com.plog.global.util.TimeUtil;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -12,7 +13,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -67,7 +67,7 @@ public class Post extends BaseEntity {
 
     public void markAsNotice() {
         this.isNotice = true;
-        this.noticedAt = LocalDateTime.now(ZoneOffset.UTC);
+        this.noticedAt = TimeUtil.now();
     }
 
     public void unpinNotice() {

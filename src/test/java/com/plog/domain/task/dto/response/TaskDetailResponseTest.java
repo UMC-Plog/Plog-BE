@@ -11,8 +11,8 @@ import com.plog.domain.task.entity.TaskCompetencyClassification;
 import com.plog.domain.report.entity.CompetencyCategory;
 import com.plog.domain.user.entity.ProfilePreset;
 import com.plog.domain.user.entity.User;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.DisplayName;
@@ -56,8 +56,8 @@ class TaskDetailResponseTest {
                 .projectMember(stubAssignee())
                 .title("title")
                 .cardStatus(TaskStatus.DONE)
-                .endDate(LocalDate.now().minusDays(5))
-                .completedAt(LocalDateTime.now())
+                .endDate(TimeUtil.today().minusDays(5))
+                .completedAt(TimeUtil.now())
                 .build();
 
         TaskDetailResponse response = TaskDetailResponse.from(task, List.of());
@@ -74,7 +74,7 @@ class TaskDetailResponseTest {
                 .projectMember(stubAssignee())
                 .title("title")
                 .cardStatus(TaskStatus.IN_PROGRESS)
-                .endDate(LocalDate.now().minusDays(1))
+                .endDate(TimeUtil.today().minusDays(1))
                 .build();
 
         TaskDetailResponse response = TaskDetailResponse.from(task, List.of());

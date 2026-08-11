@@ -19,7 +19,7 @@ public class WithdrawnUserPurgeScheduler {
         this.userWithdrawalService = userWithdrawalService;
     }
 
-    // 컨테이너 TZ는 UTC로 고정되어 있다(docker-compose.yml의 TZ=UTC) — 이 cron은 UTC 기준 매일 03:00이다.
+    // 컨테이너 TZ는 Asia/Seoul로 고정되어 있다(docker-compose.yml의 TZ) — 이 cron은 KST 기준 매일 03:00이다.
     // 트래픽이 적은 새벽 시간대를 골라 배치가 실 서비스 부하와 겹치지 않게 한다.
     @Scheduled(cron = "0 0 3 * * *")
     public void purge() {

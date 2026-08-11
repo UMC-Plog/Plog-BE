@@ -16,9 +16,9 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.UserRepository;
+import com.plog.global.util.TimeUtil;
 import com.plog.infrastructure.s3.AttachmentPolicy;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -119,7 +119,7 @@ class ChatMessageAppenderIntegrationTest {
     }
 
     private Project saveProject(String suffix) {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = TimeUtil.today();
         return projectRepository.save(Project.builder()
                 .projectName("Project " + suffix)
                 .inviteTokenHash(UUID.randomUUID().toString())

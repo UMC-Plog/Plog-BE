@@ -81,7 +81,7 @@ public class Report extends BaseEntity {
         }
         this.project = project;
         this.status = ReportStatus.GENERATING;
-        this.snapshotAt = TimeUtil.nowUtc();
+        this.snapshotAt = TimeUtil.now();
     }
 
     public static Report start(Project project) {

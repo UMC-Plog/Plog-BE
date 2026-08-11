@@ -40,7 +40,7 @@ public class SocialSignupTicketService {
         ticketRepository.flush();
 
         String rawTicket = generateRawTicket();
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         ticketRepository.save(SocialSignupTicket.issue(
                 identity.provider(), identity.providerId(), identity.email(),
                 HashUtil.sha256Hex(rawTicket), now.plus(properties.ticketTtl())));
@@ -59,7 +59,7 @@ public class SocialSignupTicketService {
         }
         SocialSignupTicket ticket = ticketRepository.findByTicketHash(HashUtil.sha256Hex(rawTicket))
                 .orElseThrow(() -> new ApiException(AuthErrorCode.SOCIAL_TICKET_INVALID));
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         if (ticket.isExpired(now)) {
             throw new ApiException(AuthErrorCode.SOCIAL_TICKET_EXPIRED);
         }
@@ -72,7 +72,7 @@ public class SocialSignupTicketService {
     /** 만료됐거나 이미 소비된 티켓 삭제. 스케줄러가 호출한다. 반환값은 삭제한 행 수. */
     @Transactional
     public int purgeFinished() {
-        return ticketRepository.deleteExpiredOrConsumed(TimeUtil.nowUtc());
+        return ticketRepository.deleteExpiredOrConsumed(TimeUtil.now());
     }
 
     private String generateRawTicket() {

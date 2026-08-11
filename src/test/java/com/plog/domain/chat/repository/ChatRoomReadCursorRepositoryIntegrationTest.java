@@ -17,9 +17,9 @@ import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.UserRepository;
+import com.plog.global.util.TimeUtil;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -304,7 +304,7 @@ class ChatRoomReadCursorRepositoryIntegrationTest {
     }
 
     private Project saveProject(String suffix) {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = TimeUtil.today();
         return projectRepository.save(Project.builder()
                 .projectName("Project " + suffix)
                 .inviteTokenHash(UUID.randomUUID().toString())

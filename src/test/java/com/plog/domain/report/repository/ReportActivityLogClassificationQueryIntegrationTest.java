@@ -17,9 +17,9 @@ import com.plog.domain.report.entity.SourceDomain;
 import com.plog.domain.report.repository.projection.EmbeddingClaimProjection;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.UserRepository;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -73,7 +73,7 @@ class ReportActivityLogClassificationQueryIntegrationTest {
     void 임베딩_선점_projection에_출처와_참조_ID를_매핑한다() {
         Project project = saveProject();
         ProjectMember member = saveMember(project);
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime now = TimeUtil.now();
         ReportActivityLog chat = ReportActivityLog.create(
                 member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE, null,
                 now.minusMinutes(1), "{\"chatMessageId\":321}", "chat:321");
@@ -95,7 +95,7 @@ class ReportActivityLogClassificationQueryIntegrationTest {
     void 정제_통과_임베딩_완료_미분류_행만_대상으로_조회한다() {
         Project project = saveProject();
         ProjectMember member = saveMember(project);
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime now = TimeUtil.now();
 
         // 대상: 정제 통과 + 임베딩 완료 + 미분류
         ReportActivityLog target = save(member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE,
@@ -131,7 +131,7 @@ class ReportActivityLogClassificationQueryIntegrationTest {
     void content가_없어_N_A로_찍힌_행도_대상에_포함된다() {
         Project project = saveProject();
         ProjectMember member = saveMember(project);
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime now = TimeUtil.now();
 
         ReportActivityLog statusChange = ReportActivityLog.create(
                 member, SourceDomain.TASK, RawActivityType.TASK_STATUS_CHANGE, null,
@@ -150,7 +150,7 @@ class ReportActivityLogClassificationQueryIntegrationTest {
     void backoff_대기중이거나_영구_실패한_행은_대상에서_제외된다() {
         Project project = saveProject();
         ProjectMember member = saveMember(project);
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime now = TimeUtil.now();
 
         // 대상: backoff 없이 즉시 재시도 가능(nextRetryAt=null)
         ReportActivityLog readyNow = save(member, SourceDomain.CHAT, RawActivityType.CHAT_MESSAGE,
@@ -199,7 +199,7 @@ class ReportActivityLogClassificationQueryIntegrationTest {
                 "동시각 나중 저장", "gemini-embedding-001", "[0.1,0.2]", false, null, baseTime.plusMinutes(10));
 
         List<ReportActivityLog> result = activityLogRepository
-                .findClassificationTargets(CLASSIFIABLE_DOMAINS, LocalDateTime.now(ZoneOffset.UTC), Limit.of(500));
+                .findClassificationTargets(CLASSIFIABLE_DOMAINS, TimeUtil.now(), Limit.of(500));
 
         assertThat(result).extracting(ReportActivityLog::getId).containsExactly(
                 earliest.getId(),
@@ -224,7 +224,7 @@ class ReportActivityLogClassificationQueryIntegrationTest {
                 "세번째(제한에 걸려 제외)", "gemini-embedding-001", "[0.1,0.2]", false, null, baseTime.plusMinutes(2));
 
         List<ReportActivityLog> result = activityLogRepository
-                .findClassificationTargets(CLASSIFIABLE_DOMAINS, LocalDateTime.now(ZoneOffset.UTC), Limit.of(2));
+                .findClassificationTargets(CLASSIFIABLE_DOMAINS, TimeUtil.now(), Limit.of(2));
 
         assertThat(result).extracting(ReportActivityLog::getId).containsExactly(first.getId(), second.getId());
     }
@@ -234,7 +234,7 @@ class ReportActivityLogClassificationQueryIntegrationTest {
             String embeddingModel, String embeddingJson, boolean noiseFiltered, ActivityCategory classifiedType
     ) {
         return save(member, domain, rawType, content, embeddingModel, embeddingJson, noiseFiltered,
-                classifiedType, LocalDateTime.now(ZoneOffset.UTC));
+                classifiedType, TimeUtil.now());
     }
 
     private ReportActivityLog save(
@@ -267,7 +267,7 @@ class ReportActivityLogClassificationQueryIntegrationTest {
     }
 
     private Project saveProject() {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = TimeUtil.today();
         return projectRepository.save(Project.builder()
                 .projectName("Project " + UUID.randomUUID())
                 .inviteTokenHash(UUID.randomUUID().toString())

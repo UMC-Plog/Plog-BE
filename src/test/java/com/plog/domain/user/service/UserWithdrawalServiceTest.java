@@ -259,9 +259,9 @@ class UserWithdrawalServiceTest {
 
         // 서비스 호출 전후 시각을 떠서 threshold = now - retention(7일) 창을 만든다.
         // 고정 오차값 대신 실제 호출 구간으로 브래킷을 잡아야 느린 테스트 실행에도 흔들리지 않는다.
-        LocalDateTime beforeCall = TimeUtil.nowUtc();
+        LocalDateTime beforeCall = TimeUtil.now();
         int purged = service.purgeExpired();
-        LocalDateTime afterCall = TimeUtil.nowUtc();
+        LocalDateTime afterCall = TimeUtil.now();
 
         assertThat(purged).isEqualTo(2);
         assertThat(first.getAnonymizedAt()).isNotNull();

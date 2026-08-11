@@ -63,7 +63,7 @@ public class ReportTextWriter {
     public void publish(Long reportId) {
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
-        report.complete(TimeUtil.nowUtc());
+        report.complete(TimeUtil.now());
         eventPublisher.publishEvent(new ReportPublishedEvent(report.getProject().getId(), reportId));
     }
 

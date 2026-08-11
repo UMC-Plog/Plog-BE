@@ -31,7 +31,6 @@ import com.plog.infrastructure.s3.UploadedFile;
 import com.plog.infrastructure.s3.UploadedFileService;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -77,7 +76,7 @@ public class PostService {
         }
         Post post = postRepository.saveAndFlush(Post.builder()
                 .projectMember(member).title(title).content(content).isNotice(request.isNotice())
-                .noticedAt(request.isNotice() ? LocalDateTime.now(ZoneOffset.UTC) : null).build());
+                .noticedAt(request.isNotice() ? TimeUtil.now() : null).build());
         List<PostAttachment> savedAttachments = saveAttachments(post, attachments, resolvedFiles);
         eventPublisher.publishEvent(new PostCreatedEvent(
                 post.getId(), member.getId(), content, post.getCreatedAt()));
@@ -488,7 +487,7 @@ public class PostService {
         try {
             String raw = new String(Base64.getUrlDecoder().decode(cursor), java.nio.charset.StandardCharsets.UTF_8);
             String[] parts = raw.split("\\|", 2);
-            return new Cursor(LocalDateTime.ofInstant(Instant.parse(parts[0]), ZoneOffset.UTC), Long.valueOf(parts[1]));
+            return new Cursor(LocalDateTime.ofInstant(Instant.parse(parts[0]), TimeUtil.STORAGE_ZONE), Long.valueOf(parts[1]));
         } catch (RuntimeException exception) {
             throw new ApiException(PostErrorCode.INVALID_CURSOR, exception);
         }

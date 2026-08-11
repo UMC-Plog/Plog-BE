@@ -69,7 +69,7 @@ public class ProjectSettingsService {
         if (endDayChanged) {
             reportLogAdapter.synchronizeProjectActivitiesForEndDayChange(
                     projectId, previousEndDay, project.getEndDay());
-            if (!TimeUtil.todayUtc().isBefore(project.getEndDay())) {
+            if (!TimeUtil.today().isBefore(project.getEndDay())) {
                 projectDeadlineService.processDeadline(projectId);
             }
         }

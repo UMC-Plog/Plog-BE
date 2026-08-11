@@ -9,7 +9,7 @@ import org.springframework.data.auditing.DateTimeProvider;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
 
-@EnableJpaAuditing(dateTimeProviderRef = "utcDateTimeProvider")
+@EnableJpaAuditing(dateTimeProviderRef = "dateTimeProvider")
 @SpringBootApplication
 public class PlogApplication {
 
@@ -17,9 +17,9 @@ public class PlogApplication {
         SpringApplication.run(PlogApplication.class, args);
     }
 
-    // 감사 컬럼을 UTC로 고정한다. 기본 제공자는 JVM 기본 타임존을 써서 환경마다 9시간 갈린다.
+    // 감사 컬럼을 KST로 고정한다. 기본 제공자는 JVM 기본 타임존을 써서 환경마다 갈린다.
     @Bean
-    DateTimeProvider utcDateTimeProvider() {
-        return () -> Optional.of(TimeUtil.nowUtc());
+    DateTimeProvider dateTimeProvider() {
+        return () -> Optional.of(TimeUtil.now());
     }
 }

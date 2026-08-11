@@ -78,7 +78,7 @@ class IntegrationActivityReportLogAdapterTest {
                 eq("GITHUB"),
                 eq("GITHUB_COMMIT"),
                 eq(null),
-                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
+                eq(LocalDateTime.of(2026, 8, 1, 12, 4, 5)),
                 eq("{\"sha\":\"abc123\"}"),
                 sourceRefId.capture()
         );
@@ -109,7 +109,7 @@ class IntegrationActivityReportLogAdapterTest {
                 eq("GITHUB"),
                 eq("GITHUB_COMMIT"),
                 eq(null),
-                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
+                eq(LocalDateTime.of(2026, 8, 1, 12, 4, 5)),
                 eq("{\"sha\":\"abc123\"}"),
                 sourceRefId.capture()
         );
@@ -201,7 +201,7 @@ class IntegrationActivityReportLogAdapterTest {
                 eq("NOTION"),
                 rawType.capture(),
                 eq(null),
-                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
+                eq(LocalDateTime.of(2026, 8, 1, 12, 4, 5)),
                 any(),
                 any()
         );
@@ -310,8 +310,9 @@ class IntegrationActivityReportLogAdapterTest {
         );
         when(integrationActivityRepository.findReportProjectionTargetsByProjectAndActivityWindow(
                 eq(40L),
-                eq(Instant.parse("2026-08-02T00:00:00Z")),
-                eq(Instant.parse("2026-08-04T00:00:00Z")),
+                // 저장 기준이 KST라 같은 경계를 절대시각으로 바꾸면 -9h 가 된다.
+                eq(Instant.parse("2026-08-01T15:00:00Z")),
+                eq(Instant.parse("2026-08-03T15:00:00Z")),
                 eq(LocalDateTime.of(2026, 8, 2, 0, 0)),
                 eq(LocalDateTime.of(2026, 8, 4, 0, 0))
         )).thenReturn(List.of(activity));
@@ -324,7 +325,7 @@ class IntegrationActivityReportLogAdapterTest {
                 eq("GITHUB"),
                 eq("GITHUB_COMMIT"),
                 eq(null),
-                eq(LocalDateTime.of(2026, 8, 1, 3, 4, 5)),
+                eq(LocalDateTime.of(2026, 8, 1, 12, 4, 5)),
                 eq("{\"sha\":\"abc123\"}"),
                 any()
         );

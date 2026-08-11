@@ -59,7 +59,7 @@ class EmailVerificationCodeServiceTest {
     @Test
     @DisplayName("재전송 쿨다운 안에서는 VERIFICATION_RESEND_COOLDOWN 예외를 던지고 저장하지 않는다")
     void issueCodeRejectsWithinCooldown() {
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         EmailVerification existing = EmailVerification.issue(
                 EMAIL, PURPOSE, HashUtil.sha256Hex("111111"), now.plusMinutes(5), now);
         given(verificationRepository.findByEmailAndPurpose(EMAIL, PURPOSE)).willReturn(Optional.of(existing));
@@ -75,7 +75,7 @@ class EmailVerificationCodeServiceTest {
     @Test
     @DisplayName("쿨다운이 지난 기존 행은 같은 인스턴스를 재발급하며 시도횟수와 인증상태를 초기화한다")
     void issueCodeReissuesExistingRowPastCooldown() {
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         EmailVerification existing = EmailVerification.issue(
                 EMAIL, PURPOSE, HashUtil.sha256Hex("111111"), now.minusMinutes(10),
                 now.minus(properties.resendCooldown()).minusSeconds(5));
@@ -99,7 +99,7 @@ class EmailVerificationCodeServiceTest {
     @Test
     @DisplayName("코드 불일치 시 DB에서 원자적으로 시도횟수를 올린 뒤에야 예외를 던진다")
     void verifyCodeIncrementsAttemptAtomicallyBeforeThrowingOnMismatch() {
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         EmailVerification existing = EmailVerification.issue(
                 EMAIL, PURPOSE, HashUtil.sha256Hex("111111"), now.plusMinutes(5), now);
         ReflectionTestUtils.setField(existing, "id", 7L);
@@ -119,7 +119,7 @@ class EmailVerificationCodeServiceTest {
     @Test
     @DisplayName("시도횟수 초과는 만료보다 우선한다 (둘 다 해당되는 행이면 초과 예외가 발생)")
     void verifyCodeAttemptExceededTakesPrecedenceOverExpired() {
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         EmailVerification existing = EmailVerification.issue(
                 EMAIL, PURPOSE, HashUtil.sha256Hex("111111"), now.minusMinutes(1), now.minusMinutes(10));
         for (int i = 0; i < properties.maxAttempts(); i++) {
@@ -136,7 +136,7 @@ class EmailVerificationCodeServiceTest {
     @Test
     @DisplayName("시도횟수가 남아있는 만료 행은 VERIFICATION_CODE_EXPIRED 예외를 던진다")
     void verifyCodeExpiredWithAttemptsRemaining() {
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         EmailVerification existing = EmailVerification.issue(
                 EMAIL, PURPOSE, HashUtil.sha256Hex("111111"), now.minusMinutes(1), now.minusMinutes(10));
         given(verificationRepository.findByEmailAndPurpose(EMAIL, PURPOSE)).willReturn(Optional.of(existing));
@@ -150,7 +150,7 @@ class EmailVerificationCodeServiceTest {
     @Test
     @DisplayName("정확한 코드로 검증하면 인증 완료 상태로 저장한다")
     void verifyCodeMarksVerifiedOnMatch() {
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         EmailVerification existing = EmailVerification.issue(
                 EMAIL, PURPOSE, HashUtil.sha256Hex("111111"), now.plusMinutes(5), now);
         given(verificationRepository.findByEmailAndPurpose(EMAIL, PURPOSE)).willReturn(Optional.of(existing));
@@ -175,7 +175,7 @@ class EmailVerificationCodeServiceTest {
     @Test
     @DisplayName("행은 있지만 인증되지 않았으면 EMAIL_NOT_VERIFIED 예외를 던진다")
     void requireVerifiedThrowsWhenNotVerified() {
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         EmailVerification existing = EmailVerification.issue(
                 EMAIL, PURPOSE, HashUtil.sha256Hex("111111"), now.plusMinutes(5), now);
         given(verificationRepository.findByEmailAndPurpose(EMAIL, PURPOSE)).willReturn(Optional.of(existing));
@@ -199,7 +199,7 @@ class EmailVerificationCodeServiceTest {
     @Test
     @DisplayName("인증 완료된 행은 그대로 반환한다")
     void requireVerifiedReturnsRowWhenVerified() {
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         EmailVerification existing = EmailVerification.issue(
                 EMAIL, PURPOSE, HashUtil.sha256Hex("111111"), now.plusMinutes(5), now);
         existing.markVerified();

@@ -18,8 +18,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 
 @Service
 @RequiredArgsConstructor
@@ -63,7 +61,7 @@ public class SelfFeedbackService {
             throw new ApiException(EvaluationErrorCode.ALREADY_SUBMITTED_SELF_FEEDBACK);
         }
         eventPublisher.publishEvent(new SelfFeedbackSubmittedEvent(
-                selfFeedback.getId(), projectMember.getId(), LocalDateTime.now(ZoneOffset.UTC)));
+                selfFeedback.getId(), projectMember.getId(), TimeUtil.now()));
         eventPublisher.publishEvent(new EvaluationCompletionCheckRequestedEvent(projectId));
 
         return new SelfFeedbackResponse(selfFeedback.getId(), selfFeedback.getContent());
@@ -90,13 +88,13 @@ public class SelfFeedbackService {
                 selfFeedback.getContent(), "{\"selfFeedbackId\":" + selfFeedback.getId() + "}");
         eventPublisher.publishEvent(new SelfFeedbackSubmittedEvent(
                 selfFeedback.getId(), projectMember.getId(),
-                selfFeedback.getCreatedAt() != null ? selfFeedback.getCreatedAt() : TimeUtil.nowUtc()));
+                selfFeedback.getCreatedAt() != null ? selfFeedback.getCreatedAt() : TimeUtil.now()));
 
         return new SelfFeedbackUpdateResponse(selfFeedback.getId());
     }
 
     private void requireEvaluationOpen(ProjectMember projectMember) {
-        if (!projectMember.getProject().isEvaluatingState(TimeUtil.todayUtc())) {
+        if (!projectMember.getProject().isEvaluatingState(TimeUtil.today())) {
             throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
         }
     }

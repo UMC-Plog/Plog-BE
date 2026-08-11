@@ -26,8 +26,8 @@ import com.plog.domain.user.repository.UserRepository;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -84,7 +84,7 @@ class ProjectCreateServiceTest {
     @ParameterizedTest
     @EnumSource(ProjectType.class)
     void createsAProjectAndItsOwnerWithAnInvite(ProjectType projectType) {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = TimeUtil.today();
         LocalDate endDay = today.plusDays(30);
         User user = User.createLocal("owner@plog.test", "encoded-password", "Owner", "owner");
         given(userRepository.findById(1L)).willReturn(Optional.of(user));
@@ -202,7 +202,7 @@ class ProjectCreateServiceTest {
 
     @Test
     void acceptsTodayAsTheEndDay() {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = TimeUtil.today();
         User user = User.createLocal("owner@plog.test", "encoded-password", "Owner", "owner");
         given(userRepository.findById(1L)).willReturn(Optional.of(user));
         executeInviteTokenPersistence();
@@ -293,7 +293,7 @@ class ProjectCreateServiceTest {
         return new ProjectCreateRequest(
                 projectName,
                 ProjectType.DEVELOP,
-                LocalDate.now(ZoneOffset.UTC).plusDays(30)
+                TimeUtil.today().plusDays(30)
         );
     }
 
@@ -323,7 +323,7 @@ class ProjectCreateServiceTest {
     }
 
     private static Stream<LocalDate> invalidEndDays() {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = TimeUtil.today();
         return Stream.of(null, today.minusDays(1), today.minusDays(30));
     }
 }

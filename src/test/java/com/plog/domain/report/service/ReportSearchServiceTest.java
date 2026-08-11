@@ -15,9 +15,9 @@ import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.error.ReportErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.SliceResponse;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,7 +68,7 @@ class ReportSearchServiceTest {
                 "PLOG API",
                 20L,
                 ReportStatus.COMPLETED,
-                completedAt.toInstant(ZoneOffset.UTC)
+                completedAt.toInstant(TimeUtil.STORAGE_ZONE)
         ));
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(20);
@@ -88,10 +88,10 @@ class ReportSearchServiceTest {
                 MemberStatus.ACTIVE,
                 "%plog!%!_!!%",
                 true,
-                // 필터는 KST 달력 하루 기준 → UTC 저장값으로 변환해 넘긴다.
-                LocalDateTime.of(2026, 6, 30, 15, 0),
+                // 저장 기준이 KST라 필터 경계가 KST 달력 하루와 그대로 일치한다.
+                LocalDateTime.of(2026, 7, 1, 0, 0),
                 true,
-                LocalDateTime.of(2026, 7, 31, 15, 0),
+                LocalDateTime.of(2026, 8, 1, 0, 0),
                 PageRequest.of(0, 2)
         )).willReturn(new SliceImpl<>(List.of(summary), PageRequest.of(0, 2), true));
 
@@ -109,7 +109,7 @@ class ReportSearchServiceTest {
                 "PLOG API",
                 20L,
                 ReportStatus.COMPLETED,
-                completedAt.toInstant(ZoneOffset.UTC)
+                completedAt.toInstant(TimeUtil.STORAGE_ZONE)
         ));
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(2);
@@ -126,7 +126,7 @@ class ReportSearchServiceTest {
                 false,
                 null,
                 true,
-                LocalDateTime.of(2026, 7, 31, 15, 0),
+                LocalDateTime.of(2026, 8, 1, 0, 0),
                 pageable
         )).willReturn(new SliceImpl<>(List.of(), pageable, false));
 
@@ -148,7 +148,7 @@ class ReportSearchServiceTest {
                 false,
                 null,
                 true,
-                LocalDateTime.of(2026, 7, 31, 15, 0),
+                LocalDateTime.of(2026, 8, 1, 0, 0),
                 pageable
         );
     }

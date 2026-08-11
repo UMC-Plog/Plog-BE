@@ -37,7 +37,7 @@ public class UploadedFileService {
                 fileStorageService.createUploadUrl(userId, request, fileKey);
         UploadedFile saved = uploadedFileRepository.save(UploadedFile.issue(
                 fileKey, userId, request.usage(), request.fileName(),
-                request.contentType(), request.fileSize(), TimeUtil.nowUtc()));
+                request.contentType(), request.fileSize(), TimeUtil.now()));
         return new FileStorageDto.PresignedUploadResponse(
                 presigned.uploadUrl(), saved.getId(), fileKey,
                 presigned.signedHeaders(), presigned.expiresAt());
@@ -65,7 +65,7 @@ public class UploadedFileService {
         if (!fileStorageService.headMatches(fileKey, fileSize, file.getContentType())) {
             throw new ApiException(invalidCode);
         }
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         int updated = uploadedFileRepository.confirmIfPending(
                 fileKey, now, UploadedFileStatus.CONFIRMED, UploadedFileStatus.PENDING);
         if (updated == 0) {
@@ -116,7 +116,7 @@ public class UploadedFileService {
         if (fileIds == null || fileIds.isEmpty()) {
             return;
         }
-        LocalDateTime now = TimeUtil.nowUtc();
+        LocalDateTime now = TimeUtil.now();
         List<UploadedFile> files = uploadedFileRepository.findAllById(fileIds);
         files.forEach(file -> file.release(now));
         uploadedFileRepository.saveAll(files);

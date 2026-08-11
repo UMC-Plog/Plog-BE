@@ -50,7 +50,7 @@ public class ReportMemberDataCollector {
             int teamSize
     ) {
         return collect(reportId, projectId, projectType, member, external, teamSize,
-                com.plog.global.util.TimeUtil.nowUtc());
+                com.plog.global.util.TimeUtil.now());
     }
 
     @Transactional

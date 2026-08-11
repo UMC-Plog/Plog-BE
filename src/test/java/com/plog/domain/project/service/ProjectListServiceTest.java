@@ -20,8 +20,8 @@ import com.plog.domain.user.entity.User;
 import com.plog.global.api.error.AuthErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.api.response.SliceResponse;
+import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,9 +54,9 @@ class ProjectListServiceTest {
         given(project.getProjectName()).willReturn("Plog");
         given(project.getProjectType()).willReturn(ProjectType.DEVELOP);
         given(project.getStatus()).willReturn(ProjectStatus.IN_PROGRESS);
-        given(project.getEndDay()).willReturn(LocalDate.now(ZoneOffset.UTC).plusDays(5));
-        given(project.isEvaluatingState(LocalDate.now(ZoneOffset.UTC))).willReturn(false);
-        given(project.evaluationDeadline()).willReturn(LocalDate.now(ZoneOffset.UTC).plusDays(12));
+        given(project.getEndDay()).willReturn(TimeUtil.today().plusDays(5));
+        given(project.isEvaluatingState(TimeUtil.today())).willReturn(false);
+        given(project.evaluationDeadline()).willReturn(TimeUtil.today().plusDays(12));
 
         ProjectMember myMembership = member(project, user(1L, "vana"));
         given(myMembership.getId()).willReturn(42L);
@@ -100,7 +100,7 @@ class ProjectListServiceTest {
         assertThat(response.content().getFirst().progressPercent()).isEqualTo(66);
         assertThat(response.content().getFirst().evaluationAvailable()).isFalse();
         assertThat(response.content().getFirst().evaluationDeadline())
-                .isEqualTo(LocalDate.now(ZoneOffset.UTC).plusDays(12));
+                .isEqualTo(TimeUtil.today().plusDays(12));
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(20);
         assertThat(response.hasNext()).isTrue();

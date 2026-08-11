@@ -48,7 +48,7 @@ public class ReportBatchService {
      *  낭비되는 조회가 늘어나므로 그때는 ShedLock 등 분산 락으로 실행 노드를 하나로 줄인다.
      */
     public ReportBatchResult startDueReports() {
-        LocalDate today = TimeUtil.todayUtc();
+        LocalDate today = TimeUtil.today();
         List<Project> dueProjects = reportRepository.findProjectsDueForReport(
                 Project.latestEndDayWithClosedEvaluation(today),
                 ReportStatus.restartBlockingStatuses(),

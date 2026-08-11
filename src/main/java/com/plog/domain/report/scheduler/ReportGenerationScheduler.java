@@ -25,7 +25,7 @@ public class ReportGenerationScheduler {
 
     private final ReportBatchService reportBatchService;
 
-    // 컨테이너 TZ는 UTC 고정이다(docker-compose.yml의 TZ=UTC) — UTC 기준 매일 03:40.
+    // 컨테이너 TZ는 Asia/Seoul 고정이다(docker-compose.yml의 TZ) — KST 기준 매일 03:40.
     // 기존 새벽 배치(03:00 탈퇴 파기 / 03:20 S3 회수 / 03:30 소셜 티켓 파기)와 시간을 벌려
     // 스케줄러 스레드풀(size=4)에서 서로 밀리지 않게 한다.
     @Scheduled(cron = "${plog.report.scheduler.cron:0 40 3 * * *}")

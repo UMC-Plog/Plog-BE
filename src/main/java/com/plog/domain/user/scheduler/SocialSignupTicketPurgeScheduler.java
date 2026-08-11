@@ -20,7 +20,7 @@ public class SocialSignupTicketPurgeScheduler {
         this.socialSignupTicketService = socialSignupTicketService;
     }
 
-    // 컨테이너 TZ는 UTC 고정이다 — UTC 기준 매일 03:30.
+    // 컨테이너 TZ는 Asia/Seoul 고정이다 — KST 기준 매일 03:30.
     // 탈퇴 파기 배치(03:00)와 시간을 벌려 두 배치가 겹치지 않게 한다.
     @Scheduled(cron = "0 30 3 * * *")
     public void purge() {

@@ -28,8 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Set;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 
 @Service
 @RequiredArgsConstructor
@@ -142,7 +140,7 @@ public class EvaluationService {
 
         peerEvaluationRepository.save(evaluation);
         eventPublisher.publishEvent(new PeerEvaluationSubmittedEvent(
-                evaluation.getId(), evaluator.getId(), evaluatee.getId(), LocalDateTime.now(ZoneOffset.UTC)));
+                evaluation.getId(), evaluator.getId(), evaluatee.getId(), TimeUtil.now()));
 
         return new PeerEvaluationCreateResponse(evaluation.getId(), hasUniformScores(request));
     }
@@ -183,7 +181,7 @@ public class EvaluationService {
                 evaluationMetadata(evaluation));
         eventPublisher.publishEvent(new PeerEvaluationSubmittedEvent(
                 evaluation.getId(), evaluator.getId(), evaluatee.getId(),
-                evaluation.getCreatedAt() != null ? evaluation.getCreatedAt() : TimeUtil.nowUtc()));
+                evaluation.getCreatedAt() != null ? evaluation.getCreatedAt() : TimeUtil.now()));
 
         return new PeerEvaluationCreateResponse(evaluation.getId(), hasUniformScores(request));
     }
@@ -206,7 +204,7 @@ public class EvaluationService {
     }
 
     private void requireEvaluationOpen(Project project) {
-        if (!project.isEvaluatingState(TimeUtil.todayUtc())) {
+        if (!project.isEvaluatingState(TimeUtil.today())) {
             throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
         }
     }
