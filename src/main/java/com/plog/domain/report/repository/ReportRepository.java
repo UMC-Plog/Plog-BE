@@ -18,9 +18,6 @@ import org.springframework.data.repository.query.Param;
 
 public interface ReportRepository extends JpaRepository<Report, Long> {
 
-    /** 서비스의 빠른 멱등성 판정. 최종 방어선은 reports.project_id 유니크 제약이다. */
-    boolean existsByProjectId(Long projectId);
-
     Optional<Report> findByProjectId(Long projectId);
 
     /** 상세 조회용. 권한 확인과 응답 모두 project 가 필요해서 LAZY 프록시를 미리 채워 온다. */
@@ -28,7 +25,7 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     Optional<Report> findWithProjectById(Long reportId);
 
     /**
-     * 리포트 자동 생성 배치의 대상 — 평가 유예가 끝났는데 리포트가 한 번도 생성되지 않은 프로젝트.
+     * 리포트 자동 생성 배치의 대상 — 평가 유예가 끝났고 리포트가 없거나 이전 생성이 실패한 프로젝트.
      * <p>
      * 리포트 도메인의 배치가 쓰는 쿼리라 ProjectRepository 가 아니라 여기에 둔다
      * (report → project 방향은 이미 Report.project 로 존재한다).
@@ -40,7 +37,7 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     @Query("select project from Project project "
             + "where project.endDay <= :endDayOnOrBefore "
             + "and not exists (select 1 from Report report "
-            + "where report.project = project) "
+            + "where report.project = project and report.status <> com.plog.domain.report.entity.ReportStatus.FAILED) "
             + "order by project.endDay asc, project.id asc")
     List<Project> findProjectsDueForReport(
             @Param("endDayOnOrBefore") LocalDate endDayOnOrBefore,

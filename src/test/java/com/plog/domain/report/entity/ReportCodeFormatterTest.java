@@ -12,7 +12,7 @@ class ReportCodeFormatterTest {
         String code = ReportCodeFormatter.formatTeam(
                 15L, LocalDateTime.of(2025, 7, 31, 15, 0));
 
-        assertThat(code).isEqualTo("PLOG-T-2025-07-15");
+        assertThat(code).isEqualTo("PLOG-T-2025-08-15");
     }
 
     @Test
@@ -20,6 +20,6 @@ class ReportCodeFormatterTest {
         String code = ReportCodeFormatter.formatPersonal(
                 15L, LocalDateTime.of(2025, 7, 31, 15, 0));
 
-        assertThat(code).isEqualTo("PLOG-P-2025-07-15");
+        assertThat(code).isEqualTo("PLOG-P-2025-08-15");
     }
 }

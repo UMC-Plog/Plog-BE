@@ -33,7 +33,6 @@ public class ReportBatchService {
 
     private final ReportRepository reportRepository;
     private final ReportLifecycleService reportLifecycleService;
-    private final ReportGenerationService reportGenerationService;
 
     /**
      * 대상 프로젝트를 훑어 리포트를 시작한다. 스케줄러와 수동 트리거의 공통 진입점이다.
@@ -64,11 +63,6 @@ public class ReportBatchService {
                 var startedReport = reportLifecycleService.closeEvaluationAndStart(project.getId());
                 if (startedReport.isPresent()) {
                     started++;
-                    // 여기서 이어서 생성까지 한다. 행만 만들고 끝내면 GENERATING 인 채로 남아
-                    // 다음 회차에도 대상에서 빠지고(멱등성 기준에 GENERATING 이 포함된다) 영영 발행되지 않는다.
-                    // 배치 스레드에서 동기로 도는 게 맞다 — 새벽에 순차 실행이라 서두를 이유가 없고,
-                    // 비동기로 던지면 전용 풀(크기 1~2)에 대기만 쌓인다.
-                    reportGenerationService.generate(startedReport.get().getId());
                 } else {
                     skipped++;
                 }

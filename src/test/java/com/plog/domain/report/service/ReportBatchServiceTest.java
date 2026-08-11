@@ -21,7 +21,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ReportBatchServiceTest {
@@ -32,33 +31,28 @@ class ReportBatchServiceTest {
     @Mock
     private ReportLifecycleService reportLifecycleService;
 
-    @Mock
-    private ReportGenerationService reportGenerationService;
-
     @InjectMocks
     private ReportBatchService reportBatchService;
 
-    // 행만 만들고 끝내면 GENERATING 으로 남아 다음 회차 대상에서도 빠진다 — 영영 발행되지 않는다.
     @Test
-    void generatesTheReportRightAfterStartingIt() {
+    void countsReportWhoseLifecycleWasStarted() {
         givenDueProjects(1L);
         Report started = mockReport();
-        ReflectionTestUtils.setField(started, "id", 77L);
         when(reportLifecycleService.closeEvaluationAndStart(1L)).thenReturn(Optional.of(started));
 
-        reportBatchService.startDueReports();
+        ReportBatchResult result = reportBatchService.startDueReports();
 
-        verify(reportGenerationService).generate(77L);
+        assertThat(result.started()).isEqualTo(1);
     }
 
     @Test
-    void doesNotGenerateForSkippedProjects() {
+    void countsSkippedProjects() {
         givenDueProjects(1L);
         when(reportLifecycleService.closeEvaluationAndStart(1L)).thenReturn(Optional.empty());
 
-        reportBatchService.startDueReports();
+        ReportBatchResult result = reportBatchService.startDueReports();
 
-        verify(reportGenerationService, never()).generate(anyLong());
+        assertThat(result.skipped()).isEqualTo(1);
     }
 
     @Test

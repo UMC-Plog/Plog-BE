@@ -151,11 +151,11 @@ class ReportMemberResultRepositoryIntegrationTest {
     }
 
     /**
-     * 배치 대상 쿼리. 유예 경계와 "리포트 없음" 조건을 실제 SQL 로 확인한다 —
+     * 배치 대상 쿼리. 유예 경계와 "리포트 없음 또는 FAILED" 조건을 실제 SQL 로 확인한다 —
      * not exists 서브쿼리와 날짜 경계는 단위 테스트로 검증되지 않는다.
      */
     @Test
-    void findsOnlyProjectsPastTheEvaluationDeadlineWithoutAnActiveReport() {
+    void findsDueProjectsWithoutAReportOrWithOnlyAFailedReport() {
         LocalDate today = LocalDate.of(2026, 8, 5);
         LocalDate bound = Project.latestEndDayWithClosedEvaluation(today);
         Project due = saveProjectEndingOn("마감지남", bound.minusDays(1));
@@ -174,8 +174,8 @@ class ReportMemberResultRepositoryIntegrationTest {
                 bound, PageRequest.of(0, 100));
 
         assertThat(found).extracting(Project::getId)
-                .containsExactlyInAnyOrder(due.getId(), exactlyDue.getId())
-                .doesNotContain(notYet.getId(), alreadyReported.getId(), failedOnly.getId());
+                .containsExactlyInAnyOrder(due.getId(), exactlyDue.getId(), failedOnly.getId())
+                .doesNotContain(notYet.getId(), alreadyReported.getId());
     }
 
     @Test

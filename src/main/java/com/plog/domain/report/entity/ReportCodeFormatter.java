@@ -2,6 +2,7 @@ package com.plog.domain.report.entity;
 
 import com.plog.global.util.TimeUtil;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
 public final class ReportCodeFormatter {
@@ -23,7 +24,7 @@ public final class ReportCodeFormatter {
         if (projectId == null || createdAtUtc == null) {
             return null;
         }
-        String yearMonth = createdAtUtc.atZone(TimeUtil.STORAGE_ZONE)
+        String yearMonth = createdAtUtc.atZone(ZoneOffset.UTC)
                 .withZoneSameInstant(TimeUtil.DISPLAY_ZONE)
                 .format(YEAR_MONTH);
         return "PLOG-" + reportType + "-" + yearMonth + "-" + projectId;

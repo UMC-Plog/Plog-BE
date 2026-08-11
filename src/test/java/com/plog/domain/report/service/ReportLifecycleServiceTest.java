@@ -12,7 +12,10 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.report.entity.Report;
 import com.plog.domain.report.entity.ReportStatus;
+import com.plog.domain.report.event.ReportGenerationRequestedEvent;
 import com.plog.domain.report.repository.ReportRepository;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.util.ReflectionTestUtils;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,14 +35,21 @@ class ReportLifecycleServiceTest {
     @Mock
     private ProjectRepository projectRepository;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     private ReportLifecycleService reportLifecycleService;
 
     @Test
     void startsGeneratingReportWhenProjectHasNone() {
         Project project = project();
-        when(reportRepository.existsByProjectId(PROJECT_ID)).thenReturn(false);
-        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(reportRepository.findByProjectId(PROJECT_ID)).thenReturn(Optional.empty());
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
+            Report report = invocation.getArgument(0);
+            ReflectionTestUtils.setField(report, "id", 10L);
+            return report;
+        });
 
         Optional<Report> started = reportLifecycleService.startFor(project);
 
@@ -48,17 +58,45 @@ class ReportLifecycleServiceTest {
         verify(reportRepository).save(saved.capture());
         assertThat(saved.getValue().getStatus()).isEqualTo(ReportStatus.GENERATING);
         assertThat(saved.getValue().getProject()).isSameAs(project);
+        verify(eventPublisher).publishEvent(new ReportGenerationRequestedEvent(10L));
     }
 
-    // 평가 종료 훅과 마감일 배치가 같은 프로젝트를 두 번 건드려도 리포트는 한 건이어야 한다.
     @Test
-    void skipsWhenReportAlreadyExistsForProject() {
-        when(reportRepository.existsByProjectId(PROJECT_ID)).thenReturn(true);
+    void skipsGeneratingReport() {
+        Report generating = Report.start(project());
+        when(reportRepository.findByProjectId(PROJECT_ID)).thenReturn(Optional.of(generating));
 
         Optional<Report> started = reportLifecycleService.startFor(project());
 
         assertThat(started).isEmpty();
         verify(reportRepository, never()).save(any(Report.class));
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void skipsCompletedReport() {
+        Report completed = Report.start(project());
+        completed.complete(java.time.LocalDateTime.of(2026, 8, 5, 10, 0));
+        when(reportRepository.findByProjectId(PROJECT_ID)).thenReturn(Optional.of(completed));
+
+        assertThat(reportLifecycleService.startFor(project())).isEmpty();
+        verify(reportRepository, never()).save(any(Report.class));
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void reusesFailedReportAndRequestsGeneration() {
+        Report failed = Report.start(project());
+        ReflectionTestUtils.setField(failed, "id", 20L);
+        failed.fail();
+        when(reportRepository.findByProjectId(PROJECT_ID)).thenReturn(Optional.of(failed));
+
+        Optional<Report> restarted = reportLifecycleService.startFor(project());
+
+        assertThat(restarted).containsSame(failed);
+        assertThat(failed.getStatus()).isEqualTo(ReportStatus.GENERATING);
+        verify(reportRepository, never()).save(any(Report.class));
+        verify(eventPublisher).publishEvent(new ReportGenerationRequestedEvent(20L));
     }
 
     // 평가를 닫지 않으면 리포트 발행 후에도 동료 평가가 계속 들어와 근거 데이터가 나중에 바뀐다.
@@ -66,7 +104,7 @@ class ReportLifecycleServiceTest {
     void closesEvaluationBeforeStartingTheReport() {
         Project project = project();
         when(projectRepository.findByIdForUpdate(PROJECT_ID)).thenReturn(Optional.of(project));
-        when(reportRepository.existsByProjectId(PROJECT_ID)).thenReturn(false);
+        when(reportRepository.findByProjectId(PROJECT_ID)).thenReturn(Optional.empty());
         when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Optional<Report> started = reportLifecycleService.closeEvaluationAndStart(PROJECT_ID);
@@ -82,7 +120,7 @@ class ReportLifecycleServiceTest {
         Project project = project();
         project.complete();
         when(projectRepository.findByIdForUpdate(PROJECT_ID)).thenReturn(Optional.of(project));
-        when(reportRepository.existsByProjectId(PROJECT_ID)).thenReturn(false);
+        when(reportRepository.findByProjectId(PROJECT_ID)).thenReturn(Optional.empty());
         when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         assertThat(reportLifecycleService.closeEvaluationAndStart(PROJECT_ID)).isPresent();
@@ -93,7 +131,7 @@ class ReportLifecycleServiceTest {
     void skipsWhenTheDueProjectAlreadyHasAReport() {
         Project project = project();
         when(projectRepository.findByIdForUpdate(PROJECT_ID)).thenReturn(Optional.of(project));
-        when(reportRepository.existsByProjectId(PROJECT_ID)).thenReturn(true);
+        when(reportRepository.findByProjectId(PROJECT_ID)).thenReturn(Optional.of(Report.start(project)));
 
         assertThat(reportLifecycleService.closeEvaluationAndStart(PROJECT_ID)).isEmpty();
         verify(reportRepository, never()).save(any(Report.class));

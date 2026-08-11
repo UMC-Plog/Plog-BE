@@ -52,6 +52,17 @@ class ReportTest {
     }
 
     @Test
+    void failedReportRestartsInTheSameEntity() {
+        Report report = Report.start(project);
+        report.fail();
+
+        report.restart();
+
+        assertThat(report.getStatus()).isEqualTo(ReportStatus.GENERATING);
+        assertThat(report.getCompletedAt()).isNull();
+    }
+
+    @Test
     void rejectsCompletionWithoutCompletionTime() {
         Report report = Report.start(project);
 
@@ -88,5 +99,6 @@ class ReportTest {
         assertThatThrownBy(completed::fail).isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> failed.complete(LocalDateTime.of(2026, 7, 21, 11, 0)))
                 .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(completed::restart).isInstanceOf(IllegalStateException.class);
     }
 }

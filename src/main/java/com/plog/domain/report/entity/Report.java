@@ -93,6 +93,23 @@ public class Report extends BaseEntity {
         return new Report(project);
     }
 
+    /** 실패한 생성 시도를 같은 행에서 다시 시작한다. 발행 완료 리포트는 재시작할 수 없다. */
+    public void restart() {
+        if (status != ReportStatus.FAILED) {
+            throw new IllegalStateException(
+                    "only a failed report can restart, but status=" + status);
+        }
+        this.status = ReportStatus.GENERATING;
+        this.snapshotAt = TimeUtil.now();
+        this.completedAt = null;
+        this.pdfObjectKey = null;
+        this.pdfFileName = null;
+        this.teamStrength = null;
+        this.teamSuggestion = null;
+        this.teamCompletionRate = null;
+        this.teamDeadlineComplianceRate = null;
+    }
+
     public void complete(LocalDateTime completedAt) {
         requireGenerating();
         if (completedAt == null) {

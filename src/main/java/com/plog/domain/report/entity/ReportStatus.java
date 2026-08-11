@@ -7,22 +7,23 @@ package com.plog.domain.report.entity;
  * <pre>
  *   (없음) --Report.start(project)--> GENERATING
  *   GENERATING --complete(completedAt)--> COMPLETED   (종료)
- *   GENERATING --fail()-----------------> FAILED      (종료)
+ *   GENERATING --fail()-----------------> FAILED
+ *   FAILED     --restart()--------------> GENERATING
  *   COMPLETED  --attachPdf(key, name)---> COMPLETED   (상태 유지, PDF 메타데이터만 기록)
  * </pre>
  *
  * COMPLETED 가 곧 "발행 완료"다 — 별도의 PUBLISHED 상태를 두지 않는다.
  * 조회 API 와 PDF 다운로드가 열리는 유일한 상태이며, ReportPublishedEvent 도 이 전이에서 나간다.
  * <p>
- * COMPLETED / FAILED 는 종료 상태라 다시 전이할 수 없다. 프로젝트당 리포트는 한 건이며
- * 사용자 재생성 요청을 지원하지 않으므로 FAILED 상태에서도 새 Report 행을 만들지 않는다.
+ * COMPLETED 는 종료 상태다. FAILED 는 자동 재큐잉 시 같은 Report 행에서 GENERATING 으로 돌아간다.
+ * 프로젝트당 리포트는 한 건이며 사용자 재생성 요청으로 새 Report 행을 만들지는 않는다.
  */
 public enum ReportStatus {
     GENERATING,
     COMPLETED,
     FAILED;
 
-    /** 더 이상 전이할 수 없는 종료 상태인지. */
+    /** 현재 생성 작업이 끝난 상태인지. FAILED 는 명시적인 restart 로만 다시 전이할 수 있다. */
     public boolean isTerminal() {
         return this != GENERATING;
     }

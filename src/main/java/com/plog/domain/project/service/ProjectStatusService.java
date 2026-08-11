@@ -10,7 +10,6 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.report.entity.Report;
-import com.plog.domain.report.event.ReportGenerationRequestedEvent;
 import com.plog.domain.report.repository.ReportRepository;
 import com.plog.domain.report.service.ReportLifecycleService;
 import com.plog.global.api.error.ProjectErrorCode;
@@ -20,7 +19,6 @@ import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,7 +36,6 @@ public class ProjectStatusService {
     private final IntegrationActorMappingStatusService actorMappingStatusService;
     private final ReportLifecycleService reportLifecycleService;
     private final ReportRepository reportRepository;
-    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public ProjectStatusDto.Response checkAndUpdateStatus(
@@ -104,10 +101,6 @@ public class ProjectStatusService {
         return startReport(project).map(Report::getId);
     }
 
-    private void requestGeneration(Report report) {
-        eventPublisher.publishEvent(new ReportGenerationRequestedEvent(report.getId()));
-    }
-
     private void validateRequestedStatus(ProjectStatusDto.Request request) {
         if (request == null || request.status() == null || request.status() == ProjectStatus.COMPLETED) {
             return;
@@ -130,9 +123,7 @@ public class ProjectStatusService {
     }
 
     private Optional<Report> startReport(Project project) {
-        Optional<Report> report = reportLifecycleService.startFor(project);
-        report.ifPresent(this::requestGeneration);
-        return report;
+        return reportLifecycleService.startFor(project);
     }
 
     private ProjectStatusDto.Response toResponse(Project project, boolean timeoutApplied) {

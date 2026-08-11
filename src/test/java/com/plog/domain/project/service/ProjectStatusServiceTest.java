@@ -20,7 +20,6 @@ import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
 import com.plog.domain.report.entity.Report;
-import com.plog.domain.report.event.ReportGenerationRequestedEvent;
 import com.plog.domain.report.repository.ReportRepository;
 import com.plog.domain.report.service.ReportLifecycleService;
 import com.plog.global.api.error.ProjectErrorCode;
@@ -34,7 +33,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectStatusServiceTest {
@@ -65,9 +63,6 @@ class ProjectStatusServiceTest {
 
     @Mock
     private ReportRepository reportRepository;
-
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private ProjectStatusService projectStatusService;
@@ -101,7 +96,7 @@ class ProjectStatusServiceTest {
     }
 
     @Test
-    void checkAndUpdateStatusRequestsGenerationForNewReport() {
+    void checkAndUpdateStatusDelegatesReportStartToLifecycleService() {
         Project project = projectEndedDaysAgo(1);
         Report report = org.mockito.Mockito.mock(Report.class);
         mockProject(project);
@@ -109,11 +104,10 @@ class ProjectStatusServiceTest {
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(2L);
         when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(2L);
         when(reportLifecycleService.startFor(project)).thenReturn(Optional.of(report));
-        when(report.getId()).thenReturn(50L);
 
         projectStatusService.checkAndUpdateStatus(PROJECT_ID, USER_ID, null);
 
-        verify(eventPublisher).publishEvent(new ReportGenerationRequestedEvent(50L));
+        verify(reportLifecycleService).startFor(project);
     }
 
     @Test
