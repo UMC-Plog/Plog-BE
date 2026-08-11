@@ -23,16 +23,20 @@ class ProjectNotificationListenerTest {
         PeerEvaluationStartedEvent peer = new PeerEvaluationStartedEvent(1L, 4L);
         NoticePublishedEvent notice = new NoticePublishedEvent(1L, 7L);
         ReportPublishedEvent report = new ReportPublishedEvent(1L, 6L);
+        IntegrationCollectionCompletedEvent collection =
+                new IntegrationCollectionCompletedEvent(1L, 8L, 4L);
 
         listener.onChatMessage(chat);
         listener.onPeerEvaluationStarted(peer);
         listener.onNoticePublished(notice);
         listener.onReportPublished(report);
+        listener.onIntegrationCollectionCompleted(collection);
 
         verify(notificationService).sendChatMessage(chat);
         verify(notificationService).sendPeerEvaluationStarted(peer);
         verify(notificationService).sendNoticePublished(notice);
         verify(notificationService).sendReportPublished(report);
+        verify(notificationService).sendIntegrationCollectionCompleted(collection);
     }
 
     @Test
@@ -41,6 +45,7 @@ class ProjectNotificationListenerTest {
         assertAfterCommit("onPeerEvaluationStarted", PeerEvaluationStartedEvent.class);
         assertAfterCommit("onNoticePublished", NoticePublishedEvent.class);
         assertAfterCommit("onReportPublished", ReportPublishedEvent.class);
+        assertAfterCommit("onIntegrationCollectionCompleted", IntegrationCollectionCompletedEvent.class);
     }
 
     private void assertAfterCommit(String methodName, Class<?> eventType) throws NoSuchMethodException {

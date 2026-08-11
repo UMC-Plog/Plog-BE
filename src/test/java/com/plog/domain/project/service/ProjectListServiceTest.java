@@ -55,6 +55,8 @@ class ProjectListServiceTest {
         given(project.getProjectType()).willReturn(ProjectType.DEVELOP);
         given(project.getStatus()).willReturn(ProjectStatus.IN_PROGRESS);
         given(project.getEndDay()).willReturn(LocalDate.now(ZoneOffset.UTC).plusDays(5));
+        given(project.isEvaluatingState(LocalDate.now(ZoneOffset.UTC))).willReturn(false);
+        given(project.evaluationDeadline()).willReturn(LocalDate.now(ZoneOffset.UTC).plusDays(12));
 
         ProjectMember myMembership = member(project, user(1L, "vana"));
         given(myMembership.getId()).willReturn(42L);
@@ -96,6 +98,9 @@ class ProjectListServiceTest {
         assertThat(response.content().getFirst().memberPreviews()).hasSize(3);
         assertThat(response.content().getFirst().extraMemberCount()).isEqualTo(1);
         assertThat(response.content().getFirst().progressPercent()).isEqualTo(66);
+        assertThat(response.content().getFirst().evaluationAvailable()).isFalse();
+        assertThat(response.content().getFirst().evaluationDeadline())
+                .isEqualTo(LocalDate.now(ZoneOffset.UTC).plusDays(12));
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(20);
         assertThat(response.hasNext()).isTrue();

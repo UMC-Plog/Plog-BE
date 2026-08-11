@@ -118,7 +118,9 @@ public class ProjectListService {
                 memberCount,
                 previews,
                 Math.max(memberCount - previews.size(), 0),
-                progressPercent(progress)
+                progressPercent(progress),
+                project.isEvaluatingState(today),
+                project.evaluationDeadline()
         );
     }
 

@@ -30,7 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class NotificationSettingsService {
     private static final Set<NotificationType> PUSH_TYPES = EnumSet.of(
             NotificationType.CHAT_MESSAGE, NotificationType.CHAT_MENTION, NotificationType.NOTICE,
-            NotificationType.PEER_EVALUATION_STARTED, NotificationType.REPORT_PUBLISHED);
+            NotificationType.PEER_EVALUATION_STARTED, NotificationType.REPORT_PUBLISHED,
+            NotificationType.INTEGRATION_COLLECTION_COMPLETED);
 
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;

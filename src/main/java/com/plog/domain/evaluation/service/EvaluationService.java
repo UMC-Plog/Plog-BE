@@ -8,6 +8,9 @@ import com.plog.domain.evaluation.dto.response.TargetMemberDto;
 import com.plog.domain.evaluation.entity.PeerEvaluation;
 import com.plog.domain.evaluation.event.PeerEvaluationSubmittedEvent;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
+import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
+import com.plog.domain.integration.service.IntegrationActorMappingStatusService;
+import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
@@ -34,6 +37,8 @@ public class EvaluationService {
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final PeerEvaluationRepository peerEvaluationRepository;
+    private final SelfFeedbackRepository selfFeedbackRepository;
+    private final IntegrationActorMappingStatusService actorMappingStatusService;
     private final EvaluationParticipantResolver participantResolver;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -44,7 +49,8 @@ public class EvaluationService {
 
         ProjectMember currentMember = participantResolver.requireEvaluator(projectId, userId);
 
-        List<ProjectMember> allMembers = projectMemberRepository.findAllWithUserByProjectId(projectId);
+        List<ProjectMember> allMembers = projectMemberRepository
+                .findAllByProjectIdAndStatusOrderByIdAsc(projectId, MemberStatus.ACTIVE);
 
         Set<Long> evaluatedTargetIds = peerEvaluationRepository.findEvaluatedTargetIds(currentMember);
 
@@ -62,7 +68,28 @@ public class EvaluationService {
                 })
                 .toList();
 
-        return new EvaluationTargetResponse(targets);
+        int completedPeerEvaluationCount = (int) targets.stream()
+                .filter(TargetMemberDto::isEvaluated)
+                .count();
+        int totalPeerEvaluationCount = targets.size();
+        boolean isSelfFeedbackCompleted = selfFeedbackRepository
+                .findByProjectMemberId(currentMember.getId())
+                .isPresent();
+        boolean isAccountMappingCompleted = actorMappingStatusService
+                .isMyMappingCompleted(projectId, currentMember.getId());
+        boolean isFinalSubmissionAvailable = !project.isCompleted()
+                && completedPeerEvaluationCount == totalPeerEvaluationCount
+                && isSelfFeedbackCompleted
+                && isAccountMappingCompleted;
+
+        return new EvaluationTargetResponse(
+                targets,
+                completedPeerEvaluationCount,
+                totalPeerEvaluationCount,
+                isSelfFeedbackCompleted,
+                isAccountMappingCompleted,
+                isFinalSubmissionAvailable
+        );
     }
 
     public PeerEvaluationDetailResponse getPeerEvaluationDetail(Long projectId, Long targetMemberId, Long userId) {

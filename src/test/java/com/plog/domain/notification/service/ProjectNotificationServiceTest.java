@@ -14,6 +14,7 @@ import com.plog.domain.notification.entity.Notification;
 import com.plog.domain.notification.entity.NotificationType;
 import com.plog.domain.notification.entity.FcmToken;
 import com.plog.domain.notification.event.ChatMessageNotificationEvent;
+import com.plog.domain.notification.event.IntegrationCollectionCompletedEvent;
 import com.plog.domain.notification.event.NoticePublishedEvent;
 import com.plog.domain.notification.event.PeerEvaluationStartedEvent;
 import com.plog.domain.notification.event.ReportPublishedEvent;
@@ -115,6 +116,41 @@ class ProjectNotificationServiceTest {
         service.sendReportPublished(new ReportPublishedEvent(10L, 20L));
 
         assertSavedNotifications(NotificationType.REPORT_PUBLISHED, 20L, 2);
+    }
+
+    @Test
+    void 활동_로그_수집_완료는_요청자에게만_잡_ID와_함께_알림을_보낸다() {
+        Project project = mock(Project.class);
+        when(project.getId()).thenReturn(10L);
+        when(project.getProjectName()).thenReturn("Plog");
+        ProjectMember requester = member(1L, 101L, project, "요청자");
+        when(projectMemberRepository.findAllByIdIn(List.of(1L))).thenReturn(List.of(requester));
+        FcmToken token = mock(FcmToken.class);
+        when(token.getToken()).thenReturn("requester-token");
+        when(fcmTokenRepository.findAllByUserIdIn(java.util.Set.of(101L))).thenReturn(List.of(token));
+
+        service.sendIntegrationCollectionCompleted(
+                new IntegrationCollectionCompletedEvent(10L, 42L, 1L));
+
+        assertSavedNotifications(NotificationType.INTEGRATION_COLLECTION_COMPLETED, 42L, 1);
+        ArgumentCaptor<FcmMessage> messageCaptor = ArgumentCaptor.forClass(FcmMessage.class);
+        verify(fcmGateway).send(messageCaptor.capture());
+        assertThat(messageCaptor.getValue().data())
+                .containsEntry("type", "INTEGRATION_COLLECTION_COMPLETED")
+                .containsEntry("projectId", "10")
+                .containsEntry("resourceId", "42");
+    }
+
+    @Test
+    void 동일한_수집_잡의_완료_알림은_중복_발송하지_않는다() {
+        when(notificationRepository.existsByProjectIdAndTypeAndResourceId(
+                10L, NotificationType.INTEGRATION_COLLECTION_COMPLETED, 42L)).thenReturn(true);
+
+        service.sendIntegrationCollectionCompleted(
+                new IntegrationCollectionCompletedEvent(10L, 42L, 1L));
+
+        verify(notificationRepository, org.mockito.Mockito.never()).saveAll(anyCollection());
+        verify(fcmGateway, org.mockito.Mockito.never()).send(any(FcmMessage.class));
     }
 
     @Test

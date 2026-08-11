@@ -13,7 +13,10 @@ import com.plog.domain.evaluation.dto.response.EvaluationTargetResponse;
 import com.plog.domain.evaluation.dto.response.TargetMemberDto;
 import com.plog.domain.evaluation.entity.PeerEvaluation;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
+import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
+import com.plog.domain.integration.service.IntegrationActorMappingStatusService;
 import com.plog.domain.project.entity.Project;
+import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
@@ -48,6 +51,12 @@ class EvaluationServiceTest {
     private PeerEvaluationRepository peerEvaluationRepository;
 
     @Mock
+    private SelfFeedbackRepository selfFeedbackRepository;
+
+    @Mock
+    private IntegrationActorMappingStatusService actorMappingStatusService;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private EvaluationService evaluationService;
@@ -60,6 +69,8 @@ class EvaluationServiceTest {
                 projectRepository,
                 projectMemberRepository,
                 peerEvaluationRepository,
+                selfFeedbackRepository,
+                actorMappingStatusService,
                 participantResolver,
                 eventPublisher
         );
@@ -159,9 +170,11 @@ class EvaluationServiceTest {
                 .build();
         when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
         when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(currentMember));
-        when(projectMemberRepository.findAllWithUserByProjectId(1L))
+        when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(1L, MemberStatus.ACTIVE))
                 .thenReturn(List.of(currentMember, teammate, evaluatedTeammate));
         when(peerEvaluationRepository.findEvaluatedTargetIds(currentMember)).thenReturn(Set.of(30L));
+        when(selfFeedbackRepository.findByProjectMemberId(10L)).thenReturn(Optional.empty());
+        when(actorMappingStatusService.isMyMappingCompleted(1L, 10L)).thenReturn(true);
 
         EvaluationTargetResponse response = evaluationService.getEvaluationTargets(1L, 7L);
 
@@ -169,6 +182,38 @@ class EvaluationServiceTest {
                 new TargetMemberDto(20L, "바나", ProfilePreset.OTTER, false),
                 new TargetMemberDto(30L, "프로젝트별명", ProfilePreset.PANDA, true)
         );
+        assertThat(response.completedPeerEvaluationCount()).isEqualTo(1);
+        assertThat(response.totalPeerEvaluationCount()).isEqualTo(2);
+        assertThat(response.isSelfFeedbackCompleted()).isFalse();
+        assertThat(response.isAccountMappingCompleted()).isTrue();
+        assertThat(response.isFinalSubmissionAvailable()).isFalse();
+    }
+
+    @Test
+    void exposesFinalSubmissionAvailabilityWhenEveryRequirementIsCompleted() {
+        Project project = project(ProjectStatus.IN_PROGRESS, LocalDate.now(ZoneOffset.UTC));
+        ProjectMember currentMember = ProjectMember.builder().id(10L).project(project).build();
+        ProjectMember teammate = ProjectMember.builder()
+                .id(20L)
+                .project(project)
+                .user(user("바나", ProfilePreset.OTTER))
+                .build();
+        when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
+        when(projectMemberRepository.findByProjectIdAndUserId(1L, 7L)).thenReturn(Optional.of(currentMember));
+        when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(1L, MemberStatus.ACTIVE))
+                .thenReturn(List.of(currentMember, teammate));
+        when(peerEvaluationRepository.findEvaluatedTargetIds(currentMember)).thenReturn(Set.of(20L));
+        when(selfFeedbackRepository.findByProjectMemberId(10L))
+                .thenReturn(Optional.of(mock(com.plog.domain.evaluation.entity.SelfFeedback.class)));
+        when(actorMappingStatusService.isMyMappingCompleted(1L, 10L)).thenReturn(true);
+
+        EvaluationTargetResponse response = evaluationService.getEvaluationTargets(1L, 7L);
+
+        assertThat(response.completedPeerEvaluationCount()).isEqualTo(1);
+        assertThat(response.totalPeerEvaluationCount()).isEqualTo(1);
+        assertThat(response.isSelfFeedbackCompleted()).isTrue();
+        assertThat(response.isAccountMappingCompleted()).isTrue();
+        assertThat(response.isFinalSubmissionAvailable()).isTrue();
     }
 
     private User user(String nickname, ProfilePreset profilePreset) {
