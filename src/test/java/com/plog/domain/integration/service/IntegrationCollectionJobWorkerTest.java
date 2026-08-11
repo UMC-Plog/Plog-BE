@@ -89,6 +89,21 @@ class IntegrationCollectionJobWorkerTest {
     }
 
     @Test
+    @DisplayName("최종 수집은 rate limit 대기로 평가 시작을 미루지 않는다")
+    void failsFinalCollectionInsteadOfDeferringRetry() {
+        IntegrationCollectionJobService.ClaimedJob job = claim(1, true);
+        givenSingleClaim(job);
+        willThrow(new CollectionRetryableException("rate limited", RESET_AT))
+                .given(collectionService).runCollection(eq(7L), any());
+
+        worker(5).processDueJobs();
+
+        then(jobService).should().fail(eq(job), any(),
+                eq("rate limited (final collection not deferred)"));
+        then(jobService).should(never()).retry(any(), any(), any(), anyString());
+    }
+
+    @Test
     @DisplayName("최대 시도를 넘기면 재큐하지 않고 FAILED로 끝낸다")
     void failsJobAfterMaxAttempts() {
         IntegrationCollectionJobService.ClaimedJob job = claim(5);
@@ -155,8 +170,12 @@ class IntegrationCollectionJobWorkerTest {
     }
 
     private IntegrationCollectionJobService.ClaimedJob claim(int attemptCount) {
+        return claim(attemptCount, false);
+    }
+
+    private IntegrationCollectionJobService.ClaimedJob claim(int attemptCount, boolean finalCollection) {
         return new IntegrationCollectionJobService.ClaimedJob(
-                42L, 7L, "token", attemptCount, false, CollectionCursor.start());
+                42L, 7L, "token", attemptCount, finalCollection, CollectionCursor.start());
     }
 
     private IntegrationCollectionJobWorker worker(int maxAttempts) {

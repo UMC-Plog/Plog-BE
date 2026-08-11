@@ -64,6 +64,10 @@ class IntegrationCollectionJobWorker {
         try {
             outcome = collectionService.runCollection(job.projectId(), new WorkerCollectionContext(job));
         } catch (CollectionRetryableException retryable) {
+            if (job.finalCollection()) {
+                jobService.fail(job, Instant.now(), retryable.getMessage() + " (final collection not deferred)");
+                return;
+            }
             requeue(job, retryable.nextAttemptAt(), retryable.getMessage());
             return;
         }
