@@ -30,8 +30,29 @@ public record ProjectListResponse(
         @Schema(description = "미리보기로 표시되지 않은 추가 멤버 수", example = "1")
         int extraMemberCount,
         @Schema(description = "프로젝트 진행률 퍼센트", example = "70")
-        int progressPercent
+        int progressPercent,
+        @Schema(description = "현재 평가 제출 가능 여부", example = "true")
+        boolean evaluationAvailable,
+        @Schema(description = "평가 제출 마감일", example = "2026-08-07")
+        LocalDate evaluationDeadline
 ) {
+    public ProjectListResponse(
+            Long projectId,
+            Long myProjectMemberId,
+            String projectName,
+            ProjectType projectType,
+            ProjectStatus status,
+            LocalDate endDay,
+            long remainingDays,
+            int memberCount,
+            List<MemberPreview> memberPreviews,
+            int extraMemberCount,
+            int progressPercent
+    ) {
+        this(projectId, myProjectMemberId, projectName, projectType, status, endDay, remainingDays,
+                memberCount, memberPreviews, extraMemberCount, progressPercent, false, null);
+    }
+
     public ProjectListResponse(
             Long projectId,
             String projectName,
@@ -45,7 +66,7 @@ public record ProjectListResponse(
             int progressPercent
     ) {
         this(projectId, null, projectName, projectType, status, endDay, remainingDays,
-                memberCount, memberPreviews, extraMemberCount, progressPercent);
+                memberCount, memberPreviews, extraMemberCount, progressPercent, false, null);
     }
 
     @Schema(description = "프로젝트 목록 멤버 미리보기")

@@ -10,6 +10,7 @@ import com.plog.domain.integration.entity.ProjectIntegration;
 import com.plog.domain.integration.repository.IntegrationActivityRepository;
 import com.plog.domain.integration.repository.ProjectIntegrationRepository;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
+import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
 import com.plog.domain.project.dto.ProjectStatusDto;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
@@ -17,8 +18,10 @@ import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.repository.ProjectRepository;
-import com.plog.domain.report.service.ReportLifecycleService;
+import com.plog.domain.report.entity.Report;
+import com.plog.domain.report.event.ReportGenerationRequestedEvent;
 import com.plog.domain.report.repository.ReportRepository;
+import com.plog.domain.report.service.ReportLifecycleService;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
@@ -47,6 +50,9 @@ class ProjectStatusServiceTest {
     private PeerEvaluationRepository peerEvaluationRepository;
 
     @Mock
+    private SelfFeedbackRepository selfFeedbackRepository;
+
+    @Mock
     private ProjectAccessService projectAccessService;
 
     @Mock
@@ -67,13 +73,13 @@ class ProjectStatusServiceTest {
     @InjectMocks
     private ProjectStatusService projectStatusService;
 
-    // 셀프 피드백은 완료 조건이 아니다. 여기서 셀프 피드백을 한 건도 만들지 않는 것이 그 자체로 검증이다.
     @Test
-    void checkAndUpdateStatusCompletesProjectWhenAllPeerEvaluationsSubmitted() {
+    void checkAndUpdateStatusCompletesProjectWhenAllEvaluationsAndSelfFeedbacksSubmitted() {
         Project project = projectEndedDaysAgo(1);
         mockProject(project);
         when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
+        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(3L);
 
         ProjectStatusDto.Response response = projectStatusService.checkAndUpdateStatus(
                 PROJECT_ID,
@@ -86,6 +92,52 @@ class ProjectStatusServiceTest {
         assertThat(response.isTimeoutApplied()).isFalse();
         verify(projectRepository).saveAndFlush(project);
         verify(reportLifecycleService).startFor(project);
+    }
+
+    @Test
+    void checkAndUpdateStatusRequestsGenerationForNewReport() {
+        Project project = projectEndedDaysAgo(1);
+        Report report = org.mockito.Mockito.mock(Report.class);
+        mockProject(project);
+        when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(2L);
+        when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(2L);
+        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(2L);
+        when(reportLifecycleService.startFor(project)).thenReturn(Optional.of(report));
+        when(report.getId()).thenReturn(50L);
+
+        projectStatusService.checkAndUpdateStatus(PROJECT_ID, USER_ID, null);
+
+        verify(eventPublisher).publishEvent(new ReportGenerationRequestedEvent(50L));
+    }
+
+    @Test
+    void completeAndStartReportAutomaticallyCompletesAfterTheLastSubmission() {
+        Project project = projectEndedDaysAgo(1);
+        mockProject(project);
+        when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(2L);
+        when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(2L);
+        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(2L);
+
+        projectStatusService.completeAndStartReportIfAllEvaluationsSubmitted(PROJECT_ID);
+
+        assertThat(project.getStatus()).isEqualTo(ProjectStatus.COMPLETED);
+        verify(projectRepository).saveAndFlush(project);
+        verify(reportLifecycleService).startFor(project);
+    }
+
+    @Test
+    void checkAndUpdateStatusKeepsInProgressWhenSelfFeedbackIsMissing() {
+        Project project = projectEndedDaysAgo(1);
+        mockProject(project);
+        when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
+        when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
+        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(2L);
+
+        ProjectStatusDto.Response response = projectStatusService.checkAndUpdateStatus(PROJECT_ID, USER_ID, null);
+
+        assertThat(response.currentStatus()).isEqualTo(ProjectStatus.IN_PROGRESS);
+        assertThat(response.isPublished()).isFalse();
+        verifyNoInteractions(reportLifecycleService);
     }
 
     @Test
@@ -128,6 +180,7 @@ class ProjectStatusServiceTest {
         mockProject(project);
         when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
+        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(3L);
 
         ProjectIntegration integration = org.mockito.Mockito.mock(ProjectIntegration.class);
         when(integration.isConnected()).thenReturn(true);
@@ -155,6 +208,7 @@ class ProjectStatusServiceTest {
         mockProject(project);
         when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
+        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(3L);
 
         ProjectIntegration integration = org.mockito.Mockito.mock(ProjectIntegration.class);
         when(integration.isConnected()).thenReturn(true);
@@ -180,6 +234,7 @@ class ProjectStatusServiceTest {
         mockProject(project);
         when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
+        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(3L);
 
         ProjectIntegration firstIntegration = org.mockito.Mockito.mock(ProjectIntegration.class);
         when(firstIntegration.isConnected()).thenReturn(true);
@@ -213,6 +268,7 @@ class ProjectStatusServiceTest {
         mockProject(project);
         when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
+        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(3L);
 
         ProjectIntegration disconnectedIntegration = org.mockito.Mockito.mock(ProjectIntegration.class);
         when(disconnectedIntegration.isConnected()).thenReturn(false);
@@ -242,8 +298,6 @@ class ProjectStatusServiceTest {
         )).isInstanceOf(ApiException.class);
     }
 
-    // 활성 멤버가 1명이면 필요 피어 평가 건수가 1 x 0 = 0 이 된다.
-    // 그대로 두면 아무 입력 없이 완료되므로, 이 경우는 타임아웃으로만 완료되어야 한다.
     @Test
     void checkAndUpdateStatusKeepsSoloProjectInProgressBeforeTimeout() {
         Project project = projectEndedDaysAgo(1);
@@ -259,6 +313,20 @@ class ProjectStatusServiceTest {
         assertThat(response.currentStatus()).isEqualTo(ProjectStatus.IN_PROGRESS);
         assertThat(response.isPublished()).isFalse();
         assertThat(response.isTimeoutApplied()).isFalse();
+    }
+
+    @Test
+    void checkAndUpdateStatusCompletesSoloProjectAfterSelfFeedbackSubmission() {
+        Project project = projectEndedDaysAgo(1);
+        mockProject(project);
+        when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(1L);
+        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(1L);
+
+        ProjectStatusDto.Response response = projectStatusService.checkAndUpdateStatus(PROJECT_ID, USER_ID, null);
+
+        assertThat(response.currentStatus()).isEqualTo(ProjectStatus.COMPLETED);
+        assertThat(response.isPublished()).isTrue();
+        verify(reportLifecycleService).startFor(project);
     }
 
     @Test

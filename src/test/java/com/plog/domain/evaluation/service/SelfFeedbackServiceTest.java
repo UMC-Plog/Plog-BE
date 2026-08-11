@@ -13,6 +13,7 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.ProjectType;
+import com.plog.domain.project.event.EvaluationCompletionCheckRequestedEvent;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -88,6 +89,7 @@ class SelfFeedbackServiceTest {
         selfFeedbackService.createSelfFeedback(1L, 7L, new SelfFeedbackCreateRequest("셀프 피드백"));
 
         verify(selfFeedbackRepository).saveAndFlush(any(SelfFeedback.class));
+        verify(eventPublisher).publishEvent(new EvaluationCompletionCheckRequestedEvent(1L));
     }
 
     // 리포트 발행 = 셀프 피드백 마감. 리포트가 셀프 피드백을 분석 재료로 쓰게 될 예정이라,
