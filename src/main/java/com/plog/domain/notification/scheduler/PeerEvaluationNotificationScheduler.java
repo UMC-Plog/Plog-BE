@@ -25,7 +25,7 @@ public class PeerEvaluationNotificationScheduler {
     public void processDueProjects() {
         List<Long> projectIds = projectRepository.findProjectsAwaitingDeadlineProcessing(
                 TimeUtil.todayUtc(), PageRequest.of(0, BATCH_SIZE));
-        projectIds.forEach(projectDeadlineService::processDeadline);
+        processDeadlineForProjects(projectIds);
         if (!projectIds.isEmpty()) {
             log.info("project_deadline_processing_requested count={}", projectIds.size());
         }
@@ -34,9 +34,31 @@ public class PeerEvaluationNotificationScheduler {
     @EventListener(ApplicationReadyEvent.class)
     public void processDueProjectsOnStartup() {
         try {
-            processDueProjects();
+            Long lastProjectId = 0L;
+            while (true) {
+                List<Long> projectIds = projectRepository.findProjectsAwaitingDeadlineProcessingAfterId(
+                        TimeUtil.todayUtc(), lastProjectId, PageRequest.of(0, BATCH_SIZE));
+                if (projectIds.isEmpty()) {
+                    break;
+                }
+
+                processDeadlineForProjects(projectIds);
+                lastProjectId = projectIds.get(projectIds.size() - 1);
+                log.info("project_deadline_startup_processing_requested count={} lastProjectId={}",
+                        projectIds.size(), lastProjectId);
+            }
         } catch (RuntimeException exception) {
             log.warn("project_deadline_startup_catchup_failed", exception);
         }
+    }
+
+    private void processDeadlineForProjects(List<Long> projectIds) {
+        projectIds.forEach(projectId -> {
+            try {
+                projectDeadlineService.processDeadline(projectId);
+            } catch (RuntimeException exception) {
+                log.warn("project_deadline_processing_failed projectId={}", projectId, exception);
+            }
+        });
     }
 }
