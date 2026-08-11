@@ -4,6 +4,7 @@ import com.plog.domain.notification.dto.NotificationSettingsDto;
 import com.plog.domain.notification.entity.NotificationType;
 import com.plog.domain.notification.service.NotificationSettingsService;
 import com.plog.global.api.response.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api")
+@Tag(name = "Notification", description = "알림 조회·설정 및 FCM 토큰 관리 API")
 public class NotificationSettingsController {
     private final NotificationSettingsService notificationSettingsService;
 

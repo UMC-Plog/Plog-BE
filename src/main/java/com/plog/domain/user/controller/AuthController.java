@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Auth", description = "로그인 / 토큰 재발급 / 로그아웃 API")
+@Tag(name = "Auth", description = "회원가입, 로그인, 소셜 인증, 이메일 인증 및 비밀번호 재설정 API")
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {

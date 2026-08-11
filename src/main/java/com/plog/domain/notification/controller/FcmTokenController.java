@@ -3,6 +3,7 @@ package com.plog.domain.notification.controller;
 import com.plog.domain.notification.dto.FcmTokenDto;
 import com.plog.domain.notification.service.FcmTokenService;
 import com.plog.global.api.response.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/users/me/fcm-token")
 @RequiredArgsConstructor
+@Tag(name = "Notification", description = "알림 조회·설정 및 FCM 토큰 관리 API")
 public class FcmTokenController {
     private final FcmTokenService fcmTokenService;
 

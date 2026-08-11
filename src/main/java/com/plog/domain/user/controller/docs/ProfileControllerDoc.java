@@ -13,13 +13,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.ResponseEntity;
 
-@Tag(name = "Profile",
-        description = """
-                마이페이지 프로필 조회 / 수정 API (인증 필요).
-                회원가입 화면의 닉네임 중복확인은 Auth 태그의 GET /api/auth/nickname/check 를 사용하세요.
-                이쪽 중복확인은 본인의 현재 닉네임을 사용 가능으로 통과시킵니다.
-                탈퇴한 계정은 액세스 토큰이 아직 살아있어도(최대 30분) 아래 세 API 모두 403(AUTH016)으로 거부합니다.
-                """)
+@Tag(name = "User", description = "사용자 계정 및 프로필 관리 API")
 public interface ProfileControllerDoc {
 
     @Operation(

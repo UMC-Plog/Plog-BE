@@ -15,7 +15,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 
-@Tag(name = "Social Auth", description = "카카오 / 구글 소셜 로그인 API")
+@Tag(name = "Auth", description = "회원가입, 로그인, 소셜 인증, 이메일 인증 및 비밀번호 재설정 API")
 public interface SocialAuthControllerDoc {
 
     @Operation(

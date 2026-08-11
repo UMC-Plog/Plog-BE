@@ -22,10 +22,12 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.servlet.view.RedirectView;
 
+@Tag(name = "Integration", description = "외부 서비스 계정·리소스 연동 및 활동 로그 수집 API")
 public interface IntegrationControllerDoc {
 
     @Operation(
