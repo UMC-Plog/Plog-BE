@@ -2,13 +2,13 @@ package com.plog.domain.project.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.plog.domain.integration.entity.ProjectIntegration;
-import com.plog.domain.integration.repository.IntegrationActivityRepository;
-import com.plog.domain.integration.repository.ProjectIntegrationRepository;
+import com.plog.domain.integration.service.IntegrationActorMappingStatusService;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
 import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
 import com.plog.domain.project.dto.ProjectStatusDto;
@@ -27,6 +27,7 @@ import com.plog.global.api.exception.ApiException;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -56,10 +57,7 @@ class ProjectStatusServiceTest {
     private ProjectAccessService projectAccessService;
 
     @Mock
-    private ProjectIntegrationRepository projectIntegrationRepository;
-
-    @Mock
-    private IntegrationActivityRepository integrationActivityRepository;
+    private IntegrationActorMappingStatusService actorMappingStatusService;
 
     @Mock
     private ReportLifecycleService reportLifecycleService;
@@ -72,6 +70,13 @@ class ProjectStatusServiceTest {
 
     @InjectMocks
     private ProjectStatusService projectStatusService;
+
+    @BeforeEach
+    void allowCompletedMappingsByDefault() {
+        lenient().when(actorMappingStatusService
+                        .areAllActiveMemberMappingsCompleted(anyLong(), anyLong()))
+                .thenReturn(true);
+    }
 
     @Test
     void checkAndUpdateStatusCompletesProjectWhenAllEvaluationsAndSelfFeedbacksSubmitted() {
@@ -154,7 +159,7 @@ class ProjectStatusServiceTest {
         assertThat(response.isTimeoutApplied()).isTrue();
         verify(projectRepository).saveAndFlush(project);
         verify(reportLifecycleService).startFor(project);
-        verifyNoInteractions(projectIntegrationRepository, integrationActivityRepository);
+        verifyNoInteractions(actorMappingStatusService);
     }
 
     // 평가가 아직 안 닫혔으면 리포트도 시작되면 안 된다 — 완료 전환과 리포트 시작은 한 몸이다.
@@ -171,24 +176,16 @@ class ProjectStatusServiceTest {
         assertThat(response.isPublished()).isFalse();
         assertThat(response.isTimeoutApplied()).isFalse();
         verifyNoInteractions(reportLifecycleService);
-        verifyNoInteractions(projectIntegrationRepository, integrationActivityRepository);
+        verifyNoInteractions(actorMappingStatusService);
     }
 
     @Test
-    void checkAndUpdateStatusCompletesProjectWhenConnectedIntegrationHasNoUnassignedActors() {
+    void checkAndUpdateStatusCompletesProjectWhenAllActiveMembersMappedTheirAccounts() {
         Project project = projectEndedDaysAgo(1);
         mockProject(project);
         when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
         when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(3L);
-
-        ProjectIntegration integration = org.mockito.Mockito.mock(ProjectIntegration.class);
-        when(integration.isConnected()).thenReturn(true);
-        when(integration.getId()).thenReturn(20L);
-        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(PROJECT_ID))
-                .thenReturn(java.util.List.of(integration));
-        when(integrationActivityRepository.existsUnassignedActivityActorByProjectIntegrationId(20L))
-                .thenReturn(false);
 
         ProjectStatusDto.Response response = projectStatusService.checkAndUpdateStatus(
                 PROJECT_ID,
@@ -203,51 +200,15 @@ class ProjectStatusServiceTest {
     }
 
     @Test
-    void checkAndUpdateStatusRejectsCompletionWhenConnectedIntegrationHasUnassignedActor() {
+    void checkAndUpdateStatusRejectsCompletionWhenAnActiveMemberHasNotMappedAnAccount() {
         Project project = projectEndedDaysAgo(1);
         mockProject(project);
         when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
         when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
         when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(3L);
 
-        ProjectIntegration integration = org.mockito.Mockito.mock(ProjectIntegration.class);
-        when(integration.isConnected()).thenReturn(true);
-        when(integration.getId()).thenReturn(20L);
-        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(PROJECT_ID))
-                .thenReturn(java.util.List.of(integration));
-        when(integrationActivityRepository.existsUnassignedActivityActorByProjectIntegrationId(20L))
-                .thenReturn(true);
-
-        assertThatThrownBy(() -> projectStatusService.checkAndUpdateStatus(
-                PROJECT_ID,
-                USER_ID,
-                new ProjectStatusDto.Request(ProjectStatus.COMPLETED)
-        ))
-                .isInstanceOf(ApiException.class)
-                .extracting(exception -> ((ApiException) exception).getErrorCode())
-                .isEqualTo(ProjectErrorCode.ACTOR_MAPPING_REQUIRED);
-    }
-
-    @Test
-    void checkAndUpdateStatusRejectsCompletionWhenSecondConnectedIntegrationHasUnassignedActor() {
-        Project project = projectEndedDaysAgo(1);
-        mockProject(project);
-        when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
-        when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
-        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(3L);
-
-        ProjectIntegration firstIntegration = org.mockito.Mockito.mock(ProjectIntegration.class);
-        when(firstIntegration.isConnected()).thenReturn(true);
-        when(firstIntegration.getId()).thenReturn(20L);
-        ProjectIntegration secondIntegration = org.mockito.Mockito.mock(ProjectIntegration.class);
-        when(secondIntegration.isConnected()).thenReturn(true);
-        when(secondIntegration.getId()).thenReturn(21L);
-        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(PROJECT_ID))
-                .thenReturn(java.util.List.of(firstIntegration, secondIntegration));
-        when(integrationActivityRepository.existsUnassignedActivityActorByProjectIntegrationId(20L))
+        when(actorMappingStatusService.areAllActiveMemberMappingsCompleted(PROJECT_ID, 3L))
                 .thenReturn(false);
-        when(integrationActivityRepository.existsUnassignedActivityActorByProjectIntegrationId(21L))
-                .thenReturn(true);
 
         assertThatThrownBy(() -> projectStatusService.checkAndUpdateStatus(
                 PROJECT_ID,
@@ -257,33 +218,6 @@ class ProjectStatusServiceTest {
                 .isInstanceOf(ApiException.class)
                 .extracting(exception -> ((ApiException) exception).getErrorCode())
                 .isEqualTo(ProjectErrorCode.ACTOR_MAPPING_REQUIRED);
-
-        verify(integrationActivityRepository).existsUnassignedActivityActorByProjectIntegrationId(20L);
-        verify(integrationActivityRepository).existsUnassignedActivityActorByProjectIntegrationId(21L);
-    }
-
-    @Test
-    void checkAndUpdateStatusCompletesProjectWithoutCheckingDisconnectedIntegrations() {
-        Project project = projectEndedDaysAgo(1);
-        mockProject(project);
-        when(projectMemberRepository.countByProjectIdAndStatus(PROJECT_ID, MemberStatus.ACTIVE)).thenReturn(3L);
-        when(peerEvaluationRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(6L);
-        when(selfFeedbackRepository.countSubmittedByActiveProjectMembers(PROJECT_ID)).thenReturn(3L);
-
-        ProjectIntegration disconnectedIntegration = org.mockito.Mockito.mock(ProjectIntegration.class);
-        when(disconnectedIntegration.isConnected()).thenReturn(false);
-        when(projectIntegrationRepository.findAllByProjectIdOrderByLinkTypeAsc(PROJECT_ID))
-                .thenReturn(java.util.List.of(disconnectedIntegration));
-
-        ProjectStatusDto.Response response = projectStatusService.checkAndUpdateStatus(
-                PROJECT_ID,
-                USER_ID,
-                new ProjectStatusDto.Request(ProjectStatus.COMPLETED)
-        );
-
-        assertThat(response.currentStatus()).isEqualTo(ProjectStatus.COMPLETED);
-        assertThat(response.isPublished()).isTrue();
-        verifyNoInteractions(integrationActivityRepository);
     }
 
     @Test
