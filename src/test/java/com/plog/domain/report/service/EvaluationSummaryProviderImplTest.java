@@ -52,7 +52,7 @@ class EvaluationSummaryProviderImplTest {
     void peer_역량점수와_키워드와_정규화점수를_집계한다() {
         PeerEvaluation first = PeerEvaluation.builder()
                 .collaborationScore(4).initiativeScore(5).communicationScore(4).outputScore(4)
-                .keywords(List.of("리더십", "책임감"))
+                .keywords(List.of("책임감", "책임감", "리더십"))
                 .build();
         PeerEvaluation second = PeerEvaluation.builder()
                 .collaborationScore(5).initiativeScore(3).communicationScore(4).outputScore(5)
@@ -73,7 +73,8 @@ class EvaluationSummaryProviderImplTest {
         assertThat(summary.average()).isEqualByComparingTo("4.25");
         // 100점 척도(Z-score)는 계산 서비스 값을 그대로 쓴다.
         assertThat(summary.normalizedScore()).isEqualByComparingTo("80.00");
-        // 키워드는 최초 등장 순서로 중복 없이.
+        // 한 평가 안의 중복 선택은 한 번으로 세고, 리더십이 2명에게 선택됐으므로 앞선다.
+        // 책임감/꼼꼼함은 1회 동률이라 최초 등장 순서를 유지한다.
         assertThat(summary.keywords()).containsExactly("리더십", "책임감", "꼼꼼함");
     }
 

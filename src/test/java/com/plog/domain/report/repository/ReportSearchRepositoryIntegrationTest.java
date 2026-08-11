@@ -62,11 +62,15 @@ class ReportSearchRepositoryIntegrationTest {
     @Test
     void searchesOnlyActiveMembershipReportsByProjectNameAndCompletedRange() {
         User user = saveUser("search-owner");
-        Project target = saveProject("PLOG API");
-        addMember(user, target, MemberStatus.ACTIVE);
-        Report older = saveCompleted(target, LocalDateTime.of(2026, 7, 20, 10, 0));
-        Report latest = saveCompleted(target, LocalDateTime.of(2026, 7, 21, 10, 0));
-        saveCompleted(target, LocalDateTime.of(2026, 6, 30, 10, 0));
+        Project olderProject = saveProject("PLOG API older");
+        addMember(user, olderProject, MemberStatus.ACTIVE);
+        Report older = saveCompleted(olderProject, LocalDateTime.of(2026, 7, 20, 10, 0));
+        Project latestProject = saveProject("PLOG API latest");
+        addMember(user, latestProject, MemberStatus.ACTIVE);
+        Report latest = saveCompleted(latestProject, LocalDateTime.of(2026, 7, 21, 10, 0));
+        Project outOfRange = saveProject("PLOG API old month");
+        addMember(user, outOfRange, MemberStatus.ACTIVE);
+        saveCompleted(outOfRange, LocalDateTime.of(2026, 6, 30, 10, 0));
 
         Project otherName = saveProject("Other");
         addMember(user, otherName, MemberStatus.ACTIVE);

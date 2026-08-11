@@ -16,8 +16,8 @@ import java.util.List;
  *   writing     → 개인 리포트 ⑤ AI 문장 변환
  * </pre>
  *
- * 모든 필드는 없을 수 있다 — 근거가 부족하면 지어내지 말고 비우도록 프롬프트가 지시한다.
- * 화면은 비어 있는 섹션을 숨긴다.
+ * 최신 프롬프트는 모든 섹션을 출력하며, 근거가 부족한 문자열에는 고정 안내 문구를 넣는다.
+ * nullable 처리는 과거 저장 응답과 스키마 미지원 Stub의 호환성을 위해 유지한다.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record MemberReportText(
