@@ -7,6 +7,7 @@ import com.plog.domain.evaluation.entity.SelfFeedback;
 import com.plog.domain.evaluation.event.SelfFeedbackSubmittedEvent;
 import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.project.event.EvaluationCompletionCheckRequestedEvent;
 import com.plog.global.api.error.EvaluationErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
@@ -61,6 +62,7 @@ public class SelfFeedbackService {
         }
         eventPublisher.publishEvent(new SelfFeedbackSubmittedEvent(
                 selfFeedback.getId(), projectMember.getId(), LocalDateTime.now(ZoneOffset.UTC)));
+        eventPublisher.publishEvent(new EvaluationCompletionCheckRequestedEvent(projectId));
 
         return new SelfFeedbackResponse(selfFeedback.getId(), selfFeedback.getContent());
     }

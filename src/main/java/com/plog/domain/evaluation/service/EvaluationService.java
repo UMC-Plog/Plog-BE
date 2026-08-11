@@ -7,6 +7,7 @@ import com.plog.domain.evaluation.dto.response.PeerEvaluationDetailResponse;
 import com.plog.domain.evaluation.dto.response.TargetMemberDto;
 import com.plog.domain.evaluation.entity.PeerEvaluation;
 import com.plog.domain.evaluation.event.PeerEvaluationSubmittedEvent;
+import com.plog.domain.project.event.EvaluationCompletionCheckRequestedEvent;
 import com.plog.domain.evaluation.repository.PeerEvaluationRepository;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
@@ -112,6 +113,7 @@ public class EvaluationService {
         peerEvaluationRepository.save(evaluation);
         eventPublisher.publishEvent(new PeerEvaluationSubmittedEvent(
                 evaluation.getId(), evaluator.getId(), evaluatee.getId(), LocalDateTime.now(ZoneOffset.UTC)));
+        eventPublisher.publishEvent(new EvaluationCompletionCheckRequestedEvent(projectId));
 
         return new PeerEvaluationCreateResponse(evaluation.getId(), hasUniformScores(request));
     }
