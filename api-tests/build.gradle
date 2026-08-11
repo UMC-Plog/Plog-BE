@@ -1,0 +1,44 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.plog.apitest'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.13.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'io.rest-assured:rest-assured:6.0.1'
+    testImplementation 'org.assertj:assertj-core:3.27.6'
+    testImplementation 'org.awaitility:awaitility:4.3.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform {
+        excludeTags 'live'
+    }
+}
+
+tasks.register('apiTest', Test) {
+    description = 'Runs all API tests against a running backend.'
+    group = 'verification'
+    outputs.upToDateWhen { false }
+    useJUnitPlatform {
+        includeTags 'live'
+    }
+    testLogging {
+        events 'skipped'
+    }
+    shouldRunAfter test
+}
