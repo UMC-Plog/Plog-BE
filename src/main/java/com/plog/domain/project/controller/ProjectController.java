@@ -44,8 +44,8 @@ public class ProjectController implements ProjectControllerDoc {
     }
 
     @Operation(
-            summary = "프로젝트 상태 전환 및 타임아웃 검증",
-            description = "전원 평가 제출 또는 종료일 7일 경과 여부를 확인해 프로젝트 완료 상태로 전환합니다."
+            summary = "현재 사용자 최종 제출 및 프로젝트 완료 검증",
+            description = "현재 사용자의 최종 제출을 기록하고, 전원 최종 제출 또는 종료일 7일 경과 여부를 확인해 프로젝트 완료 상태로 전환합니다."
     )
     @PatchMapping("/{projectId}/status")
     public ResponseEntity<ApiResponse<ProjectStatusDto.Response>> checkAndUpdateStatus(

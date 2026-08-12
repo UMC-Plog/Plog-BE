@@ -266,7 +266,7 @@ class ProjectControllerTest {
                 eq(userId),
                 any(ProjectStatusDto.Request.class)
         )).willReturn(new ProjectStatusDto.Response(
-                projectId, ProjectStatus.COMPLETED, true, true, 20L,
+                projectId, ProjectStatus.COMPLETED, true, true, true, 2, 2, 20L,
                 com.plog.domain.report.entity.ReportStatus.GENERATING));
 
         mockMvc.perform(patch("/api/projects/{projectId}/status", projectId)
@@ -283,7 +283,10 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.result.projectId").value(projectId))
                 .andExpect(jsonPath("$.result.currentStatus").value("COMPLETED"))
                 .andExpect(jsonPath("$.result.isTimeoutApplied").value(true))
-                .andExpect(jsonPath("$.result.isPublished").value(true));
+                .andExpect(jsonPath("$.result.isPublished").value(true))
+                .andExpect(jsonPath("$.result.isCurrentMemberFinalSubmitted").value(true))
+                .andExpect(jsonPath("$.result.completedFinalSubmissionCount").value(2))
+                .andExpect(jsonPath("$.result.totalFinalSubmissionCount").value(2));
     }
 
     private void authenticate(Long userId) {

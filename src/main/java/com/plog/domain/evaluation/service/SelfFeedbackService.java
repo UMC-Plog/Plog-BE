@@ -7,7 +7,6 @@ import com.plog.domain.evaluation.entity.SelfFeedback;
 import com.plog.domain.evaluation.event.SelfFeedbackSubmittedEvent;
 import com.plog.domain.evaluation.repository.SelfFeedbackRepository;
 import com.plog.domain.project.entity.ProjectMember;
-import com.plog.domain.project.event.EvaluationCompletionCheckRequestedEvent;
 import com.plog.domain.report.entity.SourceDomain;
 import com.plog.domain.report.repository.ReportActivityLogRepository;
 import com.plog.global.api.error.EvaluationErrorCode;
@@ -44,6 +43,7 @@ public class SelfFeedbackService {
     public SelfFeedbackResponse createSelfFeedback(Long projectId, Long userId, SelfFeedbackCreateRequest request) {
         ProjectMember projectMember = participantResolver.requireEvaluator(projectId, userId);
 
+        requireNotFinalSubmitted(projectMember);
         requireEvaluationOpen(projectMember);
 
         if (selfFeedbackRepository.findByProjectMemberId(projectMember.getId()).isPresent()) {
@@ -62,7 +62,6 @@ public class SelfFeedbackService {
         }
         eventPublisher.publishEvent(new SelfFeedbackSubmittedEvent(
                 selfFeedback.getId(), projectMember.getId(), TimeUtil.now()));
-        eventPublisher.publishEvent(new EvaluationCompletionCheckRequestedEvent(projectId));
 
         return new SelfFeedbackResponse(selfFeedback.getId(), selfFeedback.getContent());
     }
@@ -74,6 +73,7 @@ public class SelfFeedbackService {
         if (projectMember.getProject().isCompleted()) {
             throw new ApiException(EvaluationErrorCode.CANNOT_MODIFY_FEEDBACK_AFTER_PUBLISH);
         }
+        requireNotFinalSubmitted(projectMember);
         requireEvaluationOpen(projectMember);
 
         SelfFeedback selfFeedback = selfFeedbackRepository.findByProjectMemberId(projectMember.getId())
@@ -96,6 +96,12 @@ public class SelfFeedbackService {
     private void requireEvaluationOpen(ProjectMember projectMember) {
         if (!projectMember.getProject().isEvaluatingState(TimeUtil.today())) {
             throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
+        }
+    }
+
+    private void requireNotFinalSubmitted(ProjectMember projectMember) {
+        if (projectMember.isFinalSubmitted()) {
+            throw new ApiException(EvaluationErrorCode.CANNOT_MODIFY_AFTER_FINAL_SUBMISSION);
         }
     }
 }

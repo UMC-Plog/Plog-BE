@@ -23,6 +23,8 @@ public enum EvaluationErrorCode implements BaseErrorCode {
     // 타임아웃 및 상태 변경 오류
     CANNOT_MODIFY_EVALUATION_AFTER_PUBLISH(HttpStatus.BAD_REQUEST, "EVAL400_8", "이미 최종 리포트가 발행되어 평가를 수정할 수 없습니다."),
     CANNOT_MODIFY_FEEDBACK_AFTER_PUBLISH(HttpStatus.BAD_REQUEST, "EVAL400_9", "이미 최종 리포트가 발행되어 피드백을 수정할 수 없습니다."),
+    PEER_EVALUATION_REQUIRED_FOR_FINAL_SUBMISSION(HttpStatus.BAD_REQUEST, "EVAL400_10", "모든 팀원 평가를 완료해야 최종 제출할 수 있습니다."),
+    CANNOT_MODIFY_AFTER_FINAL_SUBMISSION(HttpStatus.BAD_REQUEST, "EVAL400_11", "최종 제출 후에는 평가와 피드백을 수정할 수 없습니다."),
 
     // 팀원 간 정책
     ALREADY_EVALUATED(HttpStatus.CONFLICT, "EVAL409_1", "이미 해당 팀원을 평가하셨습니다."),
