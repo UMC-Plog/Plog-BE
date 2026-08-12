@@ -61,11 +61,31 @@ public class ReportBrowserRenderer {
                     .setTimeout(timeoutMillis));
             page.waitForSelector("[data-report-ready=\"true\"]",
                     new Page.WaitForSelectorOptions().setTimeout(timeoutMillis));
-            page.evaluate("async () => {"
-                    + "await document.fonts.ready;"
-                    + "await Promise.all(Array.from(document.images).map(image => image.complete"
-                    + " ? Promise.resolve() : new Promise(resolve => { image.onload = resolve; image.onerror = resolve; })));"
-                    + "}");
+            page.evaluate("""
+                    async timeoutMillis => {
+                      let timeoutId;
+                      try {
+                        const resourcesReady = Promise.all([
+                          document.fonts.ready,
+                          ...Array.from(document.images).map(image => image.complete
+                            ? Promise.resolve()
+                            : new Promise(resolve => {
+                                image.onload = resolve;
+                                image.onerror = resolve;
+                              }))
+                        ]);
+                        const timeout = new Promise((_, reject) => {
+                          timeoutId = setTimeout(
+                            () => reject(new Error('Report assets did not load before timeout')),
+                            timeoutMillis
+                          );
+                        });
+                        await Promise.race([resourcesReady, timeout]);
+                      } finally {
+                        clearTimeout(timeoutId);
+                      }
+                    }
+                    """, timeoutMillis);
             return page.pdf(new Page.PdfOptions()
                     .setFormat("A4")
                     .setPrintBackground(true)

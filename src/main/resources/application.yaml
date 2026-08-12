@@ -227,7 +227,7 @@ plog:
       realtime-collection:
         enabled: ${REPORT_REALTIME_ACTIVITY_COLLECTION_ENABLED:false}
     pdf:
-      render-base-url: ${REPORT_PDF_RENDER_BASE_URL:https://umc-plog.site}
+      render-base-url: ${REPORT_PDF_RENDER_BASE_URL}
       chromium-executable: ${REPORT_PDF_CHROMIUM_EXECUTABLE:/usr/bin/chromium}
       timeout: ${REPORT_PDF_RENDER_TIMEOUT:45s}
     scheduler:
