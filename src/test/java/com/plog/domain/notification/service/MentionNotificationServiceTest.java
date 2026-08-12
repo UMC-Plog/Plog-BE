@@ -19,6 +19,7 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.user.entity.User;
+import com.plog.global.util.AfterCommitExecutor;
 import com.plog.infrastructure.fcm.FcmDeliveryException;
 import com.plog.infrastructure.fcm.FcmGateway;
 import com.plog.infrastructure.fcm.FcmMessage;
@@ -55,7 +56,7 @@ class MentionNotificationServiceTest {
                 org.mockito.ArgumentMatchers.any(NotificationType.class))).thenReturn(true);
         service = new MentionNotificationService(
                 projectMemberRepository, fcmTokenRepository, notificationRepository, fcmGateway,
-                notificationPushPolicy);
+                notificationPushPolicy, new AfterCommitExecutor());
         Project project = project(10L, "Plog");
         sender = member(1L, 101L, project, MemberStatus.ACTIVE, "곰곰");
         target = member(2L, 102L, project, MemberStatus.ACTIVE, "포도");

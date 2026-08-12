@@ -21,7 +21,7 @@ class ProjectNotificationListenerTest {
         ChatMessageNotificationEvent chat =
                 new ChatMessageNotificationEvent(1L, 2L, 3L, 4L, List.of(5L), "메시지");
         PeerEvaluationStartedEvent peer = new PeerEvaluationStartedEvent(1L, 4L);
-        NoticePublishedEvent notice = new NoticePublishedEvent(1L, 7L);
+        NoticePublishedEvent notice = new NoticePublishedEvent(1L, 7L, 4L);
         ReportPublishedEvent report = new ReportPublishedEvent(1L, 6L);
         IntegrationCollectionCompletedEvent collection =
                 new IntegrationCollectionCompletedEvent(1L, 8L, 4L);

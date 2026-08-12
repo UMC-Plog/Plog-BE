@@ -77,7 +77,7 @@ class ReportDetailServiceTest {
         assertThat(response.pdfAvailable()).isTrue();
         assertThat(response.members()).hasSize(1);
         assertThat(response.members().getFirst().memberName()).isEqualTo("이창훈");
-        assertThat(response.reportCode()).isEqualTo("PLOG-T-2026-07-10");
+        assertThat(response.reportCode()).isEqualTo("PLOG-T-2026-07-00000010");
         assertThat(response.members().getFirst().finalScore()).isEqualByComparingTo("82.50");
         assertThat(response.members().getFirst().contributionRate()).isEqualByComparingTo("25.00");
         assertThat(response.projectStartDate()).isEqualTo(LocalDate.of(2026, 5, 1));
@@ -139,7 +139,7 @@ class ReportDetailServiceTest {
         assertThat(response.externalToolConnected()).isFalse();
         assertThat(response.externalScore()).isNull();
         assertThat(response.reliabilityTier()).isEqualTo(ReliabilityTier.P2);
-        assertThat(response.reportCode()).isEqualTo("PLOG-P-2026-07-10");
+        assertThat(response.reportCode()).isEqualTo("PLOG-P-2026-07-00000010");
         assertThat(response.projectName()).isEqualTo("Plog");
         assertThat(response.projectStartDate()).isEqualTo(LocalDate.of(2026, 5, 1));
         assertThat(response.competencyScores100().get(CompetencyCategory.COLLABORATION))
