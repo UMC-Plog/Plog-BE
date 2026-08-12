@@ -8,6 +8,7 @@ import com.plog.domain.evaluation.service.EvaluationService;
 import com.plog.global.api.response.ApiResponse;
 import com.plog.global.api.response.EvaluationSuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/projects/{projectId}/evaluations")
+@Tag(name = "Report", description = "피어 평가, 자기 피드백 및 리포트 생성·조회 API")
 public class EvaluationController {
 
     private final EvaluationService evaluationService;

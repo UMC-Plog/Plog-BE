@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Notification", description = "알림 센터 API")
+@Tag(name = "Notification", description = "알림 조회·설정 및 FCM 토큰 관리 API")
 @Validated
 @RestController
 @RequiredArgsConstructor

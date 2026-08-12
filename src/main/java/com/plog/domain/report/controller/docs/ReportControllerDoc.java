@@ -17,7 +17,7 @@ import jakarta.validation.constraints.Positive;
 import java.time.LocalDate;
 import org.springframework.http.ResponseEntity;
 
-@Tag(name = "Report", description = "리포트 API")
+@Tag(name = "Report", description = "피어 평가, 자기 피드백 및 리포트 생성·조회 API")
 public interface ReportControllerDoc {
 
     @Operation(

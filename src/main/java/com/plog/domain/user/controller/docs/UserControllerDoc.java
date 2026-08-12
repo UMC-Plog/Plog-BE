@@ -10,7 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 
-@Tag(name = "User", description = "계정 자체를 다루는 API (인증 필요). 프로필 수정은 Profile 태그를 참고하세요.")
+@Tag(name = "User", description = "사용자 계정 및 프로필 관리 API")
 public interface UserControllerDoc {
 
     @Operation(

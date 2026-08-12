@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Email Verification", description = "회원가입용 이메일 인증 코드 발송 / 검증 API")
+@Tag(name = "Auth", description = "회원가입, 로그인, 소셜 인증, 이메일 인증 및 비밀번호 재설정 API")
 @RestController
 @RequestMapping("/api/auth/email")
 public class EmailVerificationController {

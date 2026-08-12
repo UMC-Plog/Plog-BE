@@ -11,7 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 
-@Tag(name = "Project Member", description = "프로젝트 멤버 API")
+@Tag(name = "Project", description = "프로젝트, 멤버 및 설정 관리 API")
 public interface ProjectMemberControllerDoc {
 
     @Operation(

@@ -14,7 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "Self Feedback", description = "셀프 피드백 API")
+@Tag(name = "Report", description = "피어 평가, 자기 피드백 및 리포트 생성·조회 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/projects/{projectId}/self-feedbacks")
