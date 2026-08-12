@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 public interface FcmTokenRepository extends JpaRepository<FcmToken, Long> {
@@ -32,7 +33,7 @@ public interface FcmTokenRepository extends JpaRepository<FcmToken, Long> {
     int deleteByTokenAndUserId(@Param("token") String token, @Param("userId") Long userId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     @Query("delete from FcmToken f where f.token = :token")
     int deleteByToken(@Param("token") String token);
 
