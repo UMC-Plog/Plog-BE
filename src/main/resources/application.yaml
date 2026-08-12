@@ -227,9 +227,9 @@ plog:
       realtime-collection:
         enabled: ${REPORT_REALTIME_ACTIVITY_COLLECTION_ENABLED:false}
     pdf:
-      # truetype/ 경로여야 한다. opentype/ 아래의 CFF 폰트(.otf/.ttc)를 지정하면 파일이 존재해도
-      # PDF 렌더링이 매번 실패한다(ReportPdfRenderer.isSubsetUnsupported 가 기동 시 error 로 경고).
-      font-path: ${REPORT_PDF_FONT_PATH:/usr/share/fonts/truetype/nanum/NanumGothic.ttf}
+      render-base-url: ${REPORT_PDF_RENDER_BASE_URL}
+      chromium-executable: ${REPORT_PDF_CHROMIUM_EXECUTABLE:/usr/bin/chromium}
+      timeout: ${REPORT_PDF_RENDER_TIMEOUT:45s}
     scheduler:
       enabled: ${REPORT_SCHEDULER_ENABLED:false}
       # 초 분 시 일 월 요일 (Spring 6필드). 컨테이너 TZ=Asia/Seoul 기준.

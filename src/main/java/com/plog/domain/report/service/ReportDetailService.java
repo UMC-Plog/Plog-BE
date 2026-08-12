@@ -2,6 +2,7 @@ package com.plog.domain.report.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.domain.report.dto.response.ReportDetailResponse;
 import com.plog.domain.report.dto.response.ReportMemberResultResponse;
@@ -48,13 +49,19 @@ public class ReportDetailService {
      */
     @Transactional(readOnly = true)
     public ReportDetailResponse getReport(Long userId, Long reportId) {
-        Report report = requireAccessibleReport(userId, reportId);
+        Report report = requireReport(reportId);
+        ProjectMember requester = requireActiveMember(userId, report);
         List<ReportMemberSummaryResponse> members = report.getStatus().isPublished()
                 ? memberResultRepository.findMemberSummaries(reportId).stream()
                         .map(this::toMemberSummaryResponse)
                         .toList()
                 : List.of();
-        return toDetailResponse(report, members);
+        boolean pdfAvailable = memberResultRepository
+                .findByReportIdAndProjectMemberId(reportId, requester.getId())
+                .map(result -> ReportPdfAvailability.isAvailable(
+                        report.getStatus(), result.getPdfObjectKey(), result.getPdfFileName()))
+                .orElse(false);
+        return toDetailResponse(report, members, pdfAvailable);
     }
 
     /**
@@ -63,28 +70,52 @@ public class ReportDetailService {
      */
     @Transactional(readOnly = true)
     public ReportMemberResultResponse getMemberResult(Long userId, Long reportId, Long projectMemberId) {
-        Report report = requireAccessibleReport(userId, reportId);
+        Report report = requireReport(reportId);
+        requireActiveMember(userId, report);
         ReportMemberResult result = memberResultRepository
                 .findWithMemberByReportIdAndProjectMemberId(reportId, projectMemberId)
                 .orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_MEMBER_RESULT_NOT_FOUND));
         return toMemberResultResponse(report, result);
     }
 
+    @Transactional(readOnly = true)
+    public ReportDetailResponse getReportForRendering(Long reportId) {
+        Report report = requireReport(reportId);
+        List<ReportMemberSummaryResponse> members = memberResultRepository.findMemberSummaries(reportId).stream()
+                .map(this::toMemberSummaryResponse)
+                .toList();
+        return toDetailResponse(report, members, false);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ReportMemberResultResponse> getMemberResultsForRendering(Long reportId) {
+        Report report = requireReport(reportId);
+        return memberResultRepository.findAllByReportIdOrderByProjectMemberIdAsc(reportId).stream()
+                .map(result -> toMemberResultResponse(report, result))
+                .toList();
+    }
+
     /**
      * 리포트를 찾고 "그 리포트가 속한 프로젝트의 ACTIVE 멤버인지"까지 확인한다.
      * 같은 프로젝트 멤버면 다른 멤버의 결과도 볼 수 있다 — 리포트가 팀 공용 산출물이라는 전제다.
      */
-    private Report requireAccessibleReport(Long userId, Long reportId) {
+    private Report requireReport(Long reportId) {
+        return reportRepository.findWithProjectById(reportId)
+                .orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
+    }
+
+    private ProjectMember requireActiveMember(Long userId, Report report) {
         if (userId == null) {
             throw new ApiException(AuthErrorCode.INVALID_TOKEN);
         }
-        Report report = reportRepository.findWithProjectById(reportId)
-                .orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
-        projectAccessService.requireActiveMember(report.getProject().getId(), userId);
-        return report;
+        return projectAccessService.requireActiveMember(report.getProject().getId(), userId);
     }
 
-    private ReportDetailResponse toDetailResponse(Report report, List<ReportMemberSummaryResponse> members) {
+    private ReportDetailResponse toDetailResponse(
+            Report report,
+            List<ReportMemberSummaryResponse> members,
+            boolean pdfAvailable
+    ) {
         int totalTaskCount = members.stream().mapToInt(ReportMemberSummaryResponse::totalTaskCount).sum();
         int completedTaskCount = members.stream().mapToInt(ReportMemberSummaryResponse::completedTaskCount).sum();
         int deadlineMetTaskCount = members.stream().mapToInt(ReportMemberSummaryResponse::deadlineMetTaskCount).sum();
@@ -96,8 +127,7 @@ public class ReportDetailService {
                 report.getProject().getProjectName(),
                 report.getStatus(),
                 TimeUtil.toInstant(report.getCompletedAt()),
-                ReportPdfAvailability.isAvailable(
-                        report.getStatus(), report.getPdfObjectKey(), report.getPdfFileName()),
+                pdfAvailable,
                 report.getTeamStrength(),
                 report.getTeamSuggestion(),
                 report.getTeamCompletionRate(),

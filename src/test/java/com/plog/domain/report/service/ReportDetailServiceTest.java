@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
@@ -32,6 +33,7 @@ import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.mockito.InjectMocks;
@@ -57,11 +59,20 @@ class ReportDetailServiceTest {
     @Mock
     private ProjectAccessService projectAccessService;
 
+    @Mock
+    private ProjectMember requester;
+
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     private ReportDetailService reportDetailService;
+
+    @BeforeEach
+    void setUpRequester() {
+        lenient().when(projectAccessService.requireActiveMember(PROJECT_ID, USER_ID)).thenReturn(requester);
+        lenient().when(requester.getId()).thenReturn(PROJECT_MEMBER_ID);
+    }
 
     @Test
     void returnsCompletedReportWithMemberSummariesOrderedByRepository() {
@@ -69,6 +80,10 @@ class ReportDetailServiceTest {
         when(reportRepository.findWithProjectById(REPORT_ID)).thenReturn(Optional.of(report));
         when(memberResultRepository.findMemberSummaries(REPORT_ID))
                 .thenReturn(List.of(memberSummary(PROJECT_MEMBER_ID, "이창훈", new BigDecimal("82.50"))));
+        ReportMemberResult ownResult = memberResult(report);
+        ownResult.attachPdfArchive("reports/20/members/7/reports.zip", "Plog-reports.zip");
+        when(memberResultRepository.findByReportIdAndProjectMemberId(REPORT_ID, PROJECT_MEMBER_ID))
+                .thenReturn(Optional.of(ownResult));
 
         ReportDetailResponse response = reportDetailService.getReport(USER_ID, REPORT_ID);
 

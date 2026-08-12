@@ -35,7 +35,7 @@ dependencies {
 	implementation 'software.amazon.awssdk:lambda'
 	compileOnly 'org.projectlombok:lombok'
 	implementation 'org.postgresql:postgresql'
-	implementation 'com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10'
+	implementation 'com.microsoft.playwright:playwright:1.55.0'
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'
