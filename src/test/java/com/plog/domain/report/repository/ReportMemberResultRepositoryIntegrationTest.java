@@ -150,6 +150,39 @@ class ReportMemberResultRepositoryIntegrationTest {
         assertThat(memberResultRepository.findMemberSummaries(otherReport.getId())).isEmpty();
     }
 
+    @Test
+    void findsOnlyCompletedReportsWithMissingMemberPdfUsingTheReportIdCursor() {
+        Project missingProject = saveProject("PDF 누락");
+        Report missing = reportRepository.save(Report.start(missingProject));
+        saveResult(missing, saveMember(missingProject, "missing", "누락", null),
+                new BigDecimal("70.00"));
+        missing.complete(java.time.LocalDateTime.of(2026, 8, 13, 10, 0));
+
+        Project availableProject = saveProject("PDF 완료");
+        Report available = reportRepository.save(Report.start(availableProject));
+        ReportMemberResult availableResult = saveResult(
+                available,
+                saveMember(availableProject, "available", "완료", null),
+                new BigDecimal("80.00")
+        );
+        availableResult.attachPdfArchive("reports/available.zip", "available.zip");
+        available.complete(java.time.LocalDateTime.of(2026, 8, 13, 10, 0));
+
+        Project generatingProject = saveProject("발행 전");
+        Report generating = reportRepository.save(Report.start(generatingProject));
+        saveResult(generating, saveMember(generatingProject, "generating", "생성중", null),
+                new BigDecimal("60.00"));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(memberResultRepository.findCompletedReportIdsMissingPdfAfter(
+                0L, PageRequest.of(0, 5)))
+                .containsExactly(missing.getId());
+        assertThat(memberResultRepository.findCompletedReportIdsMissingPdfAfter(
+                missing.getId(), PageRequest.of(0, 5)))
+                .isEmpty();
+    }
+
     /**
      * 배치 대상 쿼리. 유예 경계와 "리포트 없음 또는 FAILED" 조건을 실제 SQL 로 확인한다 —
      * not exists 서브쿼리와 날짜 경계는 단위 테스트로 검증되지 않는다.

@@ -10,7 +10,6 @@ import com.microsoft.playwright.options.WaitUntilState;
 import com.plog.domain.report.config.ReportPdfProperties;
 import com.plog.domain.report.dto.response.ReportDetailResponse;
 import com.plog.domain.report.dto.response.ReportMemberResultResponse;
-import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +35,6 @@ public class ReportBrowserRenderer {
         try (Playwright playwright = Playwright.create()) {
             BrowserType.LaunchOptions launchOptions = new BrowserType.LaunchOptions()
                     .setHeadless(true)
-                    .setExecutablePath(Path.of(properties.chromiumExecutable()))
                     .setArgs(List.of("--no-sandbox", "--disable-dev-shm-usage"));
             try (Browser browser = playwright.chromium().launch(launchOptions)) {
                 byte[] teamPdf = renderPage(browser, "/internal/report-render/team", team);

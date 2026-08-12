@@ -10,15 +10,19 @@ RUN chmod +x gradlew && ./gradlew dependencies --no-daemon > /dev/null 2>&1 || t
 
 # 소스 복사 후 실행 가능한 jar 빌드
 COPY src src
-RUN ./gradlew clean bootJar --no-daemon
+RUN ./gradlew clean bootJar copyRuntimeClasspath --no-daemon
 
 # ===== Runtime stage =====
-FROM eclipse-temurin:21-jre AS runtime
+# Java 21과 Playwright가 모두 지원하는 Ubuntu 24.04를 고정한다.
+# unpinned Temurin 이미지는 새 Ubuntu로 이동해 Playwright 지원 범위를 벗어날 수 있다.
+FROM eclipse-temurin:21-jre-noble AS runtime
 WORKDIR /app
 
-# 실제 프론트 리포트 화면을 Chromium print CSS로 PDF 변환한다.
-RUN apt-get update && apt-get install -y --no-install-recommends chromium fonts-noto-cjk \
-    && rm -rf /var/lib/apt/lists/*
+# 애플리케이션과 같은 1.55.0 CLI로 정확히 맞는 Chromium 및 Linux 의존성을 설치한다.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+COPY --from=builder /app/build/runtime-classpath /tmp/runtime-classpath
+RUN java -cp "/tmp/runtime-classpath/*" com.microsoft.playwright.CLI install --with-deps chromium \
+    && rm -rf /tmp/runtime-classpath /var/lib/apt/lists/*
 
 # plain jar를 껐으므로 build/libs 에는 실행 가능한 jar 하나만 존재
 COPY --from=builder /app/build/libs/*.jar app.jar

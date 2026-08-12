@@ -57,6 +57,12 @@ tasks.withType(JavaCompile).configureEach {
 	options.compilerArgs += ['-Xlint:deprecation']
 }
 
+// Docker 런타임에서 프로젝트와 같은 Playwright CLI로 브라우저를 설치하기 위한 클래스패스.
+tasks.register('copyRuntimeClasspath', Copy) {
+	from configurations.runtimeClasspath
+	into layout.buildDirectory.dir('runtime-classpath')
+}
+
 // 실행 가능한 bootJar만 생성 (plain jar 비활성화 → Docker COPY 시 jar 하나만 잡히게)
 tasks.named('jar') {
 	enabled = false
