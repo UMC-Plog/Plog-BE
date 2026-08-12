@@ -16,4 +16,9 @@ public interface ReportSummary {
     LocalDateTime getCompletedAt();
 
     LocalDateTime getCreatedAt();
+
+    /** PDF ZIP 아카이브의 S3 키. 업로드 전이거나 업로드가 실패했으면 null 이다. */
+    String getPdfObjectKey();
+
+    String getPdfFileName();
 }

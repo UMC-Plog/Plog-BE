@@ -9,6 +9,7 @@ import com.plog.domain.report.dto.response.ReportMemberSummaryResponse;
 import com.plog.domain.report.entity.CompetencyCategory;
 import com.plog.domain.report.entity.Report;
 import com.plog.domain.report.entity.ReportMemberResult;
+import com.plog.domain.report.entity.ReportPdfAvailability;
 import com.plog.domain.report.llm.MemberReportText;
 import com.plog.domain.report.repository.ReportMemberResultRepository;
 import com.plog.domain.report.repository.ReportRepository;
@@ -95,7 +96,8 @@ public class ReportDetailService {
                 report.getProject().getProjectName(),
                 report.getStatus(),
                 TimeUtil.toInstant(report.getCompletedAt()),
-                isPdfAvailable(report),
+                ReportPdfAvailability.isAvailable(
+                        report.getStatus(), report.getPdfObjectKey(), report.getPdfFileName()),
                 report.getTeamStrength(),
                 report.getTeamSuggestion(),
                 report.getTeamCompletionRate(),
@@ -109,13 +111,6 @@ public class ReportDetailService {
                 deadlineMetTaskCount,
                 deadlineTargetTaskCount
         );
-    }
-
-    // PDF 다운로드 API 가 통과시키는 조건과 같은 기준이어야 한다 — 프론트가 이 값만 보고 버튼을 그린다.
-    private boolean isPdfAvailable(Report report) {
-        return report.getStatus().isPublished()
-                && report.getPdfObjectKey() != null && !report.getPdfObjectKey().isBlank()
-                && report.getPdfFileName() != null && !report.getPdfFileName().isBlank();
     }
 
     private ReportMemberSummaryResponse toMemberSummaryResponse(ReportMemberSummary summary) {
