@@ -1,14 +1,19 @@
 package com.plog.domain.report.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
+import com.plog.domain.report.dto.response.ReportDetailResponse;
+import com.plog.domain.report.dto.response.ReportMemberResultResponse;
 import com.plog.domain.report.entity.Report;
 import com.plog.domain.report.entity.ReportMemberResult;
 import com.plog.domain.report.repository.ReportMemberResultRepository;
@@ -37,143 +42,104 @@ class ReportPdfArchiveServiceTest {
 
     @Mock private ReportRepository reportRepository;
     @Mock private ReportMemberResultRepository resultRepository;
-    @Mock private ReportPdfRenderer renderer;
+    @Mock private ReportDetailService reportDetailService;
+    @Mock private ReportBrowserRenderer renderer;
     @Mock private FileStorageService fileStorageService;
-    @Mock private ReportTextWriter textWriter;
+    @Mock private ReportDetailResponse teamResponse;
+    @Mock private ReportMemberResultResponse firstResponse;
+    @Mock private ReportMemberResultResponse secondResponse;
     @InjectMocks private ReportPdfArchiveService service;
 
     @Test
-    void usesRealNameAndContextSpecificCodesInPdfArchive() throws Exception {
+    void createsOnePrivateTwoFileArchivePerMember() throws Exception {
         Project project = Project.builder()
-                .id(15L)
-                .projectName("Plog")
-                .inviteTokenHash("invite-hash")
-                .inviteTokenEncrypted("encrypted-invite")
+                .id(15L).projectName("Plog")
+                .inviteTokenHash("invite-hash").inviteTokenEncrypted("encrypted-invite")
                 .build();
         Report report = Report.start(project);
         ReflectionTestUtils.setField(report, "id", 20L);
         ReflectionTestUtils.setField(report, "createdAt", LocalDateTime.of(2026, 8, 1, 0, 0));
-        ProjectMember member = ProjectMember.builder()
-                .id(7L)
-                .project(project)
-                .user(User.createLocal("member@plog.test", "encoded", "김실명", "계정닉네임"))
-                .anNickname("프로젝트닉네임")
-                .build();
-        ReportMemberResult result = ReportMemberResult.create(report, member);
+        ReportMemberResult first = member(report, project, 7L, "첫째");
+        ReportMemberResult second = member(report, project, 8L, "둘째");
+
         when(reportRepository.findWithProjectById(20L)).thenReturn(Optional.of(report));
-        when(resultRepository.findAllByReportIdOrderByProjectMemberIdAsc(20L)).thenReturn(List.of(result));
-        when(renderer.render(anyString())).thenAnswer(invocation ->
-                invocation.<String>getArgument(0).getBytes(StandardCharsets.UTF_8));
+        when(resultRepository.findAllByReportIdOrderByProjectMemberIdAsc(20L))
+                .thenReturn(List.of(first, second));
+        when(reportDetailService.getReportForRendering(20L)).thenReturn(teamResponse);
+        when(reportDetailService.getMemberResultsForRendering(20L))
+                .thenReturn(List.of(firstResponse, secondResponse));
+        when(renderer.render(teamResponse, List.of(firstResponse, secondResponse)))
+                .thenReturn(new ReportBrowserRenderer.RenderedReports(
+                        "team".getBytes(StandardCharsets.UTF_8),
+                        Map.of(
+                                7L, "personal-7".getBytes(StandardCharsets.UTF_8),
+                                8L, "personal-8".getBytes(StandardCharsets.UTF_8))));
 
         service.generateAndAttach(20L);
 
-        ArgumentCaptor<byte[]> archive = ArgumentCaptor.forClass(byte[].class);
+        ArgumentCaptor<byte[]> firstArchive = ArgumentCaptor.forClass(byte[].class);
+        ArgumentCaptor<byte[]> secondArchive = ArgumentCaptor.forClass(byte[].class);
+        String fileName = "PLOG-T-2026-08-00000015-reports.zip";
         verify(fileStorageService).putGeneratedObject(
-                org.mockito.ArgumentMatchers.eq("reports/20/PLOG-T-2026-08-00000015-reports.zip"),
-                org.mockito.ArgumentMatchers.eq("application/zip"), archive.capture());
-        verify(textWriter).attachPdfArchive(
-                20L, "reports/20/PLOG-T-2026-08-00000015-reports.zip", "PLOG-T-2026-08-00000015-reports.zip");
+                eq("reports/20/members/7/" + fileName), eq("application/zip"), firstArchive.capture());
+        verify(fileStorageService).putGeneratedObject(
+                eq("reports/20/members/8/" + fileName), eq("application/zip"), secondArchive.capture());
 
-        Map<String, String> files = unzip(archive.getValue());
-        assertThat(files.get("team-report.pdf"))
-                .contains("김실명", "PLOG-T-2026-08-00000015")
-                .doesNotContain("프로젝트닉네임", "계정닉네임");
-        assertThat(files.get("member-7-report.pdf"))
-                .contains("김실명", "PLOG-P-2026-08-00000015")
-                .doesNotContain("프로젝트닉네임", "계정닉네임");
+        assertThat(unzip(firstArchive.getValue()))
+                .containsExactlyInAnyOrderEntriesOf(Map.of(
+                        "team-report.pdf", "team",
+                        "personal-report.pdf", "personal-7"));
+        assertThat(unzip(secondArchive.getValue()))
+                .containsExactlyInAnyOrderEntriesOf(Map.of(
+                        "team-report.pdf", "team",
+                        "personal-report.pdf", "personal-8"));
+        assertThat(first.getPdfObjectKey()).isEqualTo("reports/20/members/7/" + fileName);
+        assertThat(second.getPdfObjectKey()).isEqualTo("reports/20/members/8/" + fileName);
+        verify(resultRepository).saveAll(List.of(first, second));
     }
 
     @Test
-    void includesScreenSectionsAndDetailedMemberDataInPdfHtml() throws Exception {
+    void doesNotPublishAnyArchiveMetadataWhenAnUploadFails() {
         Project project = Project.builder()
-                .id(15L)
-                .projectName("Plog")
-                .inviteTokenHash("invite-hash")
-                .inviteTokenEncrypted("encrypted-invite")
-                .startDay(java.time.LocalDate.of(2026, 5, 1))
-                .endDay(java.time.LocalDate.of(2026, 6, 12))
+                .id(15L).projectName("Plog")
+                .inviteTokenHash("invite-hash").inviteTokenEncrypted("encrypted-invite")
                 .build();
         Report report = Report.start(project);
         ReflectionTestUtils.setField(report, "id", 20L);
         ReflectionTestUtils.setField(report, "createdAt", LocalDateTime.of(2026, 8, 1, 0, 0));
-        ReflectionTestUtils.setField(report, "completedAt", LocalDateTime.of(2026, 8, 12, 18, 0));
-        ReflectionTestUtils.setField(report, "teamStrength", "협업 흐름이 안정적입니다.");
-        ReflectionTestUtils.setField(report, "teamSuggestion", "진행 상황을 정기적으로 공유해 보세요.");
-        ReflectionTestUtils.setField(report, "teamCompletionRate", new java.math.BigDecimal("75.00"));
-        ReflectionTestUtils.setField(report, "teamDeadlineComplianceRate", new java.math.BigDecimal("80.00"));
-
-        ProjectMember projectMember = ProjectMember.builder()
-                .id(7L)
-                .project(project)
-                .user(User.createLocal("member@plog.test", "encoded", "김실명", "계정닉네임"))
-                .anNickname("프로젝트닉네임")
-                .build();
-        ReportMemberResult member = ReportMemberResult.create(report, projectMember);
-        ReflectionTestUtils.setField(member, "finalScore", new java.math.BigDecimal("82.50"));
-        ReflectionTestUtils.setField(member, "contributionRate", new java.math.BigDecimal("100.00"));
-        ReflectionTestUtils.setField(member, "collaborationStability", new java.math.BigDecimal("86.00"));
-        ReflectionTestUtils.setField(member, "vulnerability", new java.math.BigDecimal("24.00"));
-        ReflectionTestUtils.setField(member, "headline", "팀의 방향을 안정적으로 이끌었어요.");
-        ReflectionTestUtils.setField(member, "teamMemberHeadline", "소통과 일정 조율에 적극적으로 참여했어요.");
-        ReflectionTestUtils.setField(member, "strengths", "[{\"title\":\"일정 조율\",\"description\":\"일정 변경을 빠르게 공유했어요.\"}]");
-        ReflectionTestUtils.setField(member, "weakness", "{\"title\":\"문서화\",\"suggestions\":[\"결정 사항을 기록해 보세요.\"]}");
-        ReflectionTestUtils.setField(member, "growth", "{\"growthPoint\":\"기록 습관\",\"keepStrength\":\"협업 태도\",\"nextAction\":\"회의록 작성\"}");
-        ReflectionTestUtils.setField(member, "writing", "{\"coverLetter\":\"팀 일정을 조율했습니다.\",\"portfolio\":\"협업 프로세스를 개선했습니다.\"}");
-        ReflectionTestUtils.setField(member, "competencyScores", Map.of(
-                com.plog.domain.report.entity.CompetencyCategory.COLLABORATION,
-                new java.math.BigDecimal("4.50")));
-        ReflectionTestUtils.setField(member, "peerKeywords", List.of("책임감", "소통"));
-        ReflectionTestUtils.setField(service, "objectMapper", new ObjectMapper());
+        ReportMemberResult first = member(report, project, 7L, "첫째");
+        ReportMemberResult second = member(report, project, 8L, "둘째");
 
         when(reportRepository.findWithProjectById(20L)).thenReturn(Optional.of(report));
-        when(resultRepository.findAllByReportIdOrderByProjectMemberIdAsc(20L)).thenReturn(List.of(member));
-        when(renderer.render(anyString())).thenAnswer(invocation ->
-                invocation.<String>getArgument(0).getBytes(StandardCharsets.UTF_8));
+        when(resultRepository.findAllByReportIdOrderByProjectMemberIdAsc(20L))
+                .thenReturn(List.of(first, second));
+        when(reportDetailService.getReportForRendering(20L)).thenReturn(teamResponse);
+        when(reportDetailService.getMemberResultsForRendering(20L))
+                .thenReturn(List.of(firstResponse, secondResponse));
+        when(renderer.render(teamResponse, List.of(firstResponse, secondResponse)))
+                .thenReturn(new ReportBrowserRenderer.RenderedReports(
+                        "team".getBytes(StandardCharsets.UTF_8),
+                        Map.of(
+                                7L, "personal-7".getBytes(StandardCharsets.UTF_8),
+                                8L, "personal-8".getBytes(StandardCharsets.UTF_8))));
+        doNothing().doThrow(new IllegalStateException("S3 failure"))
+                .when(fileStorageService).putGeneratedObject(any(), any(), any());
 
-        service.generateAndAttach(20L);
+        assertThatThrownBy(() -> service.generateAndAttach(20L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("S3 failure");
 
-        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
-        verify(renderer, times(2)).render(html.capture());
-        String teamHtml = html.getAllValues().get(0);
-        String memberHtml = html.getAllValues().get(1);
-        assertThat(teamHtml).contains("팀 업무 완수 현황", "팀 기여도 분포", "팀원별 활동 요약", "책임감");
-        assertThat(memberHtml).contains("기여도 상세 분석", "강점 분석", "취약점 진단",
-                "AI 개인 성장 인사이트", "AI 문장 변환", "일정 조율", "문서화", "회의록 작성",
-                "PLOG-P-2026-08-00000015");
+        verify(resultRepository, never()).saveAll(any());
+        assertThat(first.getPdfObjectKey()).isNull();
+        assertThat(second.getPdfObjectKey()).isNull();
     }
 
-    @Test
-    void preservesUnavailableMetricsAndNormalizesNullableJson() {
-        Project project = Project.builder()
-                .id(15L)
-                .projectName("Plog")
-                .inviteTokenHash("invite-hash")
-                .inviteTokenEncrypted("encrypted-invite")
+    private ReportMemberResult member(Report report, Project project, Long id, String name) {
+        ProjectMember member = ProjectMember.builder()
+                .id(id).project(project)
+                .user(User.createLocal(id + "@plog.test", "encoded", name, name))
                 .build();
-        Report report = Report.start(project);
-        ReflectionTestUtils.setField(report, "createdAt", LocalDateTime.of(2026, 8, 1, 0, 0));
-        ProjectMember projectMember = ProjectMember.builder()
-                .id(7L)
-                .project(project)
-                .user(User.createLocal("member@plog.test", "encoded", "김실명", "계정닉네임"))
-                .anNickname("프로젝트닉네임")
-                .build();
-        ReportMemberResult member = ReportMemberResult.create(report, projectMember);
-        ReflectionTestUtils.setField(member, "strengths", "null");
-        ReflectionTestUtils.setField(member, "weakness",
-                "{\"title\":\"문서화\",\"suggestions\":[null,\"결정 사항을 기록해 보세요.\"]}");
-        ReflectionTestUtils.setField(member, "competencyScores", Map.of());
-        ReflectionTestUtils.setField(service, "objectMapper", new ObjectMapper());
-
-        String teamHtml = ReflectionTestUtils.invokeMethod(service, "teamHtml", report, List.of(member));
-        String memberHtml = ReflectionTestUtils.invokeMethod(service, "memberHtml", report, member);
-
-        assertThat(teamHtml)
-                .contains("측정 불가")
-                .doesNotContain(">0%</td>");
-        assertThat(memberHtml)
-                .contains("협업 태도", "측정 불가", "문서화", "결정 사항을 기록해 보세요.")
-                .doesNotContain("강점 분석", ">0%</div>");
+        return ReportMemberResult.create(report, member);
     }
 
     private Map<String, String> unzip(byte[] archive) throws Exception {

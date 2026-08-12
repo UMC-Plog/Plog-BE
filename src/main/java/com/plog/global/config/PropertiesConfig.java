@@ -7,6 +7,7 @@ import com.plog.domain.integration.config.IntegrationCollectionProperties;
 import com.plog.domain.integration.config.IntegrationRedirectProperties;
 import com.plog.domain.integration.config.NotionIntegrationProperties;
 import com.plog.domain.integration.config.NotionWebhookProperties;
+import com.plog.domain.report.config.ReportPdfProperties;
 import com.plog.domain.user.config.GoogleOAuthProperties;
 import com.plog.domain.user.config.KakaoOAuthProperties;
 import com.plog.global.security.jwt.JwtProperties;
@@ -37,7 +38,8 @@ import org.springframework.context.annotation.Configuration;
         SocialSignupProperties.class,
         ThumbnailProperties.class,
         LlmProperties.class,
-        EmbeddingProperties.class
+        EmbeddingProperties.class,
+        ReportPdfProperties.class
 })
 public class PropertiesConfig {
 }

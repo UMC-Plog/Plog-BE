@@ -225,8 +225,9 @@ public interface ReportControllerDoc {
     @Operation(
             summary = "리포트 PDF ZIP 다운로드 URL 발급",
             description = """
-                    ACTIVE 프로젝트 멤버에게 팀 리포트 PDF 1개와 멤버별 개인 리포트 PDF 전체를
-                    함께 담은 ZIP 파일의 임시 다운로드 URL을 발급합니다. 기존 경로 호환을 위해
+                    ACTIVE 프로젝트 멤버에게 팀 리포트 PDF 1개와 요청자 본인의 개인 리포트 PDF 1개만
+                    담은 전용 ZIP 파일의 임시 다운로드 URL을 발급합니다. 다른 팀원의 개인 리포트는 포함하지 않습니다.
+                    기존 경로 호환을 위해
                     엔드포인트는 /pdf를 유지합니다.
                     응답의 downloadUrl을 브라우저 이동/새 창 열기로 사용하면 파일 다운로드가 시작됩니다.
                     URL 만료 시간은 expiresInSeconds로 내려갑니다.

@@ -7,11 +7,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.plog.domain.project.entity.Project;
+import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.domain.report.dto.response.ReportPdfDownloadResponse;
 import com.plog.domain.report.entity.Report;
+import com.plog.domain.report.entity.ReportMemberResult;
 import com.plog.domain.report.entity.ReportStatus;
 import com.plog.domain.report.repository.ReportRepository;
+import com.plog.domain.report.repository.ReportMemberResultRepository;
 import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.error.ReportErrorCode;
 import com.plog.global.api.exception.ApiException;
@@ -36,6 +39,9 @@ class ReportPdfDownloadServiceTest {
     private ProjectAccessService projectAccessService;
 
     @Mock
+    private ReportMemberResultRepository resultRepository;
+
+    @Mock
     private FileStorageService fileStorageService;
 
     @Mock
@@ -44,12 +50,19 @@ class ReportPdfDownloadServiceTest {
     @Mock
     private Project project;
 
+    @Mock
+    private ProjectMember projectMember;
+
+    @Mock
+    private ReportMemberResult memberResult;
+
     private ReportPdfDownloadService service;
 
     @BeforeEach
     void setUp() {
         service = new ReportPdfDownloadService(
                 reportRepository,
+                resultRepository,
                 projectAccessService,
                 fileStorageService
         );
@@ -61,11 +74,14 @@ class ReportPdfDownloadServiceTest {
         given(report.getProject()).willReturn(project);
         given(project.getId()).willReturn(10L);
         given(report.getStatus()).willReturn(ReportStatus.COMPLETED);
-        given(report.getPdfObjectKey()).willReturn("reports/10/report.pdf");
-        given(report.getPdfFileName()).willReturn("Plog-report.pdf");
+        given(projectAccessService.requireActiveMember(10L, 1L)).willReturn(projectMember);
+        given(projectMember.getId()).willReturn(7L);
+        given(resultRepository.findByReportIdAndProjectMemberId(20L, 7L)).willReturn(Optional.of(memberResult));
+        given(memberResult.getPdfObjectKey()).willReturn("reports/20/members/7/report.zip");
+        given(memberResult.getPdfFileName()).willReturn("Plog-report.zip");
         given(fileStorageService.createDownloadUrl(
-                "reports/10/report.pdf",
-                "Plog-report.pdf",
+                "reports/20/members/7/report.zip",
+                "Plog-report.zip",
                 Duration.ofSeconds(300)
         )).willReturn(new FileStorageDto.PresignedDownloadResponse(
                 "https://storage.test/report.pdf",
@@ -77,7 +93,7 @@ class ReportPdfDownloadServiceTest {
         verify(projectAccessService).requireActiveMember(10L, 1L);
         assertThat(response).isEqualTo(new ReportPdfDownloadResponse(
                 20L,
-                "Plog-report.pdf",
+                "Plog-report.zip",
                 "https://storage.test/report.pdf",
                 300
         ));
@@ -127,7 +143,9 @@ class ReportPdfDownloadServiceTest {
     void rejectsACompletedReportWithoutPdfMetadata() {
         givenAccessibleReport();
         given(report.getStatus()).willReturn(ReportStatus.COMPLETED);
-        given(report.getPdfObjectKey()).willReturn(null);
+        given(projectAccessService.requireActiveMember(10L, 1L)).willReturn(projectMember);
+        given(projectMember.getId()).willReturn(7L);
+        given(resultRepository.findByReportIdAndProjectMemberId(20L, 7L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.createDownloadUrl(1L, 20L))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
@@ -141,11 +159,14 @@ class ReportPdfDownloadServiceTest {
     void propagatesAStorageDisabledError() {
         givenAccessibleReport();
         given(report.getStatus()).willReturn(ReportStatus.COMPLETED);
-        given(report.getPdfObjectKey()).willReturn("reports/10/report.pdf");
-        given(report.getPdfFileName()).willReturn("Plog-report.pdf");
+        given(projectAccessService.requireActiveMember(10L, 1L)).willReturn(projectMember);
+        given(projectMember.getId()).willReturn(7L);
+        given(resultRepository.findByReportIdAndProjectMemberId(20L, 7L)).willReturn(Optional.of(memberResult));
+        given(memberResult.getPdfObjectKey()).willReturn("reports/20/members/7/report.zip");
+        given(memberResult.getPdfFileName()).willReturn("Plog-report.zip");
         given(fileStorageService.createDownloadUrl(
-                "reports/10/report.pdf",
-                "Plog-report.pdf",
+                "reports/20/members/7/report.zip",
+                "Plog-report.zip",
                 Duration.ofSeconds(300)
         )).willThrow(new ApiException(FileStorageErrorCode.FILE_STORAGE_DISABLED));
 

@@ -180,6 +180,13 @@ public class ReportMemberResult extends BaseEntity {
     @Column(name = "llm_model", length = 100)
     private String llmModel;
 
+    /** 이 멤버에게만 제공하는 팀+본인 개인 리포트 ZIP. */
+    @Column(name = "pdf_object_key", length = 1024)
+    private String pdfObjectKey;
+
+    @Column(name = "pdf_file_name")
+    private String pdfFileName;
+
     public static ReportMemberResult create(Report report, ProjectMember projectMember) {
         if (report == null || projectMember == null) {
             throw new IllegalArgumentException("report and projectMember must not be null");
@@ -313,6 +320,14 @@ public class ReportMemberResult extends BaseEntity {
     public boolean hasLlmText() {
         return headline != null && !headline.isBlank()
                 && teamMemberHeadline != null && !teamMemberHeadline.isBlank();
+    }
+
+    public void attachPdfArchive(String objectKey, String fileName) {
+        if (objectKey == null || objectKey.isBlank() || fileName == null || fileName.isBlank()) {
+            throw new IllegalArgumentException("PDF archive metadata must not be blank");
+        }
+        this.pdfObjectKey = objectKey;
+        this.pdfFileName = fileName;
     }
 
     /**
