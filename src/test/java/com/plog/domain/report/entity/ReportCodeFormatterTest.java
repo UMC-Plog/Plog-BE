@@ -12,7 +12,7 @@ class ReportCodeFormatterTest {
         String code = ReportCodeFormatter.formatTeam(
                 15L, LocalDateTime.of(2025, 7, 31, 15, 0));
 
-        assertThat(code).isEqualTo("PLOG-T-2025-07-15");
+        assertThat(code).isEqualTo("PLOG-T-2025-07-00000015");
     }
 
     @Test
@@ -20,6 +20,14 @@ class ReportCodeFormatterTest {
         String code = ReportCodeFormatter.formatPersonal(
                 15L, LocalDateTime.of(2025, 7, 31, 15, 0));
 
-        assertThat(code).isEqualTo("PLOG-P-2025-07-15");
+        assertThat(code).isEqualTo("PLOG-P-2025-07-00000015");
+    }
+
+    @Test
+    void 프로젝트_ID가_8자리를_넘으면_자르지_않는다() {
+        String code = ReportCodeFormatter.formatTeam(
+                123456789L, LocalDateTime.of(2025, 7, 31, 15, 0));
+
+        assertThat(code).isEqualTo("PLOG-T-2025-07-123456789");
     }
 }

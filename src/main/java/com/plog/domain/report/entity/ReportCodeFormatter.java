@@ -26,6 +26,7 @@ public final class ReportCodeFormatter {
         String yearMonth = createdAtUtc.atZone(TimeUtil.STORAGE_ZONE)
                 .withZoneSameInstant(TimeUtil.DISPLAY_ZONE)
                 .format(YEAR_MONTH);
-        return "PLOG-" + reportType + "-" + yearMonth + "-" + projectId;
+        String paddedProjectId = String.format("%08d", projectId);
+        return "PLOG-" + reportType + "-" + yearMonth + "-" + paddedProjectId;
     }
 }
