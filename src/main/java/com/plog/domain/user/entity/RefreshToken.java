@@ -47,6 +47,16 @@ public class RefreshToken extends BaseEntity {
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
+    /**
+     * 회전으로 소모된 시각. null이면 아직 안 쓴 토큰이다.
+     * <p>
+     * 예전엔 회전이 곧 DELETE 였다. 그러면 재발급이 한 번만 겹쳐도 — PWA 콜드 스타트의 중복 호출,
+     * 모바일 네트워크의 재시도 — 나머지가 전부 실패해 로그아웃됐다. 지우는 대신 시각을 남겨서
+     * "방금 쓴 토큰의 재시도"와 "한참 뒤에 나타난 탈취 의심"을 구분한다.
+     */
+    @Column(name = "used_at")
+    private LocalDateTime usedAt;
+
     public static RefreshToken issue(User user, String tokenHash, LocalDateTime expiresAt) {
         return RefreshToken.builder()
                 .user(user)

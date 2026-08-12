@@ -1,7 +1,6 @@
 package com.plog.domain.user.service;
 
 import com.plog.domain.user.dto.response.TokenResponse;
-import com.plog.domain.user.entity.RefreshToken;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.UserRepository;
 import com.plog.global.api.error.AuthErrorCode;
@@ -48,13 +47,8 @@ public class AuthService {
 
     @Transactional
     public TokenResponse reissue(String rawRefreshToken) {
-        RefreshToken current = refreshTokenService.validateOrThrow(rawRefreshToken);
-        User user = current.getUser();
-        // 회전: 조회-검증과 소모(삭제)를 분리하면 동시 요청이 함께 통과할 수 있다.
-        // 삭제 성공(1행) 여부로 소모를 판정해, 이미 쓰인 토큰이면 재발급을 거부한다.
-        if (refreshTokenService.consume(rawRefreshToken) == 0) {
-            throw new ApiException(AuthErrorCode.INVALID_REFRESH_TOKEN);
-        }
+        // 회전·재시도 허용·탈취 판정은 전부 RefreshTokenService 안에 있다(원문을 다루는 곳을 한 군데로 모은다).
+        User user = refreshTokenService.rotateOrThrow(rawRefreshToken);
         // 탈퇴는 리프레시 토큰을 전부 지우지만(UserWithdrawalService), 그 일괄 삭제 직후에 이 재발급이
         // 새 토큰을 넣으면 죽은 계정에 살아있는 토큰이 남아 이후로도 계속 갱신된다.
         // 로그인과 달리 여기선 계정 존재 노출을 걱정할 필요가 없다 — 이미 유효한 리프레시 토큰 소지자다.

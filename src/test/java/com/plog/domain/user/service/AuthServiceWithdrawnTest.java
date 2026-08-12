@@ -10,7 +10,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.plog.domain.user.entity.ProfilePreset;
-import com.plog.domain.user.entity.RefreshToken;
 import com.plog.domain.user.entity.User;
 import com.plog.domain.user.repository.UserRepository;
 import com.plog.global.api.error.AuthErrorCode;
@@ -55,11 +54,8 @@ class AuthServiceWithdrawnTest {
 
         User user = User.createLocal("a@plog.test", "encoded", "홍길동", "바나나", ProfilePreset.OTTER);
         user.withdraw(LocalDateTime.of(2026, 7, 25, 12, 0));
-        // 탈퇴가 토큰을 전부 지운 직후에 진행 중이던 재발급이 새 토큰을 넣으면 이런 행이 남는다.
-        RefreshToken survivingToken = RefreshToken.issue(
-                user, "hash", LocalDateTime.of(2026, 8, 25, 12, 0));
-        given(refreshTokenService.validateOrThrow("raw-token")).willReturn(survivingToken);
-        given(refreshTokenService.consume("raw-token")).willReturn(1);
+        // 탈퇴가 토큰을 전부 지운 직후에 진행 중이던 재발급이 새 토큰을 넣으면 회전이 통과할 수 있다.
+        given(refreshTokenService.rotateOrThrow("raw-token")).willReturn(user);
 
         AuthService authService =
                 new AuthService(userRepository, refreshTokenService, tokenIssuer, passwordEncoder);
