@@ -103,7 +103,8 @@ public class ProjectNotificationService {
 
     @Transactional
     public void sendNoticePublished(NoticePublishedEvent event) {
-        if (event == null || event.projectId() == null || event.postId() == null) {
+        if (event == null || event.projectId() == null || event.postId() == null
+                || event.publisherMemberId() == null) {
             return;
         }
         notificationRepository.acquireDedupeLock(event.projectId() + ":"
@@ -112,7 +113,9 @@ public class ProjectNotificationService {
                 event.projectId(), NotificationType.NOTICE, event.postId())) {
             return;
         }
-        List<ProjectMember> targets = activeMembers(event.projectId());
+        List<ProjectMember> targets = activeMembers(event.projectId()).stream()
+                .filter(member -> !event.publisherMemberId().equals(member.getId()))
+                .toList();
         if (targets.isEmpty()) {
             return;
         }

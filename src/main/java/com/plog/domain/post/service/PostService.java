@@ -81,7 +81,7 @@ public class PostService {
         eventPublisher.publishEvent(new PostCreatedEvent(
                 post.getId(), member.getId(), content, post.getCreatedAt()));
         if (request.isNotice()) {
-            eventPublisher.publishEvent(new NoticePublishedEvent(projectId, post.getId()));
+            eventPublisher.publishEvent(new NoticePublishedEvent(projectId, post.getId(), member.getId()));
         }
         return toCreateResponse(post, member, savedAttachments);
     }
@@ -228,7 +228,7 @@ public class PostService {
         post.changeNotice(Boolean.TRUE.equals(request.isNotice()));
         postRepository.saveAndFlush(post);
         if (newlyPublished) {
-            eventPublisher.publishEvent(new NoticePublishedEvent(projectId, postId));
+            eventPublisher.publishEvent(new NoticePublishedEvent(projectId, postId, member.getId()));
         }
         return new PostDto.NoticeResponse(post.getId(), projectId, post.isNotice(), toInstant(post.getUpdatedAt()));
     }

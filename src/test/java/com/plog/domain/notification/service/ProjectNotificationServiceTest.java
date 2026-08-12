@@ -154,22 +154,28 @@ class ProjectNotificationServiceTest {
     }
 
     @Test
-    void 공지_지정_이벤트는_활성_멤버에게_postId와_함께_저장하고_설정이_켜진_대상만_push한다() {
+    void 공지_지정_이벤트는_작성자를_제외한_활성_멤버에게_저장하고_설정이_켜진_대상만_push한다() {
         Project project = mock(Project.class);
         when(project.getId()).thenReturn(10L);
         when(project.getProjectName()).thenReturn("Plog");
-        ProjectMember enabled = member(1L, 101L, project, "첫째");
-        ProjectMember disabled = member(2L, 102L, project, "둘째");
+        ProjectMember publisher = member(1L, 101L, project, "작성자");
+        ProjectMember enabled = member(2L, 102L, project, "수신자");
+        ProjectMember disabled = member(3L, 103L, project, "알림 끈 수신자");
         when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(10L, MemberStatus.ACTIVE))
-                .thenReturn(List.of(enabled, disabled));
-        when(notificationPushPolicy.isEnabled(102L, 10L, NotificationType.NOTICE)).thenReturn(false);
+                .thenReturn(List.of(publisher, enabled, disabled));
+        when(notificationPushPolicy.isEnabled(103L, 10L, NotificationType.NOTICE)).thenReturn(false);
         FcmToken token = mock(FcmToken.class);
         when(token.getToken()).thenReturn("notice-token");
-        when(fcmTokenRepository.findAllByUserIdIn(java.util.Set.of(101L))).thenReturn(List.of(token));
+        when(fcmTokenRepository.findAllByUserIdIn(java.util.Set.of(102L))).thenReturn(List.of(token));
 
-        service.sendNoticePublished(new NoticePublishedEvent(10L, 20L));
+        service.sendNoticePublished(new NoticePublishedEvent(10L, 20L, 1L));
 
-        assertSavedNotifications(NotificationType.NOTICE, 20L, 2);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Notification>> notificationCaptor = ArgumentCaptor.forClass(List.class);
+        verify(notificationRepository).saveAll(notificationCaptor.capture());
+        assertThat(notificationCaptor.getValue())
+                .extracting(notification -> notification.getUser().getId())
+                .containsExactly(102L, 103L);
         ArgumentCaptor<FcmMessage> messageCaptor = ArgumentCaptor.forClass(FcmMessage.class);
         verify(fcmGateway).send(messageCaptor.capture());
         assertThat(messageCaptor.getValue().data())
