@@ -14,6 +14,7 @@ import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
+import com.plog.global.util.AfterCommitExecutor;
 import com.plog.infrastructure.fcm.FcmDeliveryException;
 import com.plog.infrastructure.fcm.FcmGateway;
 import com.plog.infrastructure.fcm.FcmMessage;
@@ -39,6 +40,7 @@ public class ProjectNotificationService {
     private final NotificationRepository notificationRepository;
     private final FcmGateway fcmGateway;
     private final NotificationPushPolicy notificationPushPolicy;
+    private final AfterCommitExecutor afterCommitExecutor;
 
     @Transactional
     public void sendChatMessage(ChatMessageNotificationEvent event) {
@@ -202,14 +204,17 @@ public class ProjectNotificationService {
         Set<Long> pushUserIds = userIds.stream()
                 .filter(userId -> notificationPushPolicy.isEnabled(userId, project.getId(), type))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-        List<FcmToken> tokens = pushUserIds.isEmpty()
+        List<String> tokens = pushUserIds.isEmpty()
                 ? List.of()
-                : fcmTokenRepository.findAllByUserIdIn(pushUserIds);
+                : fcmTokenRepository.findAllByUserIdIn(pushUserIds).stream()
+                        .map(FcmToken::getToken)
+                        .toList();
+        Long projectId = project.getId();
+        String title = project.getProjectName();
         log.info("project_notification_delivery type={} projectId={} targetCount={} tokenCount={}",
-                type, project.getId(), targets.size(), tokens.size());
-        for (FcmToken token : tokens) {
-            sendWithRetry(token.getToken(), project.getProjectName(), body, data, type, project.getId());
-        }
+                type, projectId, targets.size(), tokens.size());
+        afterCommitExecutor.execute(() -> tokens.forEach(token ->
+                sendWithRetry(token, title, body, data, type, projectId)));
     }
 
     private void sendWithRetry(

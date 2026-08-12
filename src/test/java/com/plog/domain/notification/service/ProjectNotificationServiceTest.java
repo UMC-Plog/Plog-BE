@@ -25,6 +25,7 @@ import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.user.entity.User;
+import com.plog.global.util.AfterCommitExecutor;
 import com.plog.infrastructure.fcm.FcmGateway;
 import com.plog.infrastructure.fcm.FcmDeliveryException;
 import com.plog.infrastructure.fcm.FcmMessage;
@@ -35,6 +36,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectNotificationServiceTest {
@@ -52,7 +55,7 @@ class ProjectNotificationServiceTest {
                 org.mockito.ArgumentMatchers.any(NotificationType.class))).thenReturn(true);
         service = new ProjectNotificationService(
                 projectMemberRepository, fcmTokenRepository, notificationRepository, fcmGateway,
-                notificationPushPolicy);
+                notificationPushPolicy, new AfterCommitExecutor());
     }
 
     @Test
@@ -262,6 +265,35 @@ class ProjectNotificationServiceTest {
 
         verify(notificationRepository).saveAll(anyCollection());
         verify(fcmGateway, org.mockito.Mockito.never()).send(any(FcmMessage.class));
+    }
+
+    @Test
+    void FCM은_알림_저장_트랜잭션이_커밋된_후에_발송한다() {
+        Project project = mock(Project.class);
+        when(project.getId()).thenReturn(10L);
+        when(project.getProjectName()).thenReturn("Plog");
+        ProjectMember target = member(1L, 101L, project, "수신자");
+        FcmToken token = mock(FcmToken.class);
+        when(token.getToken()).thenReturn("target-token");
+        when(projectMemberRepository.findAllByProjectIdAndStatusOrderByIdAsc(10L, MemberStatus.ACTIVE))
+                .thenReturn(List.of(target));
+        when(fcmTokenRepository.findAllByUserIdIn(anyCollection())).thenReturn(List.of(token));
+
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.sendReportPublished(new ReportPublishedEvent(10L, 20L));
+
+            verify(notificationRepository).saveAll(anyCollection());
+            verify(fcmGateway, org.mockito.Mockito.never()).send(any(FcmMessage.class));
+
+            TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+
+            verify(fcmGateway).send(any(FcmMessage.class));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+            TransactionSynchronizationManager.setActualTransactionActive(false);
+        }
     }
 
     private void assertSavedNotifications(NotificationType type, Long resourceId, int size) {

@@ -10,10 +10,10 @@ import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.project.entity.Project;
 import com.plog.domain.project.entity.ProjectMember;
 import com.plog.domain.project.repository.ProjectMemberRepository;
+import com.plog.global.util.AfterCommitExecutor;
 import com.plog.infrastructure.fcm.FcmDeliveryException;
 import com.plog.infrastructure.fcm.FcmGateway;
 import com.plog.infrastructure.fcm.FcmMessage;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +36,7 @@ public class MentionNotificationService {
     private final NotificationRepository notificationRepository;
     private final FcmGateway fcmGateway;
     private final NotificationPushPolicy notificationPushPolicy;
+    private final AfterCommitExecutor afterCommitExecutor;
 
     @Transactional
     public void send(ChatMentionEvent event) {
@@ -97,12 +98,13 @@ public class MentionNotificationService {
                 .filter(userId -> notificationPushPolicy.isEnabled(
                         userId, event.projectId(), NotificationType.CHAT_MENTION))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-        List<FcmToken> tokens = pushUserIds.isEmpty()
+        List<String> tokens = pushUserIds.isEmpty()
                 ? List.of()
-                : new ArrayList<>(fcmTokenRepository.findAllByUserIdIn(pushUserIds));
-        for (FcmToken token : tokens) {
-            sendWithRetry(token.getToken(), title, body, data, event.projectId());
-        }
+                : fcmTokenRepository.findAllByUserIdIn(pushUserIds).stream()
+                        .map(FcmToken::getToken)
+                        .toList();
+        afterCommitExecutor.execute(() -> tokens.forEach(token ->
+                sendWithRetry(token, title, body, data, event.projectId())));
     }
 
     // 표시 닉네임 정책: anNickname 우선, 없으면 user.nickname으로 대체.
