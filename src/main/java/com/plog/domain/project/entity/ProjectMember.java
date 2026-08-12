@@ -14,6 +14,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -63,9 +64,13 @@ public class ProjectMember extends BaseEntity {
     @Column(name = "an_nickname")
     private String anNickname;
 
+    @Column(name = "final_submitted_at")
+    private LocalDateTime finalSubmittedAt;
+
     public void reactivateAsMember() {
         this.role = ProjectRole.MEMBER;
         this.status = MemberStatus.ACTIVE;
+        this.finalSubmittedAt = null;
     }
 
     public void leave() {
@@ -85,5 +90,16 @@ public class ProjectMember extends BaseEntity {
     public void transferOwnershipTo(ProjectMember targetMember) {
         this.role = ProjectRole.MEMBER;
         targetMember.assignRole(ProjectRole.OWNER);
+    }
+
+    public boolean isFinalSubmitted() {
+        return finalSubmittedAt != null;
+    }
+
+    public void submitFinal(LocalDateTime submittedAt) {
+        if (isFinalSubmitted()) {
+            return;
+        }
+        this.finalSubmittedAt = submittedAt;
     }
 }

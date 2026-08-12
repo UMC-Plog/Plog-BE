@@ -141,6 +141,38 @@ class EvaluationServiceTest {
     }
 
     @Test
+    void rejectsPeerEvaluationCreateAfterCurrentMemberFinalSubmission() {
+        Project project = project(ProjectStatus.IN_PROGRESS, TimeUtil.today());
+        ProjectMember evaluator = finalSubmittedMember(10L, project);
+        ProjectMember evaluatee = activeMember(20L, project);
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(evaluator));
+        when(projectMemberRepository.findById(20L)).thenReturn(Optional.of(evaluatee));
+
+        assertThatThrownBy(() -> evaluationService.createPeerEvaluation(
+                1L, 20L, 7L, new PeerEvaluationCreateRequest(4, 4, 5, 4, List.of("소통능력"), "동료 평가")))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isEqualTo(EvaluationErrorCode.CANNOT_MODIFY_AFTER_FINAL_SUBMISSION));
+    }
+
+    @Test
+    void rejectsPeerEvaluationUpdateAfterCurrentMemberFinalSubmission() {
+        Project project = project(ProjectStatus.IN_PROGRESS, TimeUtil.today());
+        ProjectMember evaluator = finalSubmittedMember(10L, project);
+        ProjectMember evaluatee = activeMember(20L, project);
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(evaluator));
+        when(projectMemberRepository.findById(20L)).thenReturn(Optional.of(evaluatee));
+
+        assertThatThrownBy(() -> evaluationService.updatePeerEvaluation(
+                1L, 20L, 7L, new PeerEvaluationCreateRequest(4, 4, 5, 4, List.of("소통능력"), "수정된 평가")))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isEqualTo(EvaluationErrorCode.CANNOT_MODIFY_AFTER_FINAL_SUBMISSION));
+    }
+
+    @Test
     void createsAPeerEvaluationOnceTheEndDayHasPassed() {
         Project project = project(ProjectStatus.IN_PROGRESS, TimeUtil.today().minusDays(1));
         ProjectMember evaluator = activeMember(10L, project);
@@ -291,6 +323,16 @@ class EvaluationServiceTest {
                 .project(project)
                 .role(ProjectRole.MEMBER)
                 .status(MemberStatus.ACTIVE)
+                .build();
+    }
+
+    private ProjectMember finalSubmittedMember(Long id, Project project) {
+        return ProjectMember.builder()
+                .id(id)
+                .project(project)
+                .role(ProjectRole.MEMBER)
+                .status(MemberStatus.ACTIVE)
+                .finalSubmittedAt(TimeUtil.now())
                 .build();
     }
 
