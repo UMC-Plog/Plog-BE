@@ -140,6 +140,7 @@ jobs:
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
             GEMINI_MODEL=gemini-3.5-flash-lite
             EMBEDDING_MODEL=gemini-embedding-001
+            REPORT_PDF_RENDER_BASE_URL=https://umc-plog.site
             EOF
             chmod 600 .env
 

@@ -4,6 +4,7 @@ import com.plog.domain.report.entity.ReportMemberResult;
 import com.plog.domain.report.repository.projection.ReportMemberSummary;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -12,6 +13,21 @@ import org.springframework.data.repository.query.Param;
 public interface ReportMemberResultRepository extends JpaRepository<ReportMemberResult, Long> {
 
     Optional<ReportMemberResult> findByReportIdAndProjectMemberId(Long reportId, Long projectMemberId);
+
+    /**
+     * 발행은 끝났지만 멤버별 PDF ZIP이 하나라도 없는 리포트를 복구 순서대로 찾는다.
+     * reportId 커서를 사용해 같은 실행에서 실패한 리포트를 무한 재조회하지 않는다.
+     */
+    @Query("select distinct result.report.id from ReportMemberResult result "
+            + "where result.report.status = com.plog.domain.report.entity.ReportStatus.COMPLETED "
+            + "and result.report.id > :afterReportId "
+            + "and (result.pdfObjectKey is null or result.pdfObjectKey = '' "
+            + "or result.pdfFileName is null or result.pdfFileName = '') "
+            + "order by result.report.id asc")
+    List<Long> findCompletedReportIdsMissingPdfAfter(
+            @Param("afterReportId") Long afterReportId,
+            Pageable pageable
+    );
 
     @EntityGraph(attributePaths = {"projectMember", "projectMember.user"})
     List<ReportMemberResult> findAllByReportIdOrderByProjectMemberIdAsc(Long reportId);
