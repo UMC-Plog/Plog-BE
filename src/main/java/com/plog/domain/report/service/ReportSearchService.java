@@ -3,6 +3,7 @@ package com.plog.domain.report.service;
 import com.plog.domain.project.entity.MemberStatus;
 import com.plog.domain.report.dto.response.ReportSearchResponse;
 import com.plog.domain.report.entity.ReportCodeFormatter;
+import com.plog.domain.report.entity.ReportPdfAvailability;
 import com.plog.domain.report.repository.ReportRepository;
 import com.plog.domain.report.repository.projection.ReportSummary;
 import com.plog.global.api.error.AuthErrorCode;
@@ -110,7 +111,12 @@ public class ReportSearchService {
                 summary.getReportId(),
                 ReportCodeFormatter.formatTeam(summary.getProjectId(), summary.getCreatedAt()),
                 summary.getReportStatus(),
-                TimeUtil.toInstant(summary.getCompletedAt())
+                TimeUtil.toInstant(summary.getCompletedAt()),
+                ReportPdfAvailability.isAvailable(
+                        summary.getReportStatus(),
+                        summary.getPdfObjectKey(),
+                        summary.getPdfFileName()
+                )
         );
     }
 }

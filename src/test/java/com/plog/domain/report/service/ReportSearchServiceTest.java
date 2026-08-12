@@ -56,6 +56,8 @@ class ReportSearchServiceTest {
         given(summary.getCreatedAt()).willReturn(LocalDateTime.of(2026, 7, 20, 11, 0));
         given(summary.getReportStatus()).willReturn(ReportStatus.COMPLETED);
         given(summary.getCompletedAt()).willReturn(completedAt);
+        given(summary.getPdfObjectKey()).willReturn("reports/20/plog.zip");
+        given(summary.getPdfFileName()).willReturn("plog.zip");
         given(reportRepository.findAccessibleReportSlice(
                 1L,
                 MemberStatus.ACTIVE,
@@ -70,11 +72,54 @@ class ReportSearchServiceTest {
                 20L,
                 "PLOG-T-2026-07-10",
                 ReportStatus.COMPLETED,
-                completedAt.toInstant(TimeUtil.STORAGE_ZONE)
+                completedAt.toInstant(TimeUtil.STORAGE_ZONE),
+                true
         ));
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(20);
         assertThat(response.hasNext()).isTrue();
+    }
+
+    /** 완료 = 다운로드 가능이 아니다. ZIP 업로드가 실패하면 COMPLETED 여도 발급이 404 로 떨어진다. */
+    @Test
+    void marksACompletedReportWithoutAnArchiveAsUnavailable() {
+        PageRequest pageable = PageRequest.of(0, 20);
+        given(summary.getProjectId()).willReturn(10L);
+        given(summary.getReportId()).willReturn(20L);
+        given(summary.getCreatedAt()).willReturn(LocalDateTime.of(2026, 7, 20, 11, 0));
+        given(summary.getReportStatus()).willReturn(ReportStatus.COMPLETED);
+        given(summary.getPdfObjectKey()).willReturn(null);
+        given(reportRepository.findAccessibleReportSlice(
+                1L,
+                MemberStatus.ACTIVE,
+                pageable
+        )).willReturn(new SliceImpl<>(List.of(summary), pageable, false));
+
+        SliceResponse<ReportSearchResponse> response = service.getReports(1L, 0, 20);
+
+        assertThat(response.content()).singleElement()
+                .extracting(ReportSearchResponse::pdfAvailable)
+                .isEqualTo(false);
+    }
+
+    @Test
+    void marksAGeneratingReportAsUnavailable() {
+        PageRequest pageable = PageRequest.of(0, 20);
+        given(summary.getProjectId()).willReturn(10L);
+        given(summary.getReportId()).willReturn(20L);
+        given(summary.getCreatedAt()).willReturn(LocalDateTime.of(2026, 7, 20, 11, 0));
+        given(summary.getReportStatus()).willReturn(ReportStatus.GENERATING);
+        given(reportRepository.findAccessibleReportSlice(
+                1L,
+                MemberStatus.ACTIVE,
+                pageable
+        )).willReturn(new SliceImpl<>(List.of(summary), pageable, false));
+
+        SliceResponse<ReportSearchResponse> response = service.getReports(1L, 0, 20);
+
+        assertThat(response.content()).singleElement()
+                .extracting(ReportSearchResponse::pdfAvailable)
+                .isEqualTo(false);
     }
 
     @Test
@@ -86,6 +131,8 @@ class ReportSearchServiceTest {
         given(summary.getCreatedAt()).willReturn(LocalDateTime.of(2026, 7, 20, 11, 0));
         given(summary.getReportStatus()).willReturn(ReportStatus.COMPLETED);
         given(summary.getCompletedAt()).willReturn(completedAt);
+        given(summary.getPdfObjectKey()).willReturn("reports/20/plog.zip");
+        given(summary.getPdfFileName()).willReturn("plog.zip");
         given(reportRepository.searchAccessibleReportSlice(
                 1L,
                 MemberStatus.ACTIVE,
@@ -113,7 +160,8 @@ class ReportSearchServiceTest {
                 20L,
                 "PLOG-T-2026-07-10",
                 ReportStatus.COMPLETED,
-                completedAt.toInstant(TimeUtil.STORAGE_ZONE)
+                completedAt.toInstant(TimeUtil.STORAGE_ZONE),
+                true
         ));
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(2);
