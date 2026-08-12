@@ -1,6 +1,7 @@
 package com.plog.domain.report.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plog.domain.report.entity.CompetencyCategory;
 import com.plog.domain.report.entity.Report;
@@ -17,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -289,7 +291,7 @@ public class ReportPdfArchiveService {
     }
 
     private String weaknessSection(String name, ReportMemberResult member) {
-        MemberReportText.Weakness weakness = readJson(member.getWeakness(), MemberReportText.Weakness.class, null);
+        MemberReportText.Weakness weakness = readWeakness(member.getWeakness());
         String title = weakness == null || weakness.title() == null || weakness.title().isBlank()
                 ? "아직 뚜렷한 취약점이 발견되지 않았어요" : weakness.title();
         StringBuilder tips = new StringBuilder("<ul>");
@@ -358,6 +360,33 @@ public class ReportPdfArchiveService {
         } catch (Exception exception) {
             log.warn("PDF 리포트 JSON 역직렬화 실패, 해당 섹션을 생략합니다", exception);
             return fallback;
+        }
+    }
+
+    private MemberReportText.Weakness readWeakness(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            if (root == null || root.isNull() || !root.isObject()) {
+                return null;
+            }
+            JsonNode titleNode = root.get("title");
+            String title = titleNode == null || titleNode.isNull() ? null : titleNode.asText();
+            List<String> suggestions = new ArrayList<>();
+            JsonNode suggestionsNode = root.get("suggestions");
+            if (suggestionsNode != null && suggestionsNode.isArray()) {
+                suggestionsNode.forEach(node -> {
+                    if (node != null && !node.isNull()) {
+                        suggestions.add(node.asText());
+                    }
+                });
+            }
+            return new MemberReportText.Weakness(title, suggestions);
+        } catch (Exception exception) {
+            log.warn("PDF 리포트 취약점 JSON 역직렬화 실패, 해당 섹션을 기본값으로 대체합니다", exception);
+            return null;
         }
     }
 
