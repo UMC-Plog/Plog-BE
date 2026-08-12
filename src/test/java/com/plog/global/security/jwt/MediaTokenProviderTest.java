@@ -12,7 +12,8 @@ class MediaTokenProviderTest {
     private static final String SECRET = "plog-test-secret-key-must-be-at-least-32-bytes";
 
     private final JwtProperties properties = new JwtProperties(
-            SECRET, Duration.ofMinutes(30), Duration.ofDays(14), Duration.ofDays(14));
+            SECRET, Duration.ofMinutes(30), Duration.ofDays(14), Duration.ofDays(14),
+            Duration.ofSeconds(60));
     private final MediaTokenProvider mediaTokenProvider = new MediaTokenProvider(properties);
     private final JwtProvider jwtProvider = new JwtProvider(properties);
 

@@ -11,7 +11,18 @@ import java.util.HexFormat;
  */
 public final class HashUtil {
 
+    private static final int FINGERPRINT_LENGTH = 12;
+
     private HashUtil() {
+    }
+
+    /**
+     * 로그용 짧은 지문. 원문도, 조회에 쓰는 전체 해시도 남기지 않으면서
+     * "같은 토큰으로 들어온 요청인지"만 로그끼리 대조할 수 있게 한다.
+     * 로그가 유출돼도 이 값으로는 토큰을 되돌릴 수 없다.
+     */
+    public static String fingerprint(String raw) {
+        return sha256Hex(raw).substring(0, FINGERPRINT_LENGTH);
     }
 
     public static String sha256Hex(String raw) {
