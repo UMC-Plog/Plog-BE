@@ -81,11 +81,14 @@ public class EvaluationService {
         boolean isAccountMappingCompleted = actorMappingStatusService
                 .isMyMappingCompleted(projectId, currentMember.getId());
         // 자기 피드백은 선택 사항이므로 최종 제출 조건에서 제외한다.
-        // 단, 평가할 팀원이 없는 solo 프로젝트는 자기 피드백만이 유일한 평가이므로 그때는 요구한다.
-        boolean selfFeedbackRequirementMet = totalPeerEvaluationCount > 0 || isSelfFeedbackCompleted;
+        // 계정 매핑도 선택 사항이므로 화면 상태만 내려준다.
+        int totalFinalSubmissionCount = allMembers.size();
+        int completedFinalSubmissionCount = (int) allMembers.stream()
+                .filter(ProjectMember::isFinalSubmitted)
+                .count();
         boolean isFinalSubmissionAvailable = !project.isCompleted()
                 && completedPeerEvaluationCount == totalPeerEvaluationCount
-                && selfFeedbackRequirementMet;
+                && !currentMember.isFinalSubmitted();
 
         return new EvaluationTargetResponse(
                 targets,
@@ -93,6 +96,9 @@ public class EvaluationService {
                 totalPeerEvaluationCount,
                 isSelfFeedbackCompleted,
                 isAccountMappingCompleted,
+                currentMember.isFinalSubmitted(),
+                completedFinalSubmissionCount,
+                totalFinalSubmissionCount,
                 isFinalSubmissionAvailable
         );
     }
@@ -119,6 +125,7 @@ public class EvaluationService {
         ProjectMember evaluator = participantResolver.requireEvaluator(projectId, userId);
         ProjectMember evaluatee = participantResolver.requireEvaluatee(projectId, targetMemberId);
 
+        requireNotFinalSubmitted(evaluator);
         requireEvaluationOpen(evaluatee.getProject());
 
         if (evaluator.getId().equals(evaluatee.getId())) {
@@ -160,6 +167,7 @@ public class EvaluationService {
         if (evaluatee.getProject().isCompleted()) {
             throw new ApiException(EvaluationErrorCode.CANNOT_MODIFY_EVALUATION_AFTER_PUBLISH);
         }
+        requireNotFinalSubmitted(evaluator);
         requireEvaluationOpen(evaluatee.getProject());
 
         PeerEvaluation evaluation = peerEvaluationRepository
@@ -208,6 +216,12 @@ public class EvaluationService {
     private void requireEvaluationOpen(Project project) {
         if (!project.isEvaluatingState(TimeUtil.today())) {
             throw new ApiException(EvaluationErrorCode.NOT_EVALUATING_STATE);
+        }
+    }
+
+    private void requireNotFinalSubmitted(ProjectMember evaluator) {
+        if (evaluator.isFinalSubmitted()) {
+            throw new ApiException(EvaluationErrorCode.CANNOT_MODIFY_AFTER_FINAL_SUBMISSION);
         }
     }
 }

@@ -26,6 +26,8 @@ public interface ReportControllerDoc {
                     ACTIVE 멤버십의 프로젝트 리포트를 Slice로 조회합니다.
                     프로젝트와 리포트는 1:1 관계이며, 프론트는 hasNext=true일 때 다음 page를 요청하면 됩니다.
                     정렬은 완료 시각 내림차순, 리포트 ID 내림차순입니다. 완료 시각이 없는 리포트는 뒤에 배치됩니다.
+                    ZIP 다운로드 버튼은 reportStatus가 아니라 pdfAvailable로 판단하세요 —
+                    발행은 됐지만 ZIP 업로드가 실패해 COMPLETED인데 false인 리포트가 있을 수 있습니다.
                     """
     )
     @ApiResponses({
@@ -58,6 +60,8 @@ public interface ReportControllerDoc {
                     ACTIVE 멤버십의 프로젝트 리포트를 프로젝트명과 완료 기간으로 Slice 검색합니다.
                     keyword는 프로젝트명 검색에 사용하고, startDate/endDate는 리포트 완료일 범위 필터입니다.
                     프론트는 hasNext=true일 때 다음 page를 요청하면 됩니다.
+                    ZIP 다운로드 버튼은 reportStatus가 아니라 pdfAvailable로 판단하세요 —
+                    발행은 됐지만 ZIP 업로드가 실패해 COMPLETED인데 false인 리포트가 있을 수 있습니다.
                     """
     )
     @ApiResponses({

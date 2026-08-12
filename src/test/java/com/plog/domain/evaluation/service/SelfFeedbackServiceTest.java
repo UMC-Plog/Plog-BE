@@ -16,7 +16,6 @@ import com.plog.domain.project.entity.ProjectRole;
 import com.plog.domain.project.entity.ProjectStatus;
 import com.plog.domain.project.entity.PeerEvaluationStatus;
 import com.plog.domain.project.entity.ProjectType;
-import com.plog.domain.project.event.EvaluationCompletionCheckRequestedEvent;
 import com.plog.domain.project.repository.ProjectMemberRepository;
 import com.plog.domain.project.service.ProjectAccessService;
 import com.plog.domain.report.repository.ReportActivityLogRepository;
@@ -25,6 +24,7 @@ import com.plog.global.api.error.ProjectErrorCode;
 import com.plog.global.api.exception.ApiException;
 import com.plog.global.util.TimeUtil;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -106,7 +106,6 @@ class SelfFeedbackServiceTest {
         selfFeedbackService.createSelfFeedback(1L, 7L, new SelfFeedbackCreateRequest("셀프 피드백"));
 
         verify(selfFeedbackRepository).saveAndFlush(any(SelfFeedback.class));
-        verify(eventPublisher).publishEvent(new EvaluationCompletionCheckRequestedEvent(1L));
     }
 
     // 리포트 발행 = 셀프 피드백 마감. 리포트가 셀프 피드백을 분석 재료로 쓰게 될 예정이라,
@@ -123,6 +122,34 @@ class SelfFeedbackServiceTest {
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getErrorCode())
                                 .isEqualTo(EvaluationErrorCode.NOT_EVALUATING_STATE));
+    }
+
+    @Test
+    void rejectsSelfFeedbackCreateAfterCurrentMemberFinalSubmission() {
+        ProjectMember projectMember = projectMember(
+                ProjectStatus.IN_PROGRESS, TimeUtil.today().minusDays(1), PeerEvaluationStatus.OPEN, TimeUtil.now());
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(projectMember));
+
+        assertThatThrownBy(() -> selfFeedbackService.createSelfFeedback(
+                1L, 7L, new SelfFeedbackCreateRequest("셀프 피드백")))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isEqualTo(EvaluationErrorCode.CANNOT_MODIFY_AFTER_FINAL_SUBMISSION));
+    }
+
+    @Test
+    void rejectsSelfFeedbackUpdateAfterCurrentMemberFinalSubmission() {
+        ProjectMember projectMember = projectMember(
+                ProjectStatus.IN_PROGRESS, TimeUtil.today().minusDays(1), PeerEvaluationStatus.OPEN, TimeUtil.now());
+        when(projectMemberRepository.findByProjectIdAndUserIdAndStatus(1L, 7L, MemberStatus.ACTIVE))
+                .thenReturn(Optional.of(projectMember));
+
+        assertThatThrownBy(() -> selfFeedbackService.updateSelfFeedback(
+                1L, 7L, new SelfFeedbackCreateRequest("수정된 피드백")))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isEqualTo(EvaluationErrorCode.CANNOT_MODIFY_AFTER_FINAL_SUBMISSION));
     }
 
     @Test
@@ -161,6 +188,15 @@ class SelfFeedbackServiceTest {
 
     private ProjectMember projectMember(
             ProjectStatus status, LocalDate endDay, PeerEvaluationStatus evaluationStatus) {
+        return projectMember(status, endDay, evaluationStatus, null);
+    }
+
+    private ProjectMember projectMember(
+            ProjectStatus status,
+            LocalDate endDay,
+            PeerEvaluationStatus evaluationStatus,
+            LocalDateTime finalSubmittedAt
+    ) {
         Project project = Project.builder()
                 .id(1L)
                 .projectName("Plog")
@@ -177,6 +213,7 @@ class SelfFeedbackServiceTest {
                 .project(project)
                 .role(ProjectRole.MEMBER)
                 .status(MemberStatus.ACTIVE)
+                .finalSubmittedAt(finalSubmittedAt)
                 .build();
     }
 }

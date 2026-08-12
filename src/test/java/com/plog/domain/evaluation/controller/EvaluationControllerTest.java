@@ -59,7 +59,7 @@ class EvaluationControllerTest {
     @Test
     void returnsEvaluationSubmissionProgress() throws Exception {
         given(evaluationService.getEvaluationTargets(1L, 7L))
-                .willReturn(new EvaluationTargetResponse(List.of(), 0, 0, true, true, true));
+                .willReturn(new EvaluationTargetResponse(List.of(), 0, 0, true, true, false, 1, 2, true));
 
         mockMvc.perform(get("/api/projects/{projectId}/evaluations/targets", 1L))
                 .andExpect(status().isOk())
@@ -67,6 +67,9 @@ class EvaluationControllerTest {
                 .andExpect(jsonPath("$.result.totalPeerEvaluationCount").value(0))
                 .andExpect(jsonPath("$.result.isSelfFeedbackCompleted").value(true))
                 .andExpect(jsonPath("$.result.isAccountMappingCompleted").value(true))
+                .andExpect(jsonPath("$.result.isCurrentMemberFinalSubmitted").value(false))
+                .andExpect(jsonPath("$.result.completedFinalSubmissionCount").value(1))
+                .andExpect(jsonPath("$.result.totalFinalSubmissionCount").value(2))
                 .andExpect(jsonPath("$.result.isFinalSubmissionAvailable").value(true));
     }
 

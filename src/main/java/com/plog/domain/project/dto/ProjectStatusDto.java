@@ -20,6 +20,10 @@ public final class ProjectStatusDto {
             boolean isTimeoutApplied,
             @JsonProperty("isPublished")
             boolean isPublished,
+            @JsonProperty("isCurrentMemberFinalSubmitted")
+            boolean isCurrentMemberFinalSubmitted,
+            int completedFinalSubmissionCount,
+            int totalFinalSubmissionCount,
             Long reportId,
             ReportStatus reportStatus
     ) {

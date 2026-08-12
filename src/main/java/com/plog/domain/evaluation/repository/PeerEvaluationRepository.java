@@ -33,9 +33,13 @@ public interface PeerEvaluationRepository extends JpaRepository<PeerEvaluation, 
             from PeerEvaluation peerEvaluation
             where peerEvaluation.evaluator.project.id = :projectId
               and peerEvaluation.evaluatee.project.id = :projectId
+              and peerEvaluation.evaluator.id = :evaluatorId
               and peerEvaluation.evaluator.status = com.plog.domain.project.entity.MemberStatus.ACTIVE
               and peerEvaluation.evaluatee.status = com.plog.domain.project.entity.MemberStatus.ACTIVE
             """)
-    long countSubmittedByActiveProjectMembers(@Param("projectId") Long projectId);
+    long countSubmittedByActiveEvaluator(
+            @Param("projectId") Long projectId,
+            @Param("evaluatorId") Long evaluatorId
+    );
 
 }

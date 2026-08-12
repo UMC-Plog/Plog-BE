@@ -85,7 +85,8 @@ class ReportControllerTest {
                         "Plog",
                         20L,
                         ReportStatus.COMPLETED,
-                        completedAt
+                        completedAt,
+                        true
                 )),
                 0,
                 20,
@@ -102,6 +103,7 @@ class ReportControllerTest {
                 .andExpect(jsonPath("$.result.content[0].reportStatus").value("COMPLETED"))
                 .andExpect(jsonPath("$.result.content[0].completedAt")
                         .value("2026-07-20T12:00:00Z"))
+                .andExpect(jsonPath("$.result.content[0].pdfAvailable").value(true))
                 .andExpect(jsonPath("$.result.page").value(0))
                 .andExpect(jsonPath("$.result.size").value(20))
                 .andExpect(jsonPath("$.result.hasNext").value(false))
@@ -118,7 +120,8 @@ class ReportControllerTest {
                         "Plog",
                         20L,
                         ReportStatus.COMPLETED,
-                        completedAt
+                        completedAt,
+                        false
                 )),
                 0,
                 20,
@@ -146,6 +149,8 @@ class ReportControllerTest {
                 // 오프셋을 실어 보낸다 — 클라이언트가 서버 타임존을 추측하지 않도록.
                 .andExpect(jsonPath("$.result.content[0].completedAt")
                         .value("2026-07-20T12:00:00Z"))
+                // COMPLETED 여도 ZIP 이 없으면 false — 프론트는 이 값으로 버튼을 그린다.
+                .andExpect(jsonPath("$.result.content[0].pdfAvailable").value(false))
                 .andExpect(jsonPath("$.result.page").value(0))
                 .andExpect(jsonPath("$.result.size").value(20))
                 .andExpect(jsonPath("$.result.hasNext").value(false))
