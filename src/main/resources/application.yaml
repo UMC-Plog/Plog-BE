@@ -228,8 +228,8 @@ plog:
         enabled: ${REPORT_REALTIME_ACTIVITY_COLLECTION_ENABLED:false}
     pdf:
       render-base-url: ${REPORT_PDF_RENDER_BASE_URL}
-      chromium-executable: ${REPORT_PDF_CHROMIUM_EXECUTABLE:/usr/bin/chromium}
       timeout: ${REPORT_PDF_RENDER_TIMEOUT:45s}
+      recovery-delay-ms: ${REPORT_PDF_RECOVERY_DELAY_MS:3600000}
     scheduler:
       enabled: ${REPORT_SCHEDULER_ENABLED:false}
       # 초 분 시 일 월 요일 (Spring 6필드). 컨테이너 TZ=Asia/Seoul 기준.
