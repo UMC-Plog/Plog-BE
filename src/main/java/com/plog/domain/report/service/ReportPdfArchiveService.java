@@ -20,6 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
@@ -113,9 +114,9 @@ public class ReportPdfArchiveService {
                     .append(member.getTotalTaskCount()).append("개</td><td>")
                     .append(member.getCompletedTaskCount()).append("개</td><td class='")
                     .append(rateClass(member.getCompletionRate())).append("'>")
-                    .append(percent(member.getCompletionRate())).append("%</td><td class='")
+                    .append(displayPercent(member.getCompletionRate())).append("</td><td class='")
                     .append(rateClass(member.getDeadlineComplianceRate())).append("'>")
-                    .append(percent(member.getDeadlineComplianceRate())).append("%</td></tr>");
+                    .append(displayPercent(member.getDeadlineComplianceRate())).append("</td></tr>");
 
             String color = SERIES_COLORS[index++ % SERIES_COLORS.length];
             contributionRows.append(scoreRow(name, member.getContributionRate(), color, "%"));
@@ -210,7 +211,7 @@ public class ReportPdfArchiveService {
 
     private String stat(String label, Object value, String unit, String caption) {
         return "<td><div class='stat'><div class='stat-label'>" + esc(label) + "</div><div class='stat-value'>"
-                + displayNumber(value) + " <span class='stat-unit'>" + esc(unit) + "</span></div><div class='caption'>"
+                + displayNumber(value) + metricUnit(value, unit) + "</div><div class='caption'>"
                 + esc(caption) + "</div></div></td>";
     }
 
@@ -231,12 +232,13 @@ public class ReportPdfArchiveService {
         return "<div class='member-card'><table class='member-head'><tr><td><div class='member-name'>"
                 + esc(member.getProjectMember().getUser().getName()) + chips + "</div><div class='activity'>전체 "
                 + member.getTotalTaskCount() + "개 · 완료 " + member.getCompletedTaskCount() + "개 · 완료율 "
-                + percent(member.getCompletionRate()) + "%</div></td><td class='peer'>" + displayNumber(member.getPeerAverage())
-                + " / 5.0</td></tr></table>" + aiNote("AI 한줄 평가", fallback(member.getTeamMemberHeadline(),
+                + displayPercent(member.getCompletionRate()) + "</div></td><td class='peer'>"
+                + metric(member.getPeerAverage(), " / 5.0") + "</td></tr></table>"
+                + aiNote("AI 한줄 평가", fallback(member.getTeamMemberHeadline(),
                 "평가 근거가 부족해 한줄 평가를 생성하지 못했어요"))
                 + "<div class='score-list'>" + competencyRows(member.getCompetencyScores(), false) + "</div>"
-                + "<div class='peer-total'>종합 Peer 평균 <span>★ " + displayNumber(member.getPeerAverage())
-                + " / 5.0</span></div></div>";
+                + "<div class='peer-total'>종합 Peer 평균 <span>★ " + metric(member.getPeerAverage(), " / 5.0")
+                + "</span></div></div>";
     }
 
     private String competencyRows(Map<CompetencyCategory, BigDecimal> scores, boolean scaleToHundred) {
@@ -246,9 +248,11 @@ public class ReportPdfArchiveService {
                 CompetencyCategory.LEADERSHIP, CompetencyCategory.COMMUNICATION, CompetencyCategory.OUTPUT);
         for (int index = 0; index < categories.size(); index++) {
             CompetencyCategory category = categories.get(index);
-            BigDecimal raw = safe.getOrDefault(category, BigDecimal.ZERO);
-            BigDecimal shown = scaleToHundred ? raw.multiply(BigDecimal.valueOf(20)) : raw;
-            BigDecimal bar = scaleToHundred ? shown : raw.multiply(BigDecimal.valueOf(20));
+            BigDecimal raw = safe.get(category);
+            BigDecimal shown = raw == null ? null
+                    : scaleToHundred ? raw.multiply(BigDecimal.valueOf(20)) : raw;
+            BigDecimal bar = raw == null ? null
+                    : scaleToHundred ? shown : raw.multiply(BigDecimal.valueOf(20));
             rows.append(scoreRow(competencyLabel(category), shown, SERIES_COLORS[index], scaleToHundred ? "" : " / 5.0", bar));
         }
         return rows.toString();
@@ -259,14 +263,17 @@ public class ReportPdfArchiveService {
     }
 
     private String scoreRow(String label, BigDecimal value, String color, String unit, BigDecimal barValue) {
+        String bar = barValue == null
+                ? "<div class='bar'></div>"
+                : "<div class='bar'><div class='bar-fill' style='width:" + clampPercent(barValue)
+                        + "%;background:" + color + "'></div></div>";
         return "<table class='score-row'><tr><td class='score-label'>" + esc(label) + "</td><td class='bar-cell'>"
-                + "<div class='bar'><div class='bar-fill' style='width:" + clampPercent(barValue) + "%;background:"
-                + color + "'></div></div></td><td class='score-value'>" + displayNumber(value) + esc(unit)
-                + "</td></tr></table>";
+                + bar + "</td><td class='score-value'>" + metric(value, unit) + "</td></tr></table>";
     }
 
     private String strengthSection(String name, ReportMemberResult member) {
-        List<MemberReportText.StrengthCard> strengths = readJson(member.getStrengths(), STRENGTH_LIST, List.of());
+        List<MemberReportText.StrengthCard> strengths = readJson(member.getStrengths(), STRENGTH_LIST, List.of())
+                .stream().filter(Objects::nonNull).toList();
         if (strengths.isEmpty()) {
             return "";
         }
@@ -283,14 +290,17 @@ public class ReportPdfArchiveService {
 
     private String weaknessSection(String name, ReportMemberResult member) {
         MemberReportText.Weakness weakness = readJson(member.getWeakness(), MemberReportText.Weakness.class, null);
-        String title = weakness == null ? "아직 뚜렷한 취약점이 발견되지 않았어요" : weakness.title();
+        String title = weakness == null || weakness.title() == null || weakness.title().isBlank()
+                ? "아직 뚜렷한 취약점이 발견되지 않았어요" : weakness.title();
         StringBuilder tips = new StringBuilder("<ul>");
         if (weakness != null) {
-            weakness.suggestions().forEach(tip -> tips.append("<li>").append(esc(tip)).append("</li>"));
+            List<String> suggestions = weakness.suggestions() == null ? List.of() : weakness.suggestions();
+            suggestions.stream().filter(Objects::nonNull)
+                    .forEach(tip -> tips.append("<li>").append(esc(tip)).append("</li>"));
         }
         tips.append("</ul>");
         String content = "<table class='card weakness'><tr><td class='gauge'><div class='muted'>취약도</div>"
-                + "<div class='gauge-value'>" + percent(member.getVulnerability()) + "%</div></td>"
+                + "<div class='gauge-value'>" + displayPercent(member.getVulnerability()) + "</div></td>"
                 + "<td class='weakness-copy'><div class='muted'>주요 취약점</div><h3>" + esc(title) + "</h3>"
                 + tips + "</td></tr></table>";
         return section(3, "취약점 진단", name + "님의 약점을 AI가 분석했어요", content);
@@ -330,7 +340,8 @@ public class ReportPdfArchiveService {
             return fallback;
         }
         try {
-            return objectMapper.readValue(json, type);
+            T parsed = objectMapper.readValue(json, type);
+            return parsed == null ? fallback : parsed;
         } catch (Exception exception) {
             log.warn("PDF 리포트 JSON 역직렬화 실패, 해당 섹션을 생략합니다: type={}", type.getSimpleName(), exception);
             return fallback;
@@ -342,7 +353,8 @@ public class ReportPdfArchiveService {
             return fallback;
         }
         try {
-            return objectMapper.readValue(json, type);
+            T parsed = objectMapper.readValue(json, type);
+            return parsed == null ? fallback : parsed;
         } catch (Exception exception) {
             log.warn("PDF 리포트 JSON 역직렬화 실패, 해당 섹션을 생략합니다", exception);
             return fallback;
@@ -372,7 +384,10 @@ public class ReportPdfArchiveService {
     }
 
     private String rateClass(BigDecimal rate) {
-        return rate != null && rate.compareTo(BigDecimal.valueOf(80)) >= 0 ? "success" : "danger";
+        if (rate == null) {
+            return "";
+        }
+        return rate.compareTo(BigDecimal.valueOf(80)) >= 0 ? "success" : "danger";
     }
 
     private String competencyLabel(CompetencyCategory category) {
@@ -398,7 +413,7 @@ public class ReportPdfArchiveService {
 
     private String displayNumber(Object value) {
         if (value == null) {
-            return "0";
+            return "측정 불가";
         }
         if (value instanceof BigDecimal decimal) {
             return decimal.stripTrailingZeros().toPlainString();
@@ -407,11 +422,23 @@ public class ReportPdfArchiveService {
     }
 
     private int percent(BigDecimal value) {
-        return value == null ? 0 : value.setScale(0, java.math.RoundingMode.HALF_UP).intValue();
+        return value.setScale(0, java.math.RoundingMode.HALF_UP).intValue();
     }
 
     private int clampPercent(BigDecimal value) {
         return Math.max(0, Math.min(100, percent(value)));
+    }
+
+    private String displayPercent(BigDecimal value) {
+        return value == null ? "측정 불가" : percent(value) + "%";
+    }
+
+    private String metric(Object value, String unit) {
+        return value == null ? "측정 불가" : displayNumber(value) + esc(unit);
+    }
+
+    private String metricUnit(Object value, String unit) {
+        return value == null ? "" : " <span class='stat-unit'>" + esc(unit) + "</span>";
     }
 
     private String esc(String value) {

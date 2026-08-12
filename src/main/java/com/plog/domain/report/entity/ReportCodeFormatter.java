@@ -3,6 +3,7 @@ package com.plog.domain.report.entity;
 import com.plog.global.util.TimeUtil;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 public final class ReportCodeFormatter {
 
@@ -26,7 +27,7 @@ public final class ReportCodeFormatter {
         String yearMonth = createdAtUtc.atZone(TimeUtil.STORAGE_ZONE)
                 .withZoneSameInstant(TimeUtil.DISPLAY_ZONE)
                 .format(YEAR_MONTH);
-        String paddedProjectId = String.format("%08d", projectId);
+        String paddedProjectId = String.format(Locale.ROOT, "%08d", projectId);
         return "PLOG-" + reportType + "-" + yearMonth + "-" + paddedProjectId;
     }
 }

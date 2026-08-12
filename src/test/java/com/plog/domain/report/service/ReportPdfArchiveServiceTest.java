@@ -142,6 +142,40 @@ class ReportPdfArchiveServiceTest {
                 "PLOG-P-2026-08-00000015");
     }
 
+    @Test
+    void preservesUnavailableMetricsAndNormalizesNullableJson() {
+        Project project = Project.builder()
+                .id(15L)
+                .projectName("Plog")
+                .inviteTokenHash("invite-hash")
+                .inviteTokenEncrypted("encrypted-invite")
+                .build();
+        Report report = Report.start(project);
+        ReflectionTestUtils.setField(report, "createdAt", LocalDateTime.of(2026, 8, 1, 0, 0));
+        ProjectMember projectMember = ProjectMember.builder()
+                .id(7L)
+                .project(project)
+                .user(User.createLocal("member@plog.test", "encoded", "김실명", "계정닉네임"))
+                .anNickname("프로젝트닉네임")
+                .build();
+        ReportMemberResult member = ReportMemberResult.create(report, projectMember);
+        ReflectionTestUtils.setField(member, "strengths", "null");
+        ReflectionTestUtils.setField(member, "weakness",
+                "{\"title\":\"문서화\",\"suggestions\":[null,\"결정 사항을 기록해 보세요.\"]}");
+        ReflectionTestUtils.setField(member, "competencyScores", Map.of());
+        ReflectionTestUtils.setField(service, "objectMapper", new ObjectMapper());
+
+        String teamHtml = ReflectionTestUtils.invokeMethod(service, "teamHtml", report, List.of(member));
+        String memberHtml = ReflectionTestUtils.invokeMethod(service, "memberHtml", report, member);
+
+        assertThat(teamHtml)
+                .contains("측정 불가")
+                .doesNotContain(">0%</td>");
+        assertThat(memberHtml)
+                .contains("협업 태도", "측정 불가", "문서화", "결정 사항을 기록해 보세요.")
+                .doesNotContain("강점 분석", ">0%</div>");
+    }
+
     private Map<String, String> unzip(byte[] archive) throws Exception {
         Map<String, String> files = new LinkedHashMap<>();
         try (ZipInputStream input = new ZipInputStream(
