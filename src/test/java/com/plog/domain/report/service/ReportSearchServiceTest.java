@@ -70,7 +70,7 @@ class ReportSearchServiceTest {
                 10L,
                 "PLOG API",
                 20L,
-                "PLOG-T-2026-07-10",
+                "PLOG-T-2026-07-00000010",
                 ReportStatus.COMPLETED,
                 completedAt.toInstant(TimeUtil.STORAGE_ZONE),
                 true
@@ -158,7 +158,7 @@ class ReportSearchServiceTest {
                 10L,
                 "PLOG API",
                 20L,
-                "PLOG-T-2026-07-10",
+                "PLOG-T-2026-07-00000010",
                 ReportStatus.COMPLETED,
                 completedAt.toInstant(TimeUtil.STORAGE_ZONE),
                 true
