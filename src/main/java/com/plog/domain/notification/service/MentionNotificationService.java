@@ -103,7 +103,7 @@ public class MentionNotificationService {
                 : fcmTokenRepository.findAllByUserIdIn(pushUserIds).stream()
                         .map(FcmToken::getToken)
                         .toList();
-        afterCommitExecutor.execute(() -> tokens.forEach(token ->
+        tokens.forEach(token -> afterCommitExecutor.execute(() ->
                 sendWithRetry(token, title, body, data, event.projectId())));
     }
 

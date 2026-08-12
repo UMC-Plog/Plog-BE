@@ -213,7 +213,7 @@ public class ProjectNotificationService {
         String title = project.getProjectName();
         log.info("project_notification_delivery type={} projectId={} targetCount={} tokenCount={}",
                 type, projectId, targets.size(), tokens.size());
-        afterCommitExecutor.execute(() -> tokens.forEach(token ->
+        tokens.forEach(token -> afterCommitExecutor.execute(() ->
                 sendWithRetry(token, title, body, data, type, projectId)));
     }
 
