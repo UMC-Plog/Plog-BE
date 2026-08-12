@@ -12,7 +12,8 @@ class MediaCookieFactoryTest {
     private static final String SECRET = "plog-test-secret-key-must-be-at-least-32-bytes";
 
     private final JwtProperties jwtProperties = new JwtProperties(
-            SECRET, Duration.ofMinutes(30), Duration.ofDays(14), Duration.ofDays(14));
+            SECRET, Duration.ofMinutes(30), Duration.ofDays(14), Duration.ofDays(14),
+            Duration.ofSeconds(60));
     private final JwtProvider jwtProvider = new JwtProvider(jwtProperties);
     private final MediaTokenProvider mediaTokenProvider = new MediaTokenProvider(jwtProperties);
     private final MediaProperties mediaProperties = new MediaProperties("None");

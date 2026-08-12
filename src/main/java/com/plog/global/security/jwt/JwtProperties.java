@@ -13,7 +13,8 @@ public record JwtProperties(
         String secret,
         Duration accessTokenTtl,
         Duration refreshTokenTtl,
-        Duration mediaTokenTtl
+        Duration mediaTokenTtl,
+        Duration refreshTokenGrace
 ) {
     private static final int MIN_SECRET_BYTES = 32; // 256 bit
 
@@ -27,6 +28,10 @@ public record JwtProperties(
         }
         if (mediaTokenTtl == null) {
             throw new IllegalStateException("app.jwt.media-token-ttl 이 필요합니다.");
+        }
+        // 0이면 회전 유예가 사라져 재시도 한 번에 로그아웃되던 예전 동작으로 돌아간다.
+        if (refreshTokenGrace == null || refreshTokenGrace.isNegative() || refreshTokenGrace.isZero()) {
+            throw new IllegalStateException("app.jwt.refresh-token-grace 는 0보다 커야 합니다.");
         }
     }
 }

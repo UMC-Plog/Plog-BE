@@ -54,7 +54,11 @@ public class AuthController {
             description = """
                     보관 중인 Refresh Token으로 Access/Refresh Token을 재발급받습니다.
                     - 재발급 시 기존 Refresh Token은 폐기되고 새 토큰으로 교체됩니다(회전).
+                    - 같은 토큰이 짧은 시간 안에 다시 오면 재시도로 보고 통과시킵니다(회전 유예).
+                      부팅 시 중복 호출이나 네트워크 재전송으로 로그아웃되지 않습니다.
+                    - 유예를 넘긴 재사용은 토큰 유출로 간주해 해당 계정의 모든 세션을 폐기합니다.
                     - 토큰이 없거나 만료된 경우 AUTH013(INVALID_REFRESH_TOKEN)을 반환합니다.
+                      성공 코드 AUTH013(SOCIAL_SIGNUP_COMPLETED)과 번호가 겹치므로 isSuccess로 구분해야 합니다.
                     """
     )
     @SecurityRequirements // 공개 API — 만료된 Access 없이도 호출 가능해야 함

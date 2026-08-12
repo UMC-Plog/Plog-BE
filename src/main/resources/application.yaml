@@ -53,6 +53,10 @@ app:
     # 이미지 표시용 미디어 쿠키 수명. refresh 와 같은 값이어야 "로그인 세션이 살아 있으면
     # 미디어 쿠키도 살아 있다"가 불변식으로 성립한다.
     media-token-ttl: 14d
+    # 회전 유예. 이 시간 안에 같은 리프레시 토큰이 다시 오면 재시도로 보고 통과시킨다.
+    # 없으면 JwtProperties 가 기동을 막는다 — 유예 0은 재발급이 한 번만 겹쳐도
+    # 로그아웃되던 예전 동작이라, 조용히 기본값으로 돌아가지 않게 필수값으로 뒀다.
+    refresh-token-grace: 60s
   # 이메일 인증 코드 정책 (하드코딩 금지 → @ConfigurationProperties 바인딩)
   email-verification:
     code-length: 6
@@ -223,7 +227,9 @@ plog:
       realtime-collection:
         enabled: ${REPORT_REALTIME_ACTIVITY_COLLECTION_ENABLED:false}
     pdf:
-      font-path: ${REPORT_PDF_FONT_PATH:/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc}
+      # truetype/ 경로여야 한다. opentype/ 아래의 CFF 폰트(.otf/.ttc)를 지정하면 파일이 존재해도
+      # PDF 렌더링이 매번 실패한다(ReportPdfRenderer.isSubsetUnsupported 가 기동 시 error 로 경고).
+      font-path: ${REPORT_PDF_FONT_PATH:/usr/share/fonts/truetype/nanum/NanumGothic.ttf}
     scheduler:
       enabled: ${REPORT_SCHEDULER_ENABLED:false}
       # 초 분 시 일 월 요일 (Spring 6필드). 컨테이너 TZ=Asia/Seoul 기준.
