@@ -18,6 +18,10 @@ repositories {
 }
 
 dependencies {
+	// 지표를 Grafana Cloud 로 직접 push 하기 위한 한 쌍. actuator 가 JVM·HTTP·DB풀 지표를
+	// 수집하고, otlp 레지스트리가 그것을 밖으로 내보낸다. EC2 에 수집기 컨테이너를 띄우지 않는다.
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'io.micrometer:micrometer-registry-otlp'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-mail'
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
