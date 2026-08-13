@@ -22,6 +22,12 @@ import org.springframework.stereotype.Component;
 public class ReportBrowserRenderer {
 
     private static final String RENDER_DATA_KEY = "__PLOG_REPORT_RENDER_DATA__";
+    private static final double A4_CONTENT_WIDTH_MILLIMETERS = 186.0;
+    private static final double REPORT_REFERENCE_WIDTH_PIXELS = 402.0;
+    private static final double CSS_PIXELS_PER_INCH = 96.0;
+    private static final double MILLIMETERS_PER_INCH = 25.4;
+    static final double A4_REPORT_SCALE = A4_CONTENT_WIDTH_MILLIMETERS
+            / (REPORT_REFERENCE_WIDTH_PIXELS * MILLIMETERS_PER_INCH / CSS_PIXELS_PER_INCH);
     private static final Semaphore RENDER_SLOT = new Semaphore(1);
 
     private final ReportPdfProperties properties;
@@ -84,11 +90,16 @@ public class ReportBrowserRenderer {
                       }
                     }
                     """, timeoutMillis);
-            return page.pdf(new Page.PdfOptions()
-                    .setFormat("A4")
-                    .setPrintBackground(true)
-                    .setPreferCSSPageSize(true));
+            return page.pdf(createPdfOptions());
         }
+    }
+
+    static Page.PdfOptions createPdfOptions() {
+        return new Page.PdfOptions()
+                .setFormat("A4")
+                .setScale(A4_REPORT_SCALE)
+                .setPrintBackground(true)
+                .setPreferCSSPageSize(true);
     }
 
     private String url(String path) {
