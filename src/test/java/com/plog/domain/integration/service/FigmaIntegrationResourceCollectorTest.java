@@ -2,9 +2,11 @@ package com.plog.domain.integration.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -34,6 +36,7 @@ class FigmaIntegrationResourceCollectorTest {
     private static final String TOKEN = "figma-token";
     private static final String FILE_KEY = "figma-file-1";
     private static final String RESOURCE_URL = "https://www.figma.com/design/figma-file-1/App";
+    private static final String FIGMA_SYSTEM_ACTOR_ID = "183317509314044055";
 
     private final ProjectIntegrationService projectIntegrationService = mock(ProjectIntegrationService.class);
     private final IntegrationActivityStoreService activityStoreService =
@@ -98,6 +101,94 @@ class FigmaIntegrationResourceCollectorTest {
         );
     }
 
+    @Test
+    @DisplayName("Figma 시스템 actor는 제외하고 같은 이름의 다른 사용자는 저장한다")
+    void excludesFigmaSystemActorAndKeepsDifferentUserWithSameHandle() {
+        Fixture fixture = fixture();
+        IntegrationResource resource = resource();
+
+        expectFile(fixture.server);
+        expectVersions(fixture.server, "https://api.figma.com/v1/files/" + FILE_KEY + "/versions", """
+                {"versions":[
+                  {"id":"system-version","created_at":"2026-08-01T10:00:00Z",
+                   "user":{"id":"183317509314044055","handle":"Figma"}},
+                  {"id":"human-version","created_at":"2026-08-01T11:00:00Z",
+                   "user":{"id":"human-user","handle":"figma"}}
+                ],"pagination":{}}
+                """);
+        expectSystemActorComments(fixture.server);
+
+        fixture.collector.collect(resource, resource.getProjectIntegration(), new RecordingContext());
+
+        fixture.server.verify();
+        verify(activityStoreService, never()).store(
+                eq(resource),
+                eq(IntegrationActivityType.FIGMA_FILE_VERSION),
+                eq("version:system-version"),
+                eq(FIGMA_SYSTEM_ACTOR_ID),
+                eq("Figma"),
+                any(),
+                any(),
+                eq(RESOURCE_URL),
+                any()
+        );
+        verify(activityStoreService).store(
+                eq(resource),
+                eq(IntegrationActivityType.FIGMA_FILE_VERSION),
+                eq("version:human-version"),
+                eq("human-user"),
+                eq("figma"),
+                any(),
+                eq(Instant.parse("2026-08-01T11:00:00Z")),
+                eq(RESOURCE_URL),
+                any()
+        );
+        verify(activityStoreService, never()).store(
+                eq(resource),
+                eq(IntegrationActivityType.FIGMA_COMMENT),
+                eq("comment:system-comment"),
+                eq(FIGMA_SYSTEM_ACTOR_ID),
+                eq("FIGMA"),
+                any(),
+                any(),
+                eq(RESOURCE_URL),
+                any()
+        );
+        verify(activityStoreService).store(
+                eq(resource),
+                eq(IntegrationActivityType.FIGMA_COMMENT),
+                eq("comment:human-comment"),
+                eq("human-commenter"),
+                eq("Figma"),
+                any(),
+                any(),
+                eq(RESOURCE_URL),
+                any()
+        );
+        verify(activityStoreService, never()).store(
+                eq(resource),
+                eq(IntegrationActivityType.FIGMA_COMMENT_REACTION),
+                any(),
+                eq(FIGMA_SYSTEM_ACTOR_ID),
+                eq("figma"),
+                any(),
+                any(),
+                eq(RESOURCE_URL),
+                any()
+        );
+        verify(activityStoreService).store(
+                eq(resource),
+                eq(IntegrationActivityType.FIGMA_COMMENT_REACTION),
+                any(),
+                eq("human-reactor"),
+                eq("FIGMA"),
+                any(),
+                any(),
+                eq(RESOURCE_URL),
+                any()
+        );
+    }
+
     private Fixture fixture() {
         RestClient.Builder builder = RestClient.builder();
         List<String> requestedUris = new ArrayList<>();
@@ -141,6 +232,24 @@ class FigmaIntegrationResourceCollectorTest {
                           "message":"Looks good",
                           "reactions":[{"emoji":"+1","created_at":"2026-08-01T12:05:00Z",
                             "user":{"id":"user-4","handle":"Reactor","email":"reactor@example.com"}}]}]}
+                        """, MediaType.APPLICATION_JSON));
+    }
+
+    private void expectSystemActorComments(MockRestServiceServer server) {
+        server.expect(requestTo(Matchers.containsString("/v1/files/" + FILE_KEY + "/comments")))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN))
+                .andRespond(withSuccess("""
+                        {"comments":[
+                          {"id":"system-comment","created_at":"2026-08-01T12:00:00Z",
+                           "user":{"id":"183317509314044055","handle":"FIGMA"},
+                           "reactions":[{"emoji":"+1","created_at":"2026-08-01T12:01:00Z",
+                             "user":{"id":"human-reactor","handle":"FIGMA"}}]},
+                          {"id":"human-comment","created_at":"2026-08-01T12:02:00Z",
+                           "user":{"id":"human-commenter","handle":"Figma"},
+                           "reactions":[{"emoji":"+1","created_at":"2026-08-01T12:03:00Z",
+                             "user":{"id":"183317509314044055","handle":"figma"}}]}
+                        ]}
                         """, MediaType.APPLICATION_JSON));
     }
 
