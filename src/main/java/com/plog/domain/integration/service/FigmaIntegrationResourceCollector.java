@@ -9,6 +9,7 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +25,8 @@ import org.springframework.web.client.RestClientResponseException;
 class FigmaIntegrationResourceCollector implements IntegrationResourceCollector {
 
     private static final String API_BASE_URL = "https://api.figma.com";
+    private static final String FIGMA_SYSTEM_ACTOR_ID = "183317509314044055";
+    private static final String FIGMA_SYSTEM_ACTOR_HANDLE = "figma";
 
     private final ProjectIntegrationService projectIntegrationService;
     private final IntegrationActivityStoreService activityStoreService;
@@ -73,13 +76,18 @@ class FigmaIntegrationResourceCollector implements IntegrationResourceCollector 
         JsonNode comments = get("/v1/files/" + fileKey + "/comments", token, context);
         for (JsonNode comment : comments.path("comments")) {
             JsonNode user = comment.path("user");
-            activityStoreService.store(resource, IntegrationActivityType.FIGMA_COMMENT,
-                    "comment:" + comment.path("id").asText(), user.path("id").asText(null),
-                    user.path("handle").asText(null), user.path("email").asText(null),
-                    parseInstant(comment.path("created_at").asText(null)), resource.getResourceUrl(),
-                    comment.toString());
+            if (!isFigmaSystemActor(user)) {
+                activityStoreService.store(resource, IntegrationActivityType.FIGMA_COMMENT,
+                        "comment:" + comment.path("id").asText(), user.path("id").asText(null),
+                        user.path("handle").asText(null), user.path("email").asText(null),
+                        parseInstant(comment.path("created_at").asText(null)), resource.getResourceUrl(),
+                        comment.toString());
+            }
             for (JsonNode reaction : comment.path("reactions")) {
                 JsonNode reactionUser = reaction.path("user");
+                if (isFigmaSystemActor(reactionUser)) {
+                    continue;
+                }
                 activityStoreService.store(resource, IntegrationActivityType.FIGMA_COMMENT_REACTION,
                         "reaction:" + comment.path("id").asText()
                                 + ":" + reactionUser.path("id").asText()
@@ -105,6 +113,9 @@ class FigmaIntegrationResourceCollector implements IntegrationResourceCollector 
             JsonNode response = get(nextPage, token, context);
             for (JsonNode version : response.path("versions")) {
                 JsonNode user = version.path("user");
+                if (isFigmaSystemActor(user)) {
+                    continue;
+                }
                 activityStoreService.store(resource, IntegrationActivityType.FIGMA_FILE_VERSION,
                         "version:" + version.path("id").asText(), user.path("id").asText(null),
                         user.path("handle").asText(null), user.path("email").asText(null),
@@ -113,6 +124,14 @@ class FigmaIntegrationResourceCollector implements IntegrationResourceCollector 
             }
             nextPage = response.path("pagination").path("next_page").asText(null);
         }
+    }
+
+    private boolean isFigmaSystemActor(JsonNode user) {
+        String actorId = user.path("id").asText(null);
+        String actorHandle = user.path("handle").asText(null);
+        return FIGMA_SYSTEM_ACTOR_ID.equals(actorId)
+                && actorHandle != null
+                && FIGMA_SYSTEM_ACTOR_HANDLE.equals(actorHandle.trim().toLowerCase(Locale.ROOT));
     }
 
     private JsonNode get(String path, String token, CollectionContext context) {
